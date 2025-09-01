@@ -1,0 +1,71 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# macOS
+.DS_Store
+
+# Linux
+*~
+.directory
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Logs
+logs
+*.log
+*.out
+*.err
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+.history/
+
+# Build
+dist/
+build/
+tmp/
+temp/
+.cache/
+.pytest_cache/
+coverage/
+*.egg-info/
+*.egg
+
+# Docker
+*.pid
+docker-compose.override.yml
+
+# Misc
+*.swp
+*.bak
+*.tmp
+*.orig
+*.old
+
+# Environment files
+.env
+.env.*
+
+# Test output
+junit.xml
+test-results/
