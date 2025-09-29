@@ -1,16 +1,20 @@
 {
-    // Devcontainer configurado para Docker-outside-of-Docker (DoD):
-    // Permite usar el Docker del host dentro del contenedor de desarrollo.
-    "name": "Debian DevContainer",
+    // DevContainer configured for Go development with Docker-outside-of-Docker (DoD)
+    "name": "Go Development Container",
     "build": {
-        "dockerfile": "Dockerfile"
+        "dockerfile": "Dockerfile",
+        "args": {
+            // Set to "true" to automatically use latest Go version
+            // Set to "false" to use fixed version with update notifications
+            "AUTO_UPDATE_GO": "false"
+        }
     },
-    // Usa la feature oficial de Microsoft para Docker-outside-of-Docker
+    // Uses Microsoft's official feature for Docker-outside-of-Docker
     "features": {
         "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
             "version": "latest",
             "enableNonRootDocker": true,
-            "moby": true
+            "moby": false
         }
     },
     // Optional: SSH agent forwarding if needed
@@ -20,12 +24,25 @@
     ],
     "customizations": {
         "vscode": {
-            "settings": {},
+            "settings": {
+                "go.toolsManagement.checkForUpdates": "local",
+                "go.useLanguageServer": true,
+                "go.gopath": "/go",
+                "go.goroot": "/usr/local/go",
+                "go.lintOnSave": "package",
+                "go.vetOnSave": "package",
+                "go.formatTool": "goimports",
+                "go.lintTool": "golangci-lint",
+                "go.gomodDirectories": ["./go"]
+            },
             "extensions": [
-                "ms-azuretools.vscode-docker"
+                "golang.go",
+                "ms-azuretools.vscode-docker",
+                "eamodio.gitlens",
+                "ms-vscode.makefile-tools"
             ]
         }
     },
     "remoteUser": "vscode",
-    "postCreateCommand": "echo 'Devcontainer ready.'"
+    "postCreateCommand": "go version && echo 'Go DevContainer ready.'"
 }
