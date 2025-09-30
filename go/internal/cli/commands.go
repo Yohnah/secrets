@@ -394,8 +394,17 @@ func NewInitCommand(app *CLIApp) *cobra.Command {
 							logSuccess("KeePass database and keyfile created successfully")
 						}
 					}
-				} else if verbose {
-					logInfo(fmt.Sprintf("KeePass database already exists: %s", dbPath))
+				} else {
+					// Database already exists - update groups based on current YAML
+					if verbose {
+						logInfo(fmt.Sprintf("KeePass database already exists: %s", dbPath))
+					}
+					
+					// Update groups from current YAML file
+					if err := updateKeePassGroupsFromYaml(dbPath, keyfilePath, yamlFile, verbose); err != nil {
+						logError("Failed to update KeePass groups from YAML", err)
+						return
+					}
 				}
 			} else if verbose {
 				logInfo("Database creation skipped due to --no-create-database flag")
@@ -594,4 +603,111 @@ func createKeePassDatabaseWithProfile(dbPath, keyfilePath, password, profile str
 	}
 	
 	return nil
+}
+
+// updateKeePassGroupsFromYaml updates KeePass groups based on current YAML file
+func updateKeePassGroupsFromYaml(dbPath, keyfilePath, yamlFile string, verbose bool) error {
+	// Read profile from the specified YAML file
+	profile, err := readProfileFromSpecificYaml(yamlFile)
+	if err != nil {
+		return fmt.Errorf("error reading profile from YAML file %s: %v", yamlFile, err)
+	}
+	
+	// If no profile specified, nothing to update
+	if profile == "" {
+		if verbose {
+			logInfo("No profile specified in YAML metadata, skipping group updates")
+		}
+		return nil
+	}
+	
+	// Open existing KeePass database
+	kp, err := keepass.New(dbPath)
+	if err != nil {
+		return fmt.Errorf("error opening KeePass database: %v", err)
+	}
+	
+	// Prompt for password to open existing database
+	password, err := promptPassword("Enter password for existing KeePass database: ")
+	if err != nil {
+		return fmt.Errorf("error reading password: %v", err)
+	}
+	
+	// Read keyfile data
+	keyData, err := os.ReadFile(keyfilePath)
+	if err != nil {
+		return fmt.Errorf("error reading keyfile %s: %v", keyfilePath, err)
+	}
+	
+	// Open the existing database
+	if err := kp.OpenWithKeyData(password, keyData); err != nil {
+		return fmt.Errorf("error opening KeePass database: %v", err)
+	}
+	
+	// Check if group already exists
+	if groupExists, err := kp.GroupExists(profile); err != nil {
+		return fmt.Errorf("error checking if group exists: %v", err)
+	} else if groupExists {
+		if verbose {
+			logInfo(fmt.Sprintf("Group '%s' already exists in database", profile))
+		}
+		return nil
+	}
+	
+	// Create the new group
+	if err := kp.CreateGroup(profile); err != nil {
+		return fmt.Errorf("error creating group %s: %v", profile, err)
+	}
+	
+	if verbose {
+		logSuccess(fmt.Sprintf("Created new group: /%s/", profile))
+	}
+	
+	// Save the database
+	if err := kp.Save(); err != nil {
+		return fmt.Errorf("error saving KeePass database: %v", err)
+	}
+	
+	return nil
+}
+
+// readProfileFromSpecificYaml reads the profile from a specific YAML file
+func readProfileFromSpecificYaml(yamlFile string) (string, error) {
+	// Check if YAML file exists
+	if _, err := os.Stat(yamlFile); os.IsNotExist(err) {
+		return "", nil
+	}
+	
+	content, err := os.ReadFile(yamlFile)
+	if err != nil {
+		return "", fmt.Errorf("error reading YAML file: %v", err)
+	}
+	
+	// Split by YAML document separator
+	documents := strings.Split(string(content), "---")
+	if len(documents) == 0 {
+		return "", nil
+	}
+	
+	// Parse the first document (metadata)
+	metadataDoc := strings.TrimSpace(documents[0])
+	lines := strings.Split(metadataDoc, "\n")
+	
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "profile:") {
+			// Extract profile value
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				profile := strings.TrimSpace(parts[1])
+				// Remove quotes if present
+				if strings.HasPrefix(profile, "\"") && strings.HasSuffix(profile, "\"") {
+					profile = profile[1 : len(profile)-1]
+				}
+				return profile, nil
+			}
+		}
+	}
+	
+	return "", nil
 }

@@ -664,3 +664,69 @@ func (k *KeePass) deleteEntryFromGroup(group *gokeepasslib.Group, entryPath stri
 func (k *KeePass) GetKeyFilePath() string {
 	return k.keyfilePath
 }
+
+// OpenWithKeyData opens an existing KeePass database with password and keyfile data
+func (k *KeePass) OpenWithKeyData(password string, keyData []byte) error {
+	if k.database != nil {
+		return fmt.Errorf("database already loaded")
+	}
+	
+	// Read the database file
+	file, err := os.Open(k.databasePath)
+	if err != nil {
+		return fmt.Errorf("cannot open database file: %v", err)
+	}
+	defer file.Close()
+	
+	// Create credentials with password and keyfile data
+	credentials, err := gokeepasslib.NewPasswordAndKeyDataCredentials(password, keyData)
+	if err != nil {
+		return fmt.Errorf("failed to create credentials: %v", err)
+	}
+	
+	// Decode the database
+	db := gokeepasslib.NewDatabase()
+	db.Credentials = credentials
+	err = gokeepasslib.NewDecoder(file).Decode(db)
+	if err != nil {
+		return fmt.Errorf("failed to decode database: %v", err)
+	}
+	
+	// Unlock the database
+	err = db.UnlockProtectedEntries()
+	if err != nil {
+		return fmt.Errorf("failed to unlock database: %v", err)
+	}
+	
+	k.database = db
+	k.credentials = credentials
+	k.isOpen = true
+	return nil
+}
+
+// GroupExists checks if a group with the given name exists in the database
+func (k *KeePass) GroupExists(groupName string) (bool, error) {
+	if k.database == nil {
+		return false, fmt.Errorf("database not loaded")
+	}
+	
+	// Check if group exists in root groups
+	return k.findGroupByName(groupName, &k.database.Content.Root.Groups[0]), nil
+}
+
+// findGroupByName recursively searches for a group by name
+func (k *KeePass) findGroupByName(groupName string, group *gokeepasslib.Group) bool {
+	// Check current group
+	if group.Name == groupName {
+		return true
+	}
+	
+	// Check subgroups recursively
+	for i := range group.Groups {
+		if k.findGroupByName(groupName, &group.Groups[i]) {
+			return true
+		}
+	}
+	
+	return false
+}
