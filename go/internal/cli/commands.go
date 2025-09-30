@@ -385,7 +385,7 @@ func NewInitCommand(app *CLIApp) *cobra.Command {
 						}
 						
 						// Create database and keyfile
-						if err := createKeePassDatabase(dbPath, keyfilePath, password, verbose); err != nil {
+						if err := createKeePassDatabase(dbPath, keyfilePath, password, yamlFile, verbose); err != nil {
 							logError("Failed to create KeePass database", err)
 							return
 						}
@@ -460,7 +460,7 @@ func generateKeyfile(keyfilePath string) error {
 }
 
 // createKeePassDatabase creates a new KeePass database with keyfile and password
-func createKeePassDatabase(dbPath, keyfilePath, password string, verbose bool) error {
+func createKeePassDatabase(dbPath, keyfilePath, password, yamlFile string, verbose bool) error {
 	// First create the keyfile in the specified path
 	if err := generateKeyfile(keyfilePath); err != nil {
 		return fmt.Errorf("failed to create keyfile: %v", err)
@@ -477,7 +477,7 @@ func createKeePassDatabase(dbPath, keyfilePath, password string, verbose bool) e
 	}
 
 	// Create actual KeePass database using the existing keyfile
-	if err := createKeePassDatabaseWithProfile(dbPath, keyfilePath, password, profile, verbose); err != nil {
+	if err := createKeePassDatabaseWithProfile(dbPath, keyfilePath, password, profile, yamlFile, verbose); err != nil {
 		return fmt.Errorf("failed to create KeePass database: %v", err)
 	}
 
@@ -567,7 +567,7 @@ func readProfileFromSecretsYaml() (string, error) {
 }
 
 // createKeePassDatabaseWithProfile creates a KeePass database with base group
-func createKeePassDatabaseWithProfile(dbPath, keyfilePath, password, profile string, verbose bool) error {
+func createKeePassDatabaseWithProfile(dbPath, keyfilePath, password, profile, yamlFile string, verbose bool) error {
 	// Create a new KeePass instance
 	kp, err := keepass.New(dbPath)
 	if err != nil {
@@ -594,6 +594,34 @@ func createKeePassDatabaseWithProfile(dbPath, keyfilePath, password, profile str
 		
 		if verbose {
 			logInfo(fmt.Sprintf("Created base group: /%s/", profile))
+		}
+		
+		// Read and create environment groups
+		environments, err := readEnvironmentsFromSpecificYaml(yamlFile)
+		if err != nil {
+			return fmt.Errorf("error reading environments from YAML: %v", err)
+		}
+		
+		// Create environment subgroups under the profile group
+		for _, env := range environments {
+			envGroupPath := profile + "/" + env
+			if err := kp.CreateGroup(envGroupPath); err != nil {
+				return fmt.Errorf("error creating environment group %s: %v", envGroupPath, err)
+			}
+			
+			if verbose {
+				logInfo(fmt.Sprintf("Created environment group: /%s/", envGroupPath))
+			}
+			
+			// Create HEAD version group under each environment
+			headGroupPath := envGroupPath + "/HEAD"
+			if err := kp.CreateGroup(headGroupPath); err != nil {
+				return fmt.Errorf("error creating HEAD version group %s: %v", headGroupPath, err)
+			}
+			
+			if verbose {
+				logInfo(fmt.Sprintf("Created HEAD version group: /%s/", headGroupPath))
+			}
 		}
 	}
 	
@@ -644,23 +672,71 @@ func updateKeePassGroupsFromYaml(dbPath, keyfilePath, yamlFile string, verbose b
 		return fmt.Errorf("error opening KeePass database: %v", err)
 	}
 	
-	// Check if group already exists
-	if groupExists, err := kp.GroupExists(profile); err != nil {
-		return fmt.Errorf("error checking if group exists: %v", err)
-	} else if groupExists {
-		if verbose {
-			logInfo(fmt.Sprintf("Group '%s' already exists in database", profile))
+	// Check if profile group already exists
+	profileExists, err := kp.GroupExists(profile)
+	if err != nil {
+		return fmt.Errorf("error checking if profile group exists: %v", err)
+	}
+	
+	// Create the profile group if it doesn't exist
+	if !profileExists {
+		if err := kp.CreateGroup(profile); err != nil {
+			return fmt.Errorf("error creating profile group %s: %v", profile, err)
 		}
-		return nil
+		
+		if verbose {
+			logSuccess(fmt.Sprintf("Created new profile group: /%s/", profile))
+		}
+	} else if verbose {
+		logInfo(fmt.Sprintf("Profile group '%s' already exists", profile))
 	}
 	
-	// Create the new group
-	if err := kp.CreateGroup(profile); err != nil {
-		return fmt.Errorf("error creating group %s: %v", profile, err)
+	// Read and create/update environment groups
+	environments, err := readEnvironmentsFromSpecificYaml(yamlFile)
+	if err != nil {
+		return fmt.Errorf("error reading environments from YAML: %v", err)
 	}
 	
-	if verbose {
-		logSuccess(fmt.Sprintf("Created new group: /%s/", profile))
+	// Create environment subgroups under the profile group
+	for _, env := range environments {
+		envGroupPath := profile + "/" + env
+		
+		// Check if environment group already exists
+		envExists, err := kp.GroupExists(envGroupPath)
+		if err != nil {
+			return fmt.Errorf("error checking if environment group exists: %v", err)
+		}
+		
+		if !envExists {
+			if err := kp.CreateGroup(envGroupPath); err != nil {
+				return fmt.Errorf("error creating environment group %s: %v", envGroupPath, err)
+			}
+			
+			if verbose {
+				logSuccess(fmt.Sprintf("Created new environment group: /%s/", envGroupPath))
+			}
+		} else if verbose {
+			logInfo(fmt.Sprintf("Environment group '%s' already exists", envGroupPath))
+		}
+		
+		// Create HEAD version group under each environment (always check/create)
+		headGroupPath := envGroupPath + "/HEAD"
+		headExists, err := kp.GroupExists(headGroupPath)
+		if err != nil {
+			return fmt.Errorf("error checking if HEAD version group exists: %v", err)
+		}
+		
+		if !headExists {
+			if err := kp.CreateGroup(headGroupPath); err != nil {
+				return fmt.Errorf("error creating HEAD version group %s: %v", headGroupPath, err)
+			}
+			
+			if verbose {
+				logSuccess(fmt.Sprintf("Created new HEAD version group: /%s/", headGroupPath))
+			}
+		} else if verbose {
+			logInfo(fmt.Sprintf("HEAD version group '%s' already exists", headGroupPath))
+		}
 	}
 	
 	// Save the database
@@ -710,4 +786,51 @@ func readProfileFromSpecificYaml(yamlFile string) (string, error) {
 	}
 	
 	return "", nil
+}
+// readEnvironmentsFromSpecificYaml reads the environments (development, production, etc.) from a specific YAML file
+func readEnvironmentsFromSpecificYaml(yamlFile string) ([]string, error) {
+	// Check if YAML file exists
+	if _, err := os.Stat(yamlFile); os.IsNotExist(err) {
+		return []string{}, nil
+	}
+	
+	content, err := os.ReadFile(yamlFile)
+	if err != nil {
+		return nil, fmt.Errorf("error reading YAML file: %v", err)
+	}
+	
+	// Split by YAML document separator
+	documents := strings.Split(string(content), "---")
+	if len(documents) < 2 {
+		// No environments section
+		return []string{}, nil
+	}
+	
+	// Parse the second document (environments)
+	environmentsDoc := strings.TrimSpace(documents[1])
+	if environmentsDoc == "" {
+		return []string{}, nil
+	}
+	
+	lines := strings.Split(environmentsDoc, "\n")
+	var environments []string
+	
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		
+		// Check if line is an environment definition (ends with :)
+		if strings.HasSuffix(line, ":") {
+			envName := strings.TrimSuffix(line, ":")
+			envName = strings.TrimSpace(envName)
+			if envName != "" {
+				environments = append(environments, envName)
+			}
+		}
+	}
+	
+	return environments, nil
 }
