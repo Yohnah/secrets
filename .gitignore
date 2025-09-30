@@ -105,6 +105,12 @@ docker-compose.override.yml
 # Context file (project memory)
 .context
 
+# Secrets configuration files (user-specific)
+secrets.yaml
+secrets.yml
+*.secrets.yaml
+*.secrets.yml
+
 # Test output
 junit.xml
 test-results/
