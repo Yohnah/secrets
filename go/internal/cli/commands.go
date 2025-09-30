@@ -622,7 +622,15 @@ func createKeePassDatabaseWithProfile(dbPath, keyfilePath, password, profile, ya
 			if verbose {
 				logInfo(fmt.Sprintf("Created HEAD version group: /%s/", headGroupPath))
 			}
+			
+			// Create entries for this environment
+			if err := createEntriesForEnvironment(kp, yamlFile, env, headGroupPath, verbose); err != nil {
+				return fmt.Errorf("error creating entries for environment %s: %v", env, err)
+			}
 		}
+		
+		// Show developer alert message
+		showDeveloperAlert(yamlFile, verbose)
 	}
 	
 	// Save the database
@@ -737,12 +745,20 @@ func updateKeePassGroupsFromYaml(dbPath, keyfilePath, yamlFile string, verbose b
 		} else if verbose {
 			logInfo(fmt.Sprintf("HEAD version group '%s' already exists", headGroupPath))
 		}
+		
+		// Create entries for this environment
+		if err := createEntriesForEnvironment(kp, yamlFile, env, headGroupPath, verbose); err != nil {
+			return fmt.Errorf("error creating entries for environment %s: %v", env, err)
+		}
 	}
 	
 	// Save the database
 	if err := kp.Save(); err != nil {
 		return fmt.Errorf("error saving KeePass database: %v", err)
 	}
+	
+	// Show developer alert message
+	showDeveloperAlert(yamlFile, verbose)
 	
 	return nil
 }
@@ -833,4 +849,336 @@ func readEnvironmentsFromSpecificYaml(yamlFile string) ([]string, error) {
 	}
 	
 	return environments, nil
+}
+
+// SecretItem represents a single secret item from YAML
+type SecretItem struct {
+	Name  string `yaml:"name"`
+	Entry string `yaml:"entry"`
+	Key   string `yaml:"key"`
+	Type  string `yaml:"type"`
+}
+
+// createEntriesForEnvironment creates entries for a specific environment in KeePass
+func createEntriesForEnvironment(kp *keepass.KeePass, yamlFile, environment, headGroupPath string, verbose bool) error {
+	// Read entries for this environment
+	entries, err := readEntriesFromEnvironment(yamlFile, environment)
+	if err != nil {
+		return fmt.Errorf("error reading entries for environment %s: %v", environment, err)
+	}
+	
+	if verbose {
+		logInfo(fmt.Sprintf("Found %d entries for environment %s", len(entries), environment))
+	}
+	
+	// Create each entry
+	for _, item := range entries {
+		if verbose {
+			logInfo(fmt.Sprintf("Creating entry: '%s' with key '%s' in %s", item.Entry, item.Key, headGroupPath))
+		}
+		
+		if err := createEntryWithPath(kp, item.Entry, item.Key, headGroupPath, verbose); err != nil {
+			return fmt.Errorf("error creating entry %s: %v", item.Entry, err)
+		}
+	}
+	
+	return nil
+}
+
+// createEntryWithPath creates an entry at the specified path, creating intermediate groups if needed
+func createEntryWithPath(kp *keepass.KeePass, entryPath, keyField, headGroupPath string, verbose bool) error {
+	// Split entry path by slashes
+	pathParts := strings.Split(entryPath, "/")
+	
+	if len(pathParts) == 1 {
+		// Direct entry in HEAD group
+		entryName := pathParts[0]
+		fullEntryPath := headGroupPath + "/" + entryName
+		
+		// Create entry with placeholder content
+		if err := createEntryWithPlaceholder(kp, fullEntryPath, keyField); err != nil {
+			return fmt.Errorf("error creating entry %s: %v", fullEntryPath, err)
+		}
+		
+		if verbose {
+			logSuccess(fmt.Sprintf("Created entry: /%s/ with key field '%s'", fullEntryPath, keyField))
+		}
+	} else {
+		// Need to create intermediate groups
+		currentPath := headGroupPath
+		
+		// Create intermediate groups (all parts except the last one)
+		for i := 0; i < len(pathParts)-1; i++ {
+			currentPath = currentPath + "/" + pathParts[i]
+			
+			// Check if group exists
+			groupExists, err := kp.GroupExists(currentPath)
+			if err != nil {
+				return fmt.Errorf("error checking if group exists %s: %v", currentPath, err)
+			}
+			
+			if !groupExists {
+				if err := kp.CreateGroup(currentPath); err != nil {
+					return fmt.Errorf("error creating intermediate group %s: %v", currentPath, err)
+				}
+				
+				if verbose {
+					logSuccess(fmt.Sprintf("Created intermediate group: /%s/", currentPath))
+				}
+			}
+		}
+		
+		// Create the final entry
+		entryName := pathParts[len(pathParts)-1]
+		fullEntryPath := currentPath + "/" + entryName
+		
+		if err := createEntryWithPlaceholder(kp, fullEntryPath, keyField); err != nil {
+			return fmt.Errorf("error creating entry %s: %v", fullEntryPath, err)
+		}
+		
+		if verbose {
+			logSuccess(fmt.Sprintf("Created entry: /%s/ with key field '%s'", fullEntryPath, keyField))
+		}
+	}
+	
+	return nil
+}
+
+// createEntryWithPlaceholder creates an entry with placeholder content based on key field type
+func createEntryWithPlaceholder(kp *keepass.KeePass, entryPath, keyField string) error {
+	// Split the entry path to get group path and entry name
+	pathParts := strings.Split(entryPath, "/")
+	if len(pathParts) < 2 {
+		return fmt.Errorf("invalid entry path: %s", entryPath)
+	}
+	
+	// Last part is the entry name, everything else is the group path
+	entryName := pathParts[len(pathParts)-1]
+	groupPath := strings.Join(pathParts[:len(pathParts)-1], "/")
+	
+	// Create the entry in the specific group
+	if err := kp.CreateEntryInGroup(entryName, groupPath); err != nil {
+		return fmt.Errorf("error creating entry: %v", err)
+	}
+	
+	// Determine the type of field and add appropriate content
+	placeholder := "Content to be filled by developer"
+	
+	if strings.HasPrefix(keyField, "attachments/") {
+		// Type 3: Attachments
+		filename := strings.TrimPrefix(keyField, "attachments/")
+		if err := kp.WriteToEntryInGroup(entryName, groupPath, filename, []byte(placeholder), true); err != nil {
+			return fmt.Errorf("error adding attachment %s: %v", filename, err)
+		}
+	} else if isStandardKeePassField(keyField) {
+		// Type 1: Standard KeePass fields
+		// Map user-friendly names to official KeePass field names
+		officialFieldName := mapToOfficialKeePassField(keyField)
+		if err := kp.WriteToEntryInGroup(entryName, groupPath, officialFieldName, placeholder, false); err != nil {
+			return fmt.Errorf("error setting standard field %s: %v", officialFieldName, err)
+		}
+	} else {
+		// Type 2: Custom attributes/additional fields
+		if err := kp.WriteToEntryInGroup(entryName, groupPath, keyField, placeholder, false); err != nil {
+			return fmt.Errorf("error setting custom field %s: %v", keyField, err)
+		}
+	}
+	
+	return nil
+}
+
+// isStandardKeePassField checks if a field name is a standard KeePass field (case-insensitive)
+func isStandardKeePassField(fieldName string) bool {
+	// Official KeePass field names (normalized to lowercase for comparison)
+	standardFields := []string{
+		"title",
+		"username", 
+		"password",
+		"url",
+		"notes",
+	}
+	
+	// Convert input to lowercase for case-insensitive comparison
+	fieldLower := strings.ToLower(fieldName)
+	
+	for _, standard := range standardFields {
+		if fieldLower == standard {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// mapToOfficialKeePassField maps user-friendly field names to official KeePass field names (case-insensitive)
+func mapToOfficialKeePassField(fieldName string) string {
+	// Convert to lowercase for case-insensitive mapping
+	fieldLower := strings.ToLower(fieldName)
+	
+	// Map to official KeePass field names
+	switch fieldLower {
+	case "username", "user":
+		return "UserName"
+	case "password", "pass":
+		return "Password"
+	case "url":
+		return "URL"
+	case "notes", "note":
+		return "Notes"
+	case "title":
+		return "Title"
+	default:
+		// Return original field name if no mapping exists
+		return fieldName
+	}
+}
+
+// readEntriesFromEnvironment reads all entries for a specific environment from YAML
+func readEntriesFromEnvironment(yamlFile, environment string) ([]SecretItem, error) {
+	content, err := os.ReadFile(yamlFile)
+	if err != nil {
+		return nil, fmt.Errorf("error reading YAML file: %v", err)
+	}
+	
+	// Split by YAML document separator
+	documents := strings.Split(string(content), "---")
+	if len(documents) < 2 {
+		return []SecretItem{}, nil
+	}
+	
+	// Parse the second document (environments)
+	environmentsDoc := strings.TrimSpace(documents[1])
+	if environmentsDoc == "" {
+		return []SecretItem{}, nil
+	}
+	
+	lines := strings.Split(environmentsDoc, "\n")
+	var entries []SecretItem
+	var inTargetEnvironment bool
+	var currentIndent int
+	
+	for _, line := range lines {
+		originalLine := line
+		line = strings.TrimSpace(line)
+		
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		
+		// Check if this is an environment definition
+		if strings.HasSuffix(line, ":") && !strings.HasPrefix(originalLine, " ") {
+			envName := strings.TrimSuffix(line, ":")
+			envName = strings.TrimSpace(envName)
+			inTargetEnvironment = (envName == environment)
+			continue
+		}
+		
+		// If we're in the target environment, parse the entries
+		if inTargetEnvironment {
+			// Calculate indentation
+			indent := len(originalLine) - len(strings.TrimLeft(originalLine, " "))
+			
+			// If this line starts with "- ", it's a new item
+			if strings.HasPrefix(line, "- ") {
+				currentIndent = indent
+				// Parse the first field of the item
+				field := strings.TrimPrefix(line, "- ")
+				if strings.HasPrefix(field, "name:") {
+					nameValue := strings.TrimSpace(strings.TrimPrefix(field, "name:"))
+					// Remove quotes if present
+					if strings.HasPrefix(nameValue, "\"") && strings.HasSuffix(nameValue, "\"") {
+						nameValue = nameValue[1 : len(nameValue)-1]
+					}
+					
+					// Start a new entry
+					entry := SecretItem{Name: nameValue}
+					entries = append(entries, entry)
+				}
+			} else if len(entries) > 0 && indent > currentIndent {
+				// This is a field of the current item
+				entryIndex := len(entries) - 1
+				
+				if strings.HasPrefix(line, "entry:") {
+					entryValue := strings.TrimSpace(strings.TrimPrefix(line, "entry:"))
+					// Remove quotes if present
+					if strings.HasPrefix(entryValue, "\"") && strings.HasSuffix(entryValue, "\"") {
+						entryValue = entryValue[1 : len(entryValue)-1]
+					}
+					entries[entryIndex].Entry = entryValue
+				} else if strings.HasPrefix(line, "key:") {
+					keyValue := strings.TrimSpace(strings.TrimPrefix(line, "key:"))
+					// Remove quotes if present
+					if strings.HasPrefix(keyValue, "\"") && strings.HasSuffix(keyValue, "\"") {
+						keyValue = keyValue[1 : len(keyValue)-1]
+					}
+					entries[entryIndex].Key = keyValue
+				} else if strings.HasPrefix(line, "type:") {
+					typeValue := strings.TrimSpace(strings.TrimPrefix(line, "type:"))
+					// Remove quotes if present
+					if strings.HasPrefix(typeValue, "\"") && strings.HasSuffix(typeValue, "\"") {
+						typeValue = typeValue[1 : len(typeValue)-1]
+					}
+					entries[entryIndex].Type = typeValue
+				}
+			} else if indent <= currentIndent {
+				// We've moved to a different section, stop processing this environment
+				break
+			}
+		}
+	}
+	
+	return entries, nil
+}
+
+// showDeveloperAlert displays a warning message to developers about placeholder content
+func showDeveloperAlert(yamlFile string, verbose bool) {
+	// Count total entries across all environments
+	totalEntries := 0
+	
+	// Read all environments
+	environments, err := readEnvironmentsFromSpecificYaml(yamlFile)
+	if err != nil {
+		return // Silent fail, don't interrupt the main process
+	}
+	
+	for _, env := range environments {
+		entries, err := readEntriesFromEnvironment(yamlFile, env)
+		if err != nil {
+			continue // Silent fail, continue with other environments
+		}
+		totalEntries += len(entries)
+	}
+	
+	if totalEntries == 0 {
+		return // No entries created, no need for alert
+	}
+	
+	// Get current working directory for full paths
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "." // Fallback to relative path
+	}
+	
+	// Display colored alert message
+	fmt.Printf("\n")
+	fmt.Printf("\033[33m") // Yellow color for warning
+	fmt.Printf("WARNING: KeePass database created with placeholder content!\n")
+	fmt.Printf("\033[0m")  // Reset color
+	
+	fmt.Printf("\033[36m") // Cyan color for info
+	fmt.Printf("DEVELOPER ACTION REQUIRED:\n")
+	fmt.Printf("\033[0m")  // Reset color
+	
+	fmt.Printf("1. Open the KeePass database with your KeePass client as you prefer\n")
+	fmt.Printf("2. Navigate to the hierarchical group structure created\n")
+	fmt.Printf("3. Replace placeholder text 'Content to be filled by developer' with correct values\n")
+	fmt.Printf("4. Save the database to persist your changes\n")
+	
+	fmt.Printf("\n")
+	fmt.Printf("\033[35m") // Magenta color for database info
+	fmt.Printf("Database location: %s/.secrets_yohnah/secrets.kdbx\n", cwd)
+	fmt.Printf("Keyfile location: %s/.secrets_yohnah/secrets.key\n", cwd)
+	fmt.Printf("\033[0m")  // Reset color
+	fmt.Printf("\n")
 }

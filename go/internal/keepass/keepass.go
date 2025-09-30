@@ -730,3 +730,167 @@ func (k *KeePass) findGroupByName(groupName string, group *gokeepasslib.Group) b
 	
 	return false
 }
+
+// CreateEntryInGroup creates a new entry in a specific group by path
+func (k *KeePass) CreateEntryInGroup(entryName, groupPath string) error {
+	if k.database == nil {
+		return errors.New("database not initialized")
+	}
+
+	// Find the target group
+	group, err := k.findGroupByPath(groupPath)
+	if err != nil {
+		return fmt.Errorf("group not found: %s", groupPath)
+	}
+
+	// Check if entry already exists in this group
+	for _, entry := range group.Entries {
+		for _, value := range entry.Values {
+			if value.Key == "Title" && value.Value.Content == entryName {
+				// Entry already exists, nothing to do
+				return nil
+			}
+		}
+	}
+
+	// Create new entry
+	newEntry := gokeepasslib.NewEntry()
+	newEntry.Values = append(newEntry.Values, gokeepasslib.ValueData{
+		Key: "Title",
+		Value: gokeepasslib.V{
+			Content: entryName,
+		},
+	})
+
+	// Add entry to the target group
+	group.Entries = append(group.Entries, newEntry)
+	
+	return nil
+}
+
+// findGroupByPath finds a group by its hierarchical path (e.g. "root/profile/environment/HEAD")
+func (k *KeePass) findGroupByPath(groupPath string) (*gokeepasslib.Group, error) {
+	if k.database == nil {
+		return nil, errors.New("database not initialized")
+	}
+
+	// Split path into components
+	pathParts := strings.Split(strings.Trim(groupPath, "/"), "/")
+	if len(pathParts) == 0 || (len(pathParts) == 1 && pathParts[0] == "") {
+		return nil, errors.New("invalid group path")
+	}
+
+	// Start from the root group (assuming custom root name "SECRETS_YOHNAH")
+	var currentGroup *gokeepasslib.Group
+	
+	// Find the root group by name
+	for i := range k.database.Content.Root.Groups {
+		if k.database.Content.Root.Groups[i].Name == "SECRETS_YOHNAH" {
+			currentGroup = &k.database.Content.Root.Groups[i]
+			break
+		}
+	}
+	
+	if currentGroup == nil {
+		return nil, errors.New("root group 'SECRETS_YOHNAH' not found")
+	}
+
+	// Navigate through the path
+	for _, pathPart := range pathParts {
+		found := false
+		for i := range currentGroup.Groups {
+			if currentGroup.Groups[i].Name == pathPart {
+				currentGroup = &currentGroup.Groups[i]
+				found = true
+				break
+			}
+		}
+		
+		if !found {
+			return nil, fmt.Errorf("group '%s' not found in path", pathPart)
+		}
+	}
+
+	return currentGroup, nil
+}
+
+// WriteToEntryInGroup writes data to a specific entry in a specific group
+func (k *KeePass) WriteToEntryInGroup(entryName, groupPath, key string, value interface{}, isFile bool) error {
+	if k.database == nil {
+		return errors.New("database not initialized")
+	}
+
+	// Find the target group
+	group, err := k.findGroupByPath(groupPath)
+	if err != nil {
+		return fmt.Errorf("group not found: %s", groupPath)
+	}
+
+	// Find the entry in this group
+	var targetEntry *gokeepasslib.Entry
+	for i := range group.Entries {
+		entry := &group.Entries[i]
+		for _, val := range entry.Values {
+			if val.Key == "Title" && val.Value.Content == entryName {
+				targetEntry = entry
+				break
+			}
+		}
+		if targetEntry != nil {
+			break
+		}
+	}
+
+	if targetEntry == nil {
+		return fmt.Errorf("entry '%s' not found in group '%s'", entryName, groupPath)
+	}
+
+	// Convert value to string
+	valueStr := fmt.Sprintf("%v", value)
+
+	if isFile {
+		// Handle binary data
+		var content []byte
+		if str, ok := value.(string); ok {
+			content = []byte(str)
+		} else if bytes, ok := value.([]byte); ok {
+			content = bytes
+		} else {
+			content = []byte(valueStr)
+		}
+
+		// Remove existing binary with same key
+		for i, binary := range targetEntry.Binaries {
+			if binary.Name == key {
+				targetEntry.Binaries = append(targetEntry.Binaries[:i], targetEntry.Binaries[i+1:]...)
+				break
+			}
+		}
+
+		// Add binary to database and create reference
+		binary := k.database.AddBinary(content)
+		binaryRef := gokeepasslib.NewBinaryReference(key, binary.ID)
+		targetEntry.Binaries = append(targetEntry.Binaries, binaryRef)
+	} else {
+		// Handle text data
+		// Remove existing value with same key
+		for i, val := range targetEntry.Values {
+			if val.Key == key {
+				targetEntry.Values = append(targetEntry.Values[:i], targetEntry.Values[i+1:]...)
+				break
+			}
+		}
+
+		// Add new value
+		isProtected := (key == "Password" || key == "password")
+		targetEntry.Values = append(targetEntry.Values, gokeepasslib.ValueData{
+			Key: key,
+			Value: gokeepasslib.V{
+				Content:   valueStr,
+				Protected: wrappers.NewBoolWrapper(isProtected),
+			},
+		})
+	}
+
+	return nil
+}
