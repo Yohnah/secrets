@@ -104,6 +104,7 @@ docker-compose.override.yml
 
 # Context file (project memory)
 .context
+.context*
 
 # Secrets configuration files (user-specific)
 secrets.yaml

@@ -54,11 +54,11 @@ deps: ## Install Go dependencies (go mod download + tidy)
 	@echo "Dependencies installed successfully"
 
 # Run tests with verbose output for debugging
-.PHONY: test
-test: ## Run all tests with verbose output
-	@echo "Running tests with verbose output..."
-	cd $(GO_DIR) && $(GOTEST) -v ./cmd/... ./internal/... ./tests/...
-	@echo "Tests completed"
+.PHONY: tests
+tests: ## Run all tests with verbose output
+	@echo "Running all tests..."
+	cd $(GO_DIR) && $(GOTEST) -v ./...
+	@echo "All tests completed successfully"
 
 .PHONY: clean
 clean: ## Clean test artifacts, temporary files and binaries
