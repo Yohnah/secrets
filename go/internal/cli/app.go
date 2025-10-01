@@ -2,9 +2,26 @@
 package cli
 
 import (
+	"fmt"
+	"runtime"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+// Version information - set by main package
+var (
+	appVersion   = "dev"
+	appGitCommit = "unknown"
+	appBuildTime = "unknown"
+)
+
+// SetVersionInfo sets version information from main package
+func SetVersionInfo(version, gitCommit, buildTime string) {
+	appVersion = version
+	appGitCommit = gitCommit
+	appBuildTime = buildTime
+}
 
 // App interface follows ISP - Interface Segregation Principle
 type App interface {
@@ -37,8 +54,12 @@ Environment Variables:
 
 The SECRETS_YOHNAH_PASSWORD environment variable allows for automated
 workflows without interactive password prompts.`,
+			Version: appVersion,
 		},
 	}
+	
+	// Configure version template
+	app.rootCmd.SetVersionTemplate(getVersionTemplate())
 	
 	// OCP - Open/Closed Principle: easy to extend with new commands
 	app.setupGlobalFlags()
@@ -156,4 +177,13 @@ func (a *CLIApp) GetSecretsConfigFile() string {
 func (a *CLIApp) setupCommands() {
 	a.rootCmd.AddCommand(NewInitCommand(a))
 	a.rootCmd.AddCommand(a.createShowCommand())
+}
+
+// getVersionTemplate follows SRP - single responsibility of formatting version output
+func getVersionTemplate() string {
+	return fmt.Sprintf(`secrets version %s
+  commit: %s
+  built: %s
+  go: %s
+`, appVersion, appGitCommit, appBuildTime, runtime.Version())
 }

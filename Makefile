@@ -1,8 +1,21 @@
 # Variables
 APP_NAME := secrets
-VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
+
+# Version detection: use git tag if available, otherwise development version
+GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null)
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+GIT_DIRTY := $(shell git diff --quiet 2>/dev/null || echo "-dirty")
+BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+# Version logic:
+# - If on exact git tag: use tag (e.g., v0.1.0)
+# - If development: use v0.1.0-dev+timestamp.commit
+# - If dirty: add -dirty suffix
+ifdef GIT_TAG
+    VERSION := $(GIT_TAG)$(GIT_DIRTY)
+else
+    VERSION := v0.1.0-dev+$(shell date -u '+%Y%m%d').$(GIT_COMMIT)$(GIT_DIRTY)
+endif
 
 # Go parameters
 GOCMD := go
