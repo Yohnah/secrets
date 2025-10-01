@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -37,17 +38,23 @@ This command outputs a basic template that you can use to create your own secret
 You can redirect the output to create a new file:
 
   secrets show template > secrets.yml
+  secrets show template --minimal > secrets.yml
 
 The template includes examples of:
   - Metadata section with profile and default environment
   - Environment configurations with various secret types
   - Different types of secrets (envvar, ssh_agent)
   - Entry paths with and without subgroups
-  - Proper YAML formatting and structure`,
+  - Proper YAML formatting and structure
+
+Use --minimal flag to output only the essential template without commented examples.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			a.runShowTemplate(cmd, args)
 		},
 	}
+
+	// Add flags
+	templateCmd.Flags().Bool("minimal", false, "show minimal template without commented examples")
 
 	return templateCmd
 }
@@ -55,67 +62,70 @@ The template includes examples of:
 // runShowTemplate follows SRP - single responsibility of executing the template command
 func (a *CLIApp) runShowTemplate(cmd *cobra.Command, args []string) {
 	template := `metadata:
-  profile: "my-project"
-  default_environment: "development"
+  profile: "profile_name"
+  default_environment: "environment_name"
 ---
-development:
+environment_name:
   - name: DATABASE_URL
-    entry: "/databases/development/main"
-    key: "connection_string"
-    type: "envvar"
-  - name: API_KEY
-    entry: "/api_keys"
-    key: "token"
-    type: "envvar"
-  - name: SSH_PRIVATE_KEY
-    entry: "/ssh_keys/development/deploy"
-    key: "attachments/private_key"
-    type: "ssh_agent"
-  - name: ENCRYPTION_KEY
-    entry: "/encryption"
-    key: "master_key"
-    type: "envvar"
+    entry: "/path/to/entry/in/database"
+    key: "entry field name"
+    type: "(envvar|ssh_agent)"
 
-staging:
-  - name: DATABASE_URL
-    entry: "/databases/staging/main"
-    key: "connection_string"
-    type: "envvar"
-  - name: API_KEY
-    entry: "/api_keys"
-    key: "token"
-    type: "envvar"
-  - name: SSH_PRIVATE_KEY
-    entry: "/ssh_keys/staging/deploy"
-    key: "private_key"
-    type: "ssh_agent"
-
-production:
-  - name: DATABASE_URL
-    entry: "/databases/production/main"
-    key: "connection_string"
-    type: "envvar"
-  - name: API_KEY
-    entry: "/api_keys"
-    key: "token"
-    type: "envvar"
-  - name: SSH_PRIVATE_KEY
-    entry: "/ssh_keys/production/deploy"
-    key: "private_key"
-    type: "ssh_agent"
-  - name: ENCRYPTION_KEY
-    entry: "/encryption"
-    key: "master_key"
-    type: "envvar"
-  - name: GITHUB_SSH_KEY
-    entry: "/ssh_keys/github"
-    key: "attachments/github_key"
-    type: "ssh_agent"
-  - name: DOCKER_REGISTRY_TOKEN
-    entry: "/docker/registry"
-    key: "access_token"
-    type: "envvar"
+#example of multiple environments and secret types
+#development:
+#  - name: DATABASE_URL
+#    entry: "/databases/main"
+#    key: "connection_string"
+#    type: "envvar"
+#  - name: API_KEY
+#    entry: "/api_keys"
+#    key: "token"
+#    type: "envvar"
+#  - name: SSH_PRIVATE_KEY
+#    entry: "/ssh_keys/deploy"
+#    key: "attachments/private_key"
+#    type: "ssh_agent"
+#  - name: ENCRYPTION_KEY
+#    entry: "/encryption"
+#    key: "master_key"
+#    type: "envvar"
+#
+#production:
+#  - name: DATABASE_URL
+#    entry: "/databases/main"
+#    key: "connection_string"
+#    type: "envvar"
+#  - name: API_KEY
+#    entry: "/api_keys"
+#    key: "token"
+#    type: "envvar"
+#  - name: SSH_PRIVATE_KEY
+#    entry: "/ssh_keys/deploy"
+#    key: "attachments/github_key"
+#    type: "ssh_agent"
+#  - name: ENCRYPTION_KEY
+#    entry: "/encryption"
+#    key: "master_key"
+#    type: "envvar"
 `
+
+	// Check if minimal flag is set
+	minimal, _ := cmd.Flags().GetBool("minimal")
+	if minimal {
+		// Filter out commented lines
+		lines := strings.Split(template, "\n")
+		var filteredLines []string
+		for _, line := range lines {
+			// Keep lines that don't start with # (ignoring whitespace)
+			trimmed := strings.TrimSpace(line)
+			if !strings.HasPrefix(trimmed, "#") {
+				filteredLines = append(filteredLines, line)
+			}
+		}
+		template = strings.Join(filteredLines, "\n")
+		// Clean up multiple consecutive empty lines
+		template = strings.ReplaceAll(template, "\n\n\n", "\n\n")
+	}
 
 	fmt.Print(template)
 }

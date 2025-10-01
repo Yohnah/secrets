@@ -78,5 +78,58 @@ func TestKeePassReadWrite(t *testing.T) {
 		
 		t.Logf("Successfully read database with root group: %s", rootGroup.Name)
 		t.Logf("Database structure is valid and accessible")
+		
+		// Test EnsureProfileStructure functionality
+		testProfile := "TEST-PROFILE"
+		err = keepassManager.EnsureProfileStructure(dbPath, keyfilePath, password, testProfile)
+		if err != nil {
+			t.Fatalf("Failed to ensure profile structure: %v", err)
+		}
+		
+		// Re-read database to verify profile structure was created
+		file2, err := os.Open(dbPath)
+		if err != nil {
+			t.Fatalf("Failed to reopen database: %v", err)
+		}
+		defer file2.Close()
+		
+		db2 := gokeepasslib.NewDatabase()
+		db2.Credentials = credentials
+		decoder2 := gokeepasslib.NewDecoder(file2)
+		if err := decoder2.Decode(db2); err != nil {
+			t.Fatalf("Failed to decode database after profile creation: %v", err)
+		}
+		
+		// Verify profile structure exists
+		rootGroup2 := db2.Content.Root.Groups[0]
+		if len(rootGroup2.Groups) == 0 {
+			t.Error("Root group should contain profile groups after EnsureProfileStructure")
+		}
+		
+		var profileGroup *gokeepasslib.Group
+		for i := range rootGroup2.Groups {
+			if rootGroup2.Groups[i].Name == testProfile {
+				profileGroup = &rootGroup2.Groups[i]
+				break
+			}
+		}
+		
+		if profileGroup == nil {
+			t.Errorf("Profile group '%s' not found", testProfile)
+		} else {
+			t.Logf("Profile group found: %s", profileGroup.Name)
+			
+			// Verify HEAD subgroup exists
+			if len(profileGroup.Groups) == 0 {
+				t.Error("Profile group should contain HEAD subgroup")
+			} else {
+				headGroup := profileGroup.Groups[0]
+				if headGroup.Name != "HEAD" {
+					t.Errorf("Expected HEAD subgroup, got '%s'", headGroup.Name)
+				} else {
+					t.Logf("HEAD subgroup found under profile: %s", headGroup.Name)
+				}
+			}
+		}
 	})
 }

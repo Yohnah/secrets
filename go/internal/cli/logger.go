@@ -8,6 +8,7 @@ type Logger interface {
 	Debug(message string)
 	Success(message string)
 	Error(message string)
+	Print(message string) // Always shows - for essential user messages
 }
 
 // CLILogger follows SRP - Single Responsibility for logging
@@ -22,9 +23,11 @@ func NewLogger(verbose bool) Logger {
 	}
 }
 
-// Info always shows - for important user information
+// Info only shows with verbose flag - for detailed user information
 func (l *CLILogger) Info(message string) {
-	fmt.Printf("INFO: %s\n", message)
+	if l.verbose {
+		fmt.Printf("INFO: %s\n", message)
+	}
 }
 
 // Debug only shows with verbose flag - for development/troubleshooting
@@ -34,12 +37,19 @@ func (l *CLILogger) Debug(message string) {
 	}
 }
 
-// Success always shows - for user feedback
+// Success only shows with verbose flag - for detailed user feedback
 func (l *CLILogger) Success(message string) {
-	fmt.Printf("SUCCESS: %s\n", message)
+	if l.verbose {
+		fmt.Printf("SUCCESS: %s\n", message)
+	}
 }
 
 // Error always shows - critical for user
 func (l *CLILogger) Error(message string) {
 	fmt.Printf("ERROR: %s\n", message)
+}
+
+// Print always shows - for essential user messages
+func (l *CLILogger) Print(message string) {
+	fmt.Println(message)
 }

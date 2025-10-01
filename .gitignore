@@ -116,5 +116,11 @@ secrets.yml
 junit.xml
 test-results/
 
+# Backup and temporary files
+*.bak
+*.backup
+*.tmp
+*-bak
+
 # Secrets directory - never commit
 .secrets_yohnah

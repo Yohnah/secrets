@@ -66,11 +66,11 @@ deps: ## Install Go dependencies (go mod download + tidy)
 	cd $(GO_DIR) && $(GOMOD) tidy
 	@echo "Dependencies installed successfully"
 
-# Run tests with verbose output for debugging
+# Run tests with verbose output for debugging and colored output
 .PHONY: tests
-tests: ## Run all tests with verbose output
+tests: ## Run all tests with verbose output and colors
 	@echo "Running all tests..."
-	cd $(GO_DIR) && $(GOTEST) -v ./...
+	cd $(GO_DIR) && $(HOME)/go/bin/richgo test -v ./...
 	@echo "All tests completed successfully"
 
 .PHONY: clean

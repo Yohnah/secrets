@@ -150,6 +150,34 @@ func runInit(app *CLIApp, cmd *cobra.Command, args []string) {
 	// Check if database already exists
 	if keepassManager.DatabaseExists(dbPath) {
 		logger.Info("KeePass database already exists: " + dbPath)
+		
+		// Ensure profile structure exists in existing database
+		password, err := passwordProvider.GetPassword("Enter password for existing KeePass database: ")
+		if err != nil {
+			logger.Error("Failed to get password: " + err.Error())
+			return
+		}
+		
+		if err := keepassManager.EnsureProfileStructure(dbPath, keyfilePath, password, secretsConfig.Metadata.Profile); err != nil {
+			logger.Error("Failed to ensure profile structure: " + err.Error())
+			return
+		}
+		
+		// Create environments and entries for existing database
+		result, err := keepassManager.CreateEnvironmentsAndEntries(dbPath, keyfilePath, password, secretsConfig.Metadata.Profile, secretsConfig)
+		if err != nil {
+			logger.Error("Failed to create environments and entries: " + err.Error())
+			return
+		}
+		
+		// Show warning if new entries were created
+		if result.CreatedEntries > 0 {
+			logger.Print("")
+			logger.Print("WARNING: " + fmt.Sprintf("%d new entries were created in profile '%s' of the KeePass database.", result.CreatedEntries, secretsConfig.Metadata.Profile))
+			logger.Print("These entries contain placeholder values that need to be filled by the developer.")
+			logger.Print("Please open your KeePass database and update the created entries with actual values.")
+			logger.Print("")
+		}
 	} else {
 		// Ask if user wants to create the database
 		shouldCreate, err := prompter.AskYesNo(
@@ -163,7 +191,7 @@ func runInit(app *CLIApp, cmd *cobra.Command, args []string) {
 		}
 		
 		if shouldCreate {
-			if err := createKeePassDatabase(dbPath, keyfilePath, keepassManager, passwordProvider, logger); err != nil {
+			if err := createKeePassDatabase(dbPath, keyfilePath, keepassManager, passwordProvider, logger, secretsConfig); err != nil {
 				logger.Error("Failed to create KeePass database: " + err.Error())
 				return
 			}
@@ -172,14 +200,8 @@ func runInit(app *CLIApp, cmd *cobra.Command, args []string) {
 		}
 	}
 	
-	logger.Info("Initialization completed successfully")
-	logger.Info("Configuration directory: " + secretsDir)
-	logger.Info("Configuration file: " + configPath)
-	if keepassManager.DatabaseExists(dbPath) {
-		logger.Info("KeePass database: " + dbPath)
-		logger.Info("Keyfile: " + keyfilePath)
-	}
-	logger.Info("Security: .secrets_yohnah is properly excluded from git")
+	// Silent success - no output when everything works correctly
+	// Only show errors when something goes wrong
 }
 
 // createSecretsDirectory creates the .secrets_yohnah directory if it doesn't exist
@@ -246,8 +268,9 @@ func resolveConfigPaths(secretsDir string, config *Config) (string, string) {
 }
 
 // createKeePassDatabase creates a new KeePass database with keyfile and password
-func createKeePassDatabase(dbPath, keyfilePath string, keepassManager KeePassManager, passwordProvider PasswordProvider, logger Logger) error {
+func createKeePassDatabase(dbPath, keyfilePath string, keepassManager KeePassManager, passwordProvider PasswordProvider, logger Logger, secretsConfig *SecretsConfig) error {
 	logger.Debug("Starting KeePass database creation process")
+	logger.Debug("Profile from secrets config: " + secretsConfig.Metadata.Profile)
 	
 	// Generate keyfile if it doesn't exist
 	if !keepassManager.KeyfileExists(keyfilePath) {
@@ -268,6 +291,32 @@ func createKeePassDatabase(dbPath, keyfilePath string, keepassManager KeePassMan
 	// Create the database
 	if err := keepassManager.CreateDatabase(dbPath, keyfilePath, password); err != nil {
 		return fmt.Errorf("failed to create database: %v", err)
+	}
+	
+	logger.Debug("About to ensure profile structure for: " + secretsConfig.Metadata.Profile)
+	// Ensure profile structure exists
+	if err := keepassManager.EnsureProfileStructure(dbPath, keyfilePath, password, secretsConfig.Metadata.Profile); err != nil {
+		return fmt.Errorf("failed to ensure profile structure: %v", err)
+	}
+	
+	logger.Success("Profile structure ensured successfully")
+	
+	// Create environments and entries based on secrets.yml
+	logger.Debug("Creating environments and entries from secrets.yml")
+	result, err := keepassManager.CreateEnvironmentsAndEntries(dbPath, keyfilePath, password, secretsConfig.Metadata.Profile, secretsConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create environments and entries: %v", err)
+	}
+
+	logger.Success("Environments and entries created successfully")
+	
+	// Show warning if new entries were created
+	if result.CreatedEntries > 0 {
+		logger.Print("")
+		logger.Print("WARNING: " + fmt.Sprintf("%d new entries were created in profile '%s' of the KeePass database.", result.CreatedEntries, secretsConfig.Metadata.Profile))
+		logger.Print("These entries contain placeholder values that need to be filled by the developer.")
+		logger.Print("Please open your KeePass database and update the created entries with actual values.")
+		logger.Print("")
 	}
 	
 	logger.Success("KeePass database created successfully")

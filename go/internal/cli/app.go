@@ -177,6 +177,7 @@ func (a *CLIApp) GetSecretsConfigFile() string {
 func (a *CLIApp) setupCommands() {
 	a.rootCmd.AddCommand(NewInitCommand(a))
 	a.rootCmd.AddCommand(a.createShowCommand())
+	a.rootCmd.AddCommand(NewSnapshotCommand(a))
 }
 
 // getVersionTemplate follows SRP - single responsibility of formatting version output
