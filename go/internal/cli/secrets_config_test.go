@@ -11,6 +11,7 @@ type MockLogger struct {
 	debugMessages []string
 	infoMessages  []string
 	errorMessages []string
+	printMessages []string
 }
 
 func (m *MockLogger) Debug(msg string)   { m.debugMessages = append(m.debugMessages, msg) }
@@ -18,6 +19,7 @@ func (m *MockLogger) Info(msg string)    { m.infoMessages = append(m.infoMessage
 func (m *MockLogger) Success(msg string) { m.infoMessages = append(m.infoMessages, msg) }
 func (m *MockLogger) Error(msg string)   { m.errorMessages = append(m.errorMessages, msg) }
 func (m *MockLogger) Warning(msg string) { m.infoMessages = append(m.infoMessages, msg) }
+func (m *MockLogger) Print(msg string)   { m.printMessages = append(m.printMessages, msg) }
 
 func TestSecretsConfigManager_ValidSecretsYml(t *testing.T) {
 	// Create temp directory
