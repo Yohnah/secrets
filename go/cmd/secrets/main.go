@@ -1,27 +1,26 @@
 package main
 
 import (
-	"log"
-	"os"
+"fmt"
+"os"
 
-	"github.com/Yohnah/secrets/internal/cli"
+"github.com/Yohnah/secrets/internal/cli"
 )
 
-// Version information - set at build time via ldflags
+// Version information - injected at build time
 var (
-	Version   = "dev"
-	GitCommit = "unknown"
-	BuildTime = "unknown"
+Version   = "dev"
+BuildTime = "unknown"
+GitCommit = "unknown"
 )
 
 func main() {
-	// Set version information before creating the app
-	cli.SetVersionInfo(Version, GitCommit, BuildTime)
-	
-	app := cli.NewApp()
+// Create CLI application with version info
+app := cli.NewCLIApp(Version, BuildTime, GitCommit)
 
-	if err := app.Execute(); err != nil {
-		log.Printf("Error: %v", err)
-		os.Exit(1)
-	}
+// Execute CLI
+if err := app.Execute(); err != nil {
+fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+os.Exit(1)
+}
 }

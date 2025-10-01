@@ -1,13 +1,16 @@
-package cli
+package prompt
 
 import (
 	"bufio"
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/Yohnah/secrets/internal/logger"
 )
 
 // InteractivePrompter interface follows ISP - Interface Segregation Principle
+// Separates user interaction concerns
 type InteractivePrompter interface {
 	AskYesNo(question, defaultOption string, forceDefault bool) (bool, error)
 	AskString(question, defaultOption string, forceDefault bool) (string, error)
@@ -15,12 +18,12 @@ type InteractivePrompter interface {
 
 // DefaultInteractivePrompter follows SRP - Single Responsibility for user interaction
 type DefaultInteractivePrompter struct {
-	logger Logger
+	logger logger.Logger
 	reader *bufio.Reader
 }
 
 // NewInteractivePrompter factory function follows DIP - Dependency Inversion Principle
-func NewInteractivePrompter(logger Logger) InteractivePrompter {
+func NewInteractivePrompter(logger logger.Logger) InteractivePrompter {
 	return &DefaultInteractivePrompter{
 		logger: logger,
 		reader: bufio.NewReader(os.Stdin),

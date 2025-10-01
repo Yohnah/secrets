@@ -1,15 +1,16 @@
 # Variables
 APP_NAME := secrets
 
-# Version detection: use git tag if available, otherwise development version
-GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null)
+# Version detection: use semantic versioning git tags if available, otherwise development version
+# Only consider tags that match semantic versioning pattern (v0.0.0, v1.2.3, etc.)
+GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$$' || echo "")
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 GIT_DIRTY := $(shell git diff --quiet 2>/dev/null || echo "-dirty")
 BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 
-# Version logic:
-# - If on exact git tag: use tag (e.g., v0.1.0)
-# - If development: use v0.1.0-dev+timestamp.commit
+# Version logic (following semantic versioning):
+# - If on exact semantic version git tag: use tag (e.g., v1.2.3)
+# - If development: use v0.1.0-dev+YYYYMMDD.commit
 # - If dirty: add -dirty suffix
 ifdef GIT_TAG
     VERSION := $(GIT_TAG)$(GIT_DIRTY)
