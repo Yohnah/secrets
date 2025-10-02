@@ -65,13 +65,18 @@ deps: ## Install Go dependencies (go mod download + tidy)
 	@echo "Installing Go dependencies..."
 	cd $(GO_DIR) && $(GOMOD) download
 	cd $(GO_DIR) && $(GOMOD) tidy
+	@echo "Installing development tools..."
+	@which richgo >/dev/null 2>&1 || (echo "Installing richgo..." && $(GOCMD) install github.com/kyoh86/richgo@latest)
+	@if [ -f "$$HOME/go/bin/richgo" ] && [ ! -f "/usr/local/bin/richgo" ]; then \
+		sudo ln -sf $$HOME/go/bin/richgo /usr/local/bin/richgo; \
+	fi
 	@echo "Dependencies installed successfully"
 
 # Run tests with verbose output for debugging and colored output
 .PHONY: tests
 tests: ## Run all tests with verbose output and colors
 	@echo "Running all tests..."
-	cd $(GO_DIR) && $(HOME)/go/bin/richgo test -v ./...
+	cd $(GO_DIR) && richgo test -v ./...
 	@echo "All tests completed successfully"
 
 .PHONY: clean

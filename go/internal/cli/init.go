@@ -5,291 +5,250 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/spf13/cobra"
-	"github.com/Yohnah/secrets/internal/config"
+	configPkg "github.com/Yohnah/secrets/internal/config"
 	"github.com/Yohnah/secrets/internal/git"
 	"github.com/Yohnah/secrets/internal/keepass"
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/prompt"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
-
-// InitCommand encapsulates the init command functionality
-// Follows SRP - Single Responsibility Principle: only handles init command
-type InitCommand struct {
-	logger          logger.Logger
-	configManager   config.Manager
-	gitFinder       git.RootFinder
-	keepassManager  keepass.Manager
-	prompter        prompt.InteractivePrompter
-	globalFlags     *GlobalFlags
-}
 
 // NewInitCommand creates the init command
 // Follows SRP - Single Responsibility Principle: only handles init command creation
-func NewInitCommand(
-	logger logger.Logger,
-	configManager config.Manager,
-	gitFinder git.RootFinder,
-	keepassManager keepass.Manager,
-	prompter prompt.InteractivePrompter,
-	globalFlags *GlobalFlags,
-) *cobra.Command {
-	initCmd := &InitCommand{
-		logger:          logger,
-		configManager:   configManager,
-		gitFinder:       gitFinder,
-		keepassManager:  keepassManager,
-		prompter:        prompter,
-		globalFlags:     globalFlags,
-	}
-
+func NewInitCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Initialize a new secrets project",
+		Short: "Initialize a new secrets project with KeePass database and configuration",
 		Long: `Initialize a new secrets project with KeePass database and configuration.
 
-This command will:
-1. Create the necessary directory structure (.secrets_yohnah)
-2. Generate configuration files (config.yml)
-3. Create KeePass database with keyfile
-4. Respect flag and environment variable precedence
+	This command will:
+	1. Check if current directory is within a git repository (unless --ignore-git-repository)
+	2. Create the necessary directory structure (.secrets_yohnah) in git root
+	3. Generate configuration files (config.yml)
+	4. Create KeePass database with keyfile (unless --no-database is specified)
+	5. Add .secrets_yohnah to .gitignore automatically
+	6. Respect flag and environment variable precedence
 
-Examples:
-  secrets init                              # Initialize in git repository
-  secrets init --ignore-git-repository      # Initialize in current directory
-  secrets init --verbose                    # Initialize with verbose output
-  secrets init --config myconf              # Initialize with custom config path`,
-		RunE: initCmd.runInit,
+	Examples:
+	  secrets init                              # Initialize with KeePass database (git required)
+	  secrets init --no-database                # Initialize configuration only (git required)
+	  secrets init --ignore-git-repository      # Initialize in current directory (no git required)
+	  secrets init --verbose                    # Initialize with verbose output
+	  secrets init --config myconf              # Initialize with custom config path`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Initialize managers following DDD
+			configMgr := configPkg.NewConfigManager()
+			dbMgr := keepass.NewDatabaseManager()
+			gitMgr := git.NewRepositoryManager()
+
+			// ConfigManager is the SINGLE SOURCE OF TRUTH for all configuration
+			// Get configuration values respecting precedence: FLAGS > CONFIG.YML > ENV VARS > DEFAULTS
+
+			// Get force flag - try command first, then parent
+			force := false
+			if cmd.Flags().Lookup("force") != nil {
+				force, _ = cmd.Flags().GetBool("force")
+			} else if cmd.Parent() != nil && cmd.Parent().Flags().Lookup("force") != nil {
+				force, _ = cmd.Parent().Flags().GetBool("force")
+			}
+
+			// Get other flags
+			verbose, _ := cmd.Flags().GetBool("verbose")
+			noCreateDatabase, _ := cmd.Flags().GetBool("no-create-database")
+			ignoreGitRepository, _ := cmd.Flags().GetBool("ignore-git-repository")
+
+			// Initialize logger with configuration
+			log := logger.NewLogger(verbose)
+
+			// Initialize prompter with configuration
+			prompter := prompt.NewInteractivePrompter(force)
+
+			// Git repository validation unless explicitly ignored
+			var secretsDir string
+			if !ignoreGitRepository {
+				if !gitMgr.IsGitRepository() {
+					return fmt.Errorf("el directorio actual no está dentro de un repositorio git. Use --ignore-git-repository para inicializar fuera de un repositorio git")
+				}
+
+				gitRoot, err := gitMgr.FindGitRoot()
+				if err != nil {
+					return fmt.Errorf("no se pudo encontrar la raíz del repositorio git: %w", err)
+				}
+
+				secretsDir = filepath.Join(gitRoot, ".secrets_yohnah")
+				log.Debug(fmt.Sprintf("Git repository detected. Using git root: %s", gitRoot))
+				log.Debug(fmt.Sprintf("Secrets directory will be: %s", secretsDir))
+
+				// Add .secrets_yohnah to .gitignore if not already present
+				if err := gitMgr.EnsureGitIgnore(gitRoot, ".secrets_yohnah"); err != nil {
+					log.Debug(fmt.Sprintf("Warning: could not update .gitignore: %v", err))
+					// Don't fail the init process for .gitignore issues
+				} else {
+					log.Debug("Added .secrets_yohnah to .gitignore")
+				}
+			} else {
+				secretsDir = ".secrets_yohnah"
+				log.Debug("Git repository validation ignored by user request")
+			}
+
+			configPath := filepath.Join(secretsDir, "config.yml")
+
+			// Initial confirmation after git validation
+			confirmed, err := prompter.Confirm("¿Está seguro que desea inicializar el proyecto de secretos en este directorio?")
+			if err != nil {
+				return err
+			}
+			if !confirmed {
+				fmt.Fprintln(cmd.OutOrStdout(), "Operación cancelada por el usuario.")
+				return nil
+			}
+
+			// Check if already initialized
+			if _, err := os.Stat(secretsDir); err == nil {
+				if _, err := os.Stat(configPath); err == nil {
+					fmt.Fprintln(cmd.OutOrStdout(), "✓ Secrets ya ha sido inicializado en este directorio.")
+					return nil
+				}
+			}
+
+			// Create directory
+			if err := os.MkdirAll(secretsDir, 0o700); err != nil {
+				return fmt.Errorf("no se pudo crear el directorio %s: %w", secretsDir, err)
+			}
+			log.Debug(fmt.Sprintf("Created directory: %s", secretsDir))
+
+			// Create config.yml if not exists
+			if _, err := os.Stat(configPath); os.IsNotExist(err) {
+				configContent := `# SECRETS CONFIGURATION FILE
+# This file defines the paths for the KeePass database and keyfile used by the secrets CLI.
+# You can change these values to absolute or relative paths as needed.
+#
+# database_path: Path to the KeePass database file (.kdbx)
+# keyfile_path:  Path to the KeePass keyfile (recommended for extra security)
+
+database_path: secrets.kdbx
+keyfile_path: secrets.keyfile
+`
+				if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+					return fmt.Errorf("no se pudo crear el archivo de configuración: %w", err)
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "✓ Proyecto inicializado: %s\n", secretsDir)
+				fmt.Fprintf(cmd.OutOrStdout(), "✓ Configuración creada: %s\n", configPath)
+				log.Debug(fmt.Sprintf("Created config file: %s", configPath))
+			}
+
+			// Skip database creation if --no-create-database flag is set
+			if noCreateDatabase {
+				log.Info("Database creation skipped (--no-create-database flag)")
+				return nil
+			}
+
+			// Load configuration with automatic precedence: flags > config.yml > env > defaults
+			// ConfigManager is the SINGLE SOURCE OF TRUTH for all configuration
+			externalConfig := viper.GetString("config")
+			configForLoad := configPath // Default to local config
+			if externalConfig != "" {
+				configForLoad = externalConfig // Use external config if specified
+			}
+
+			// Only pass flag values if they were explicitly set (not from viper's env fallback)
+			var databaseFlag, keyfileFlag string
+
+			// Check for database flag in parent command
+			if cmd.Parent() != nil && cmd.Parent().Flags().Changed("database") {
+				databaseFlag = viper.GetString("database")
+			}
+
+			// Check for keyfile flag in parent command
+			if cmd.Parent() != nil && cmd.Parent().Flags().Changed("keyfile") {
+				keyfileFlag = viper.GetString("keyfile")
+			}
+
+			configOptionsForLoad := configPkg.ConfigOptions{
+				DatabaseFlag: databaseFlag,
+				KeyfileFlag:  keyfileFlag,
+				ConfigPath:   configForLoad,
+				BasePath:     secretsDir,
+			}
+			cfg, err := configMgr.Load(configOptionsForLoad)
+			if err != nil {
+				log.Debug(fmt.Sprintf("Error loading configuration: %v", err))
+				return fmt.Errorf("error al cargar la configuración: %w", err)
+			}
+
+			// Use resolved paths from configuration
+			dbPath := cfg.DatabasePath
+			keyfilePath := cfg.KeyfilePath
+
+			log.Debug(fmt.Sprintf("Resolved database path: %s", dbPath))
+			log.Debug(fmt.Sprintf("Resolved keyfile path: %s", keyfilePath))
+
+			// Create parent directories for database and keyfile if they don't exist
+			if dbParentDir := filepath.Dir(dbPath); dbParentDir != "." {
+				if err := os.MkdirAll(dbParentDir, 0o700); err != nil {
+					return fmt.Errorf("no se pudo crear el directorio padre para la base de datos %s: %w", dbParentDir, err)
+				}
+				log.Debug(fmt.Sprintf("Created database parent directory: %s", dbParentDir))
+			}
+			if keyfileParentDir := filepath.Dir(keyfilePath); keyfileParentDir != "." {
+				if err := os.MkdirAll(keyfileParentDir, 0o700); err != nil {
+					return fmt.Errorf("no se pudo crear el directorio padre para el keyfile %s: %w", keyfileParentDir, err)
+				}
+				log.Debug(fmt.Sprintf("Created keyfile parent directory: %s", keyfileParentDir))
+			}
+
+			// Check if database already exists
+			if dbMgr.Exists(dbPath) {
+				fmt.Fprintf(cmd.OutOrStdout(), "✓ Database already exists: %s\n", dbPath)
+				log.Info(fmt.Sprintf("Database already exists, skipping creation: %s", dbPath))
+				return nil
+			}
+
+			// Confirm database creation
+			dbConfirmed, err := prompter.Confirm("¿Desea crear la base de datos KeePass?")
+			if err != nil {
+				return err
+			}
+			if !dbConfirmed {
+				fmt.Fprintln(cmd.OutOrStdout(), "Creación de base de datos cancelada. El keyfile no será creado.")
+				return nil
+			}
+
+			// Get password (interactive or from environment variable)
+			password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
+			if password == "" {
+				password, err = prompter.GetPassword("Ingrese contraseña para la base de datos: ")
+				if err != nil {
+					return fmt.Errorf("failed to get password: %w", err)
+				}
+				if password == "" {
+					return fmt.Errorf("password cannot be empty")
+				}
+			} else {
+				log.Debug("Using password from SECRETS_YOHNAH_PASSWORD environment variable")
+			}
+
+			// Create database with keyfile
+			log.Info("Creating KeePass database with keyfile...")
+			if err := dbMgr.Create(dbPath, keyfilePath, password); err != nil {
+				return fmt.Errorf("failed to create database: %w", err)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "✓ Database created: %s\n", dbPath)
+			fmt.Fprintf(cmd.OutOrStdout(), "✓ Keyfile created: %s\n", keyfilePath)
+			log.Info(fmt.Sprintf("Database created successfully: %s", dbPath))
+			log.Info(fmt.Sprintf("Keyfile created successfully: %s", keyfilePath))
+
+			return nil
+		},
 	}
+
+	// Add command-specific flags
+	cmd.Flags().Bool("no-create-database", false, "create only configuration without KeePass database and keyfile")
+	cmd.Flags().BoolP("force", "f", false, "force operation without confirmation") // For tests compatibility
+	cmd.Flags().BoolP("verbose", "v", false, "verbose output")                     // For tests compatibility
+	cmd.Flags().Bool("ignore-git-repository", false, "ignore git repository validation and initialize in current directory")
 
 	return cmd
-}
-
-// runInit handles the init command execution
-// Follows SRP - Single Responsibility Principle: only handles init execution
-func (ic *InitCommand) runInit(cmd *cobra.Command, args []string) error {
-	ic.logger.Debug("Init command started")
-	
-	// Determine working directory
-	var workingDir string
-	ignoreGit, _ := cmd.Flags().GetBool("ignore-git-repository")
-	
-	if ignoreGit {
-		ic.logger.Debug("Ignoring git repository requirement")
-		currentDir, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("Failed to get current directory: %v", err)
-		}
-		workingDir = currentDir
-		ic.logger.Info("Using current directory: " + workingDir)
-	} else {
-		// Find git root directory
-		gitRoot, err := ic.gitFinder.FindGitRoot()
-		if err != nil {
-			return fmt.Errorf("Failed to find git repository root: %v", err)
-		}
-		workingDir = gitRoot
-		ic.logger.Info("Git root found: " + workingDir)
-	}
-
-	// Create .secrets_yohnah directory
-	secretsDir := filepath.Join(workingDir, ".secrets_yohnah")
-	ic.logger.Debug("Checking if project is already initialized: " + secretsDir)
-	
-	if ic.isAlreadyInitialized(secretsDir) {
-		return fmt.Errorf("Project is already initialized. Secrets directory exists: %s", secretsDir)
-	}
-
-	// Ask for confirmation unless force flag is used
-	if !ic.globalFlags.Force {
-		confirmed, err := ic.prompter.AskYesNo("Initialize secrets project in this directory?", "yes", false)
-		if err != nil {
-			return fmt.Errorf("Failed to get confirmation: %v", err)
-		}
-		if !confirmed {
-			ic.logger.Print("Operation cancelled by user")
-			return nil
-		}
-	}
-
-	// Create secrets directory
-	if err := ic.createSecretsDirectory(secretsDir); err != nil {
-		return fmt.Errorf("Failed to create secrets directory: %v", err)
-	}
-
-	// Determine config path with precedence: flag > env > default
-	var configPath string
-	if ic.globalFlags.ConfigPath != "" {
-		configPath = ic.globalFlags.ConfigPath
-		ic.logger.Info("Using custom config path from flag/env: " + configPath)
-	} else {
-		configPath = filepath.Join(secretsDir, "config.yml")
-		ic.logger.Info("Using default config path: " + configPath)
-	}
-
-	// Create or verify config
-	if err := ic.createOrVerifyConfig(configPath); err != nil {
-		return fmt.Errorf("Failed to create/verify configuration: %v", err)
-	}
-
-	// Load config to get database and keyfile paths
-	cfg, err := ic.configManager.LoadConfig(configPath)
-	if err != nil {
-		return fmt.Errorf("Failed to load config: %v", err)
-	}
-
-	// Determine database and keyfile paths with precedence
-	dbPath := ic.resolveDatabasePath(cfg, secretsDir)
-	keyfilePath := ic.resolveKeyfilePath(cfg, secretsDir)
-	password := "123456" // Default password for development
-
-	ic.logger.Info("Database path: " + dbPath)
-	ic.logger.Info("Keyfile path: " + keyfilePath)
-
-	// Create KeePass database
-	if err := ic.createOrVerifyDatabase(dbPath, keyfilePath, password); err != nil {
-		return fmt.Errorf("Failed to create/verify database: %v", err)
-	}
-
-	ic.logger.Success("Secrets project initialized successfully")
-	ic.logger.Print("Configuration directory: " + secretsDir)
-	ic.logger.Print("Config file: " + configPath)
-	ic.logger.Print("Database: " + dbPath)
-	ic.logger.Print("Keyfile: " + keyfilePath)
-	
-	return nil
-}
-
-// createSecretsDirectory creates the .secrets_yohnah directory
-// Follows SRP - Single Responsibility Principle: only handles directory creation
-func (ic *InitCommand) createSecretsDirectory(secretsDir string) error {
-	ic.logger.Debug("Creating secrets directory: " + secretsDir)
-
-	// Check if directory already exists
-	if _, err := os.Stat(secretsDir); err == nil {
-		ic.logger.Info("Secrets directory already exists")
-		return nil
-	}
-
-	// Create directory
-	if err := os.MkdirAll(secretsDir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %v", err)
-	}
-
-	ic.logger.Info("Created secrets directory")
-	return nil
-}
-
-// createOrVerifyConfig creates or verifies the configuration file
-// Follows SRP - Single Responsibility Principle: only handles config creation/verification
-func (ic *InitCommand) createOrVerifyConfig(configPath string) error {
-	ic.logger.Debug("Creating or verifying config: " + configPath)
-
-	// Check if config already exists
-	if _, err := os.Stat(configPath); err == nil {
-		ic.logger.Info("Configuration file already exists")
-		
-		// Try to load and validate existing config
-		if _, err := ic.configManager.LoadConfig(configPath); err != nil {
-			ic.logger.Warning("Existing config file is invalid: " + err.Error())
-			return fmt.Errorf("invalid existing config file")
-		}
-		
-		ic.logger.Info("Existing configuration is valid")
-		return nil
-	}
-
-	// Create new config
-	if err := ic.configManager.CreateDefaultConfig(configPath); err != nil {
-		return fmt.Errorf("failed to create config: %v", err)
-	}
-
-	ic.logger.Info("Created default configuration file")
-	return nil
-}
-
-// createOrVerifyDatabase creates or verifies the KeePass database
-// Follows SRP - Single Responsibility Principle: only handles database creation/verification
-func (ic *InitCommand) createOrVerifyDatabase(dbPath, keyfilePath, password string) error {
-	ic.logger.Debug("Creating or verifying database: " + dbPath)
-
-	// Check if database already exists and is valid
-	if ic.keepassManager.DatabaseExists(dbPath, keyfilePath, password) {
-		ic.logger.Info("KeePass database already exists and is valid")
-		return nil
-	}
-
-	// Create new database
-	if err := ic.keepassManager.CreateDatabase(dbPath, keyfilePath, password); err != nil {
-		return fmt.Errorf("failed to create database: %v", err)
-	}
-
-	ic.logger.Info("Created KeePass database successfully")
-	return nil
-}
-
-// resolveDatabasePath resolves database path with precedence: flag > env > config > default
-// Follows SRP - Single Responsibility Principle: only handles path resolution
-func (ic *InitCommand) resolveDatabasePath(cfg *config.Config, secretsDir string) string {
-	// Flag has highest precedence
-	if ic.globalFlags.DatabasePath != "" {
-		if filepath.IsAbs(ic.globalFlags.DatabasePath) {
-			return ic.globalFlags.DatabasePath
-		}
-		return filepath.Join(secretsDir, ic.globalFlags.DatabasePath)
-	}
-	
-	// Config file has lowest precedence
-	if cfg.DatabasePath != "" {
-		if filepath.IsAbs(cfg.DatabasePath) {
-			return cfg.DatabasePath
-		}
-		return filepath.Join(secretsDir, cfg.DatabasePath)
-	}
-	
-	// Default fallback
-	return filepath.Join(secretsDir, "secrets.kdbx")
-}
-
-// resolveKeyfilePath resolves keyfile path with precedence: flag > env > config > default
-// Follows SRP - Single Responsibility Principle: only handles path resolution
-func (ic *InitCommand) resolveKeyfilePath(cfg *config.Config, secretsDir string) string {
-	// Flag has highest precedence
-	if ic.globalFlags.KeyfilePath != "" {
-		if filepath.IsAbs(ic.globalFlags.KeyfilePath) {
-			return ic.globalFlags.KeyfilePath
-		}
-		return filepath.Join(secretsDir, ic.globalFlags.KeyfilePath)
-	}
-	
-	// Config file has lowest precedence
-	if cfg.KeyfilePath != "" {
-		if filepath.IsAbs(cfg.KeyfilePath) {
-			return cfg.KeyfilePath
-		}
-		return filepath.Join(secretsDir, cfg.KeyfilePath)
-	}
-	
-	// Default fallback
-	return filepath.Join(secretsDir, "secrets.keyfile")
-}
-
-// isAlreadyInitialized checks if the secrets project is already initialized
-// Follows SRP - Single Responsibility Principle: only handles initialization check
-func (ic *InitCommand) isAlreadyInitialized(secretsDir string) bool {
-	ic.logger.Debug("Checking if project is already initialized: " + secretsDir)
-	
-	// Check if .secrets_yohnah directory exists
-	if _, err := os.Stat(secretsDir); os.IsNotExist(err) {
-		return false
-	}
-	
-	// Check if config.yml exists
-	configPath := filepath.Join(secretsDir, "config.yml")
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return false
-	}
-	
-	ic.logger.Debug("Project appears to be already initialized")
-	return true
 }

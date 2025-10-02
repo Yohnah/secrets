@@ -64,8 +64,16 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 ENV CGO_ENABLED=1
 ENV GOOS=linux
 
+# Setup Go environment directories with proper permissions
+RUN echo "Setting up Go environment directories..." && \
+    mkdir -p /go && \
+    chmod 777 /go && \
+    mkdir -p /go/bin && \
+    echo "Go environment directories created with proper permissions"
+
 # Install additional tools for Go development
 RUN echo "Installing Go development tools..." && \
+    export GOPATH=/go && \
     CGO_ENABLED=1 go install golang.org/x/tools/gopls@latest && \
     CGO_ENABLED=1 go install github.com/go-delve/delve/cmd/dlv@latest && \
     CGO_ENABLED=0 go install honnef.co/go/tools/cmd/staticcheck@latest && \
@@ -74,6 +82,26 @@ RUN echo "Installing Go development tools..." && \
     (CGO_ENABLED=0 go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest || \
      echo "Warning: golangci-lint installation failed, will be available for manual install") && \
     echo "Go tools installation completed"
+
+# Configure Go environment variables for all users
+ENV GOPATH="/go"
+ENV PATH="/usr/local/go/bin:/go/bin:${PATH}"
+
+# Create symbolic links for VS Code compatibility (fallback for user installations)
+RUN echo "Setting up VS Code Go tools compatibility..." && \
+    mkdir -p /go/bin && \
+    echo "#!/bin/bash" > /usr/local/bin/setup-go-tools && \
+    echo "# Setup Go tools for user session" >> /usr/local/bin/setup-go-tools && \
+    echo "if [ -d \"\$HOME/go/bin\" ]; then" >> /usr/local/bin/setup-go-tools && \
+    echo "  export PATH=\"\$PATH:\$HOME/go/bin\"" >> /usr/local/bin/setup-go-tools && \
+    echo "  for tool in gopls golangci-lint dlv staticcheck goimports; do" >> /usr/local/bin/setup-go-tools && \
+    echo "    if [ -f \"\$HOME/go/bin/\$tool\" ] && [ ! -f \"/go/bin/\$tool\" ]; then" >> /usr/local/bin/setup-go-tools && \
+    echo "      ln -sf \"\$HOME/go/bin/\$tool\" \"/go/bin/\$tool\" 2>/dev/null || true" >> /usr/local/bin/setup-go-tools && \
+    echo "    fi" >> /usr/local/bin/setup-go-tools && \
+    echo "  done" >> /usr/local/bin/setup-go-tools && \
+    echo "fi" >> /usr/local/bin/setup-go-tools && \
+    chmod +x /usr/local/bin/setup-go-tools && \
+    echo "Go tools compatibility script created"
 
 # Set working directory
 WORKDIR /workspaces/secrets

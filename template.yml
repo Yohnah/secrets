@@ -1,0 +1,90 @@
+# secrets.yml - Minimal template
+# Copy and customize for your project
+# This template contains three sections:
+
+# secrets.yml - Complete template with examples
+# This template shows placeholders and examples in comments
+
+metadata:
+  # Profile name - creates a group in KeePass database on root level with this name
+  profile: "profile-name"  # Example: "my-project", "api-service"
+  
+  # Default environment when none is specified
+  default_environment: "environment_name"      # Example: "development", "staging"
+---
+# Environment configurations
+# Each environment contains a list of secrets to be extracted
+
+environment_name:                               # Example: development, staging, production
+  # Basic environment variable from KeePass field
+  - name: "ITEM_NAME"                         # Example: DATABASE_URL, API_KEY
+    entry: "/path/to/entry"                  # Example: "/databases/dev/main", "/api/keys"
+    key: "entry_field_name"                  # Example: "password", "connection_string", "token". If using attachments, use "attachments/filename.ext"
+    type: "(envvar|ssh_agent)"               # Type: envvar for environment variables or ssh_agent for SSH keys
+
+
+# Example with real values in comments:
+# development:
+#   - name: DATABASE_URL
+#     entry: "/databases/development/main"
+#     key: "connection_string"
+#     type: "envvar"
+#   
+#   - name: API_KEY
+#     entry: "/api_keys/development"
+#     key: "token"
+#     type: "envvar"
+#   
+#   - name: SSH_PRIVATE_KEY
+#     entry: "/ssh_keys/development/deploy"
+#     key: "attachments/private_key"
+#     type: "ssh_agent"
+
+# staging:
+#   - name: DATABASE_URL
+#     entry: "/databases/staging/main"
+#     key: "connection_string"
+#     type: "envvar"
+#   
+#   - name: API_KEY
+#     entry: "/api_keys/staging"
+#     key: "token"
+#     type: "envvar"
+
+# production:
+#   - name: DATABASE_URL
+#     entry: "/databases/production/main"
+#     key: "connection_string"
+#     type: "envvar"
+#   
+#   - name: API_KEY
+#     entry: "/api_keys/production"
+#     key: "token"
+#     type: "envvar"
+#   
+#   - name: SSH_PRIVATE_KEY
+#     entry: "/ssh_keys/production/deploy"
+#     key: "private_key"
+#     type: "ssh_agent"
+#   
+#   - name: GITHUB_SSH_KEY
+#     entry: "/ssh_keys/github"
+#     key: "attachments/github_key"
+#     type: "ssh_agent"
+#   
+#   - name: DOCKER_REGISTRY_TOKEN
+#     entry: "/docker/registry"
+#     key: "access_token"
+#     type: "envvar"
+#   
+#   - name: TLS_CERTIFICATE
+#     entry: "/certificates/production"
+#     key: "attachments/server.crt"
+#     type: "envvar"
+---
+# Third section reserved for future features
+# This space will be used for advanced configurations like:
+# - Secret rotation policies
+# - Access control rules  
+# - Audit configurations
+# - Integration settings

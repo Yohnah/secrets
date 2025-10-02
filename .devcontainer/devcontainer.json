@@ -44,5 +44,5 @@
         }
     },
     "remoteUser": "vscode",
-    "postCreateCommand": "go version && echo 'Go DevContainer ready.'"
+    "postCreateCommand": "/usr/local/bin/setup-go-tools && go version && echo 'Go DevContainer ready with tools configured.'"
 }

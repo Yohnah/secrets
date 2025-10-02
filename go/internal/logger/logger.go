@@ -2,18 +2,16 @@ package logger
 
 import (
 	"fmt"
+	"log"
 	"os"
 )
 
 // Logger interface follows ISP - Interface Segregation Principle
-// Clients depend only on logging methods they need
 type Logger interface {
-	Debug(message string)
-	Info(message string) 
-	Success(message string)
-	Error(message string)
-	Warning(message string)
-	Print(message string)
+	Debug(msg string)
+	Info(msg string)
+	Error(msg string)
+	Success(msg string)
 }
 
 // DefaultLogger implements Logger interface
@@ -22,44 +20,34 @@ type DefaultLogger struct {
 	verbose bool
 }
 
-// New creates a new logger instance
-// Follows DIP - Dependency Inversion Principle: factory function
-func New(verbose bool) Logger {
+// NewLogger creates a new logger
+// Follows DIP - Dependency Inversion Principle: returns interface
+func NewLogger(verbose bool) Logger {
 	return &DefaultLogger{
 		verbose: verbose,
 	}
 }
 
-// Debug outputs debug messages only in verbose mode
-func (l *DefaultLogger) Debug(message string) {
+// Debug logs debug messages (only when verbose is enabled)
+func (l *DefaultLogger) Debug(msg string) {
 	if l.verbose {
-		fmt.Printf("[DEBUG] %s\n", message)
+		log.Printf("[DEBUG] %s", msg)
 	}
 }
 
-// Info outputs info messages only in verbose mode
-func (l *DefaultLogger) Info(message string) {
+// Info logs info messages (only when verbose is enabled)
+func (l *DefaultLogger) Info(msg string) {
 	if l.verbose {
-		fmt.Printf("[INFO] %s\n", message)
+		log.Printf("[INFO] %s", msg)
 	}
 }
 
-// Success outputs success messages always (user feedback)
-func (l *DefaultLogger) Success(message string) {
-	fmt.Printf("✓ %s\n", message)
+// Error logs error messages (always shown)
+func (l *DefaultLogger) Error(msg string) {
+	fmt.Fprintf(os.Stderr, "[ERROR] %s\n", msg)
 }
 
-// Error outputs error messages always
-func (l *DefaultLogger) Error(message string) {
-	fmt.Fprintf(os.Stderr, "✗ Error: %s\n", message)
-}
-
-// Warning outputs warning messages always
-func (l *DefaultLogger) Warning(message string) {
-	fmt.Printf("⚠ Warning: %s\n", message)
-}
-
-// Print outputs regular messages always
-func (l *DefaultLogger) Print(message string) {
-	fmt.Println(message)
+// Success logs success messages (always shown)
+func (l *DefaultLogger) Success(msg string) {
+	fmt.Printf("✓ %s\n", msg)
 }
