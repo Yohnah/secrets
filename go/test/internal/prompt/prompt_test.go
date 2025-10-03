@@ -126,3 +126,27 @@ func isPositiveResponse(input string) bool {
 	input = strings.TrimSpace(strings.ToLower(input))
 	return input == "y" || input == "yes"
 }
+
+func TestGetPasswordWithConfirmation_InterfaceCompliance(t *testing.T) {
+	// Test that InteractivePrompter implements PasswordProvider with confirmation method
+	// This validates ISP (Interface Segregation Principle) is maintained
+	prompter := prompt.NewInteractivePrompter(false)
+
+	// Type assertion to verify interface compliance
+	_, ok := interface{}(prompter).(prompt.PasswordProvider)
+	if !ok {
+		t.Fatal("InteractivePrompter does not implement PasswordProvider interface")
+	}
+}
+
+func TestPasswordProvider_HasRequiredMethods(t *testing.T) {
+	// Verify the PasswordProvider interface includes both password methods
+	// Following Interface Segregation Principle (ISP)
+	prompter := prompt.NewInteractivePrompter(false)
+
+	// Verify both GetPassword and GetPasswordWithConfirmation exist
+	var passwordProvider prompt.PasswordProvider = prompter
+	if passwordProvider == nil {
+		t.Fatal("Expected prompter to implement PasswordProvider interface")
+	}
+}

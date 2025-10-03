@@ -22,6 +22,7 @@ type ConfirmationProvider interface {
 // Following Interface Segregation Principle (ISP) - specific interface for passwords
 type PasswordProvider interface {
 	GetPassword(prompt string) (string, error)
+	GetPasswordWithConfirmation(prompt string) (string, error)
 }
 
 // InteractivePrompter implements both confirmation and password prompts
@@ -103,4 +104,32 @@ func (p *InteractivePrompter) GetPassword(prompt string) (string, error) {
 
 	fmt.Println() // Add newline after password input
 	return string(password), nil
+}
+
+// GetPasswordWithConfirmation prompts for a password twice to confirm it matches
+// This is critical for database creation to prevent typos that would lock users out
+// Following Single Responsibility Principle (SRP) - dedicated password confirmation
+func (p *InteractivePrompter) GetPasswordWithConfirmation(prompt string) (string, error) {
+	// First password entry
+	password1, err := p.GetPassword(prompt)
+	if err != nil {
+		return "", err
+	}
+
+	if password1 == "" {
+		return "", fmt.Errorf("password cannot be empty")
+	}
+
+	// Confirmation entry
+	password2, err := p.GetPassword("Confirm password: ")
+	if err != nil {
+		return "", err
+	}
+
+	// Verify passwords match
+	if password1 != password2 {
+		return "", fmt.Errorf("passwords do not match")
+	}
+
+	return password1, nil
 }

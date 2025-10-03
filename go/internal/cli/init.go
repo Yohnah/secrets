@@ -49,7 +49,6 @@ func NewInitCommand() *cobra.Command {
 			configMgr := configPkg.NewConfigManager()
 			dbMgr := keepass.NewDatabaseManager()
 			gitMgr := git.NewRepositoryManager()
-			secretsMgr := secrets.NewSecretsManager(dbMgr) // Add SecretsManager
 
 			// Determine secrets file path from args
 			var secretsFilePath string
@@ -76,6 +75,9 @@ func NewInitCommand() *cobra.Command {
 
 			// Initialize logger with configuration
 			log := logger.NewLogger(verbose)
+
+			// Initialize SecretsManager with logger
+			secretsMgr := secrets.NewSecretsManager(dbMgr, log)
 
 			// Initialize prompter with configuration
 			prompter := prompt.NewInteractivePrompter(force)
@@ -132,15 +134,15 @@ func NewInitCommand() *cobra.Command {
 			if _, err := os.Stat(secretsDir); err == nil {
 				if _, err := os.Stat(configPath); err == nil {
 					fmt.Fprintln(cmd.OutOrStdout(), "✓ Secrets has already been initialized in this directory.")
-					return nil
+					// Continue to database operations - don't return here
 				}
+			} else {
+				// Create directory if it doesn't exist
+				if err := os.MkdirAll(secretsDir, 0o700); err != nil {
+					return fmt.Errorf("could not create directory %s: %w", secretsDir, err)
+				}
+				log.Debug(fmt.Sprintf("Created directory: %s", secretsDir))
 			}
-
-			// Create directory
-			if err := os.MkdirAll(secretsDir, 0o700); err != nil {
-				return fmt.Errorf("could not create directory %s: %w", secretsDir, err)
-			}
-			log.Debug(fmt.Sprintf("Created directory: %s", secretsDir))
 
 			// Create config.yml if not exists
 			if _, err := os.Stat(configPath); os.IsNotExist(err) {
@@ -223,46 +225,121 @@ keyfile_path: secrets.keyfile
 			}
 
 			// Check if database already exists
+			var password string
 			if dbMgr.Exists(dbPath) {
 				fmt.Fprintf(cmd.OutOrStdout(), "✓ Database already exists: %s\n", dbPath)
 				log.Info(fmt.Sprintf("Database already exists, skipping creation: %s", dbPath))
-				return nil
-			}
 
-			// Confirm database creation
-			dbConfirmed, err := prompter.ConfirmWithDefault("Do you want to create the KeePass database?", true)
-			if err != nil {
-				return err
-			}
-			if !dbConfirmed {
-				fmt.Fprintln(cmd.OutOrStdout(), "Database creation cancelled. Keyfile will not be created.")
-				return nil
-			}
-
-			// Get password (interactive or from environment variable)
-			password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
-			if password == "" {
-				password, err = prompter.GetPassword("Enter database password: ")
-				if err != nil {
-					return fmt.Errorf("failed to get password: %w", err)
-				}
+				// Get password for existing database operations
+				password = os.Getenv("SECRETS_YOHNAH_PASSWORD")
 				if password == "" {
-					return fmt.Errorf("password cannot be empty")
+					password, err = prompter.GetPassword("Enter database password: ")
+					if err != nil {
+						return fmt.Errorf("failed to get password: %w", err)
+					}
+					if password == "" {
+						return fmt.Errorf("password cannot be empty")
+					}
+				} else {
+					log.Debug("Using password from SECRETS_YOHNAH_PASSWORD environment variable")
 				}
 			} else {
-				log.Debug("Using password from SECRETS_YOHNAH_PASSWORD environment variable")
+				// Database doesn't exist, create it
+				// Confirm database creation
+				dbConfirmed, err := prompter.ConfirmWithDefault("Do you want to create the KeePass database?", true)
+				if err != nil {
+					return err
+				}
+				if !dbConfirmed {
+					fmt.Fprintln(cmd.OutOrStdout(), "Database creation cancelled. Keyfile will not be created.")
+					return nil
+				}
+
+				// Get password (interactive or from environment variable)
+				password = os.Getenv("SECRETS_YOHNAH_PASSWORD")
+				if password == "" {
+					// For new database creation, require password confirmation
+					password, err = prompter.GetPasswordWithConfirmation("Enter database password: ")
+					if err != nil {
+						return fmt.Errorf("failed to get password: %w", err)
+					}
+				} else {
+					log.Debug("Using password from SECRETS_YOHNAH_PASSWORD environment variable")
+				}
+
+				// Create database with keyfile
+				log.Info("Creating KeePass database with keyfile...")
+				if err := dbMgr.Create(dbPath, keyfilePath, password); err != nil {
+					return fmt.Errorf("failed to create database: %w", err)
+				}
+
+				fmt.Fprintf(cmd.OutOrStdout(), "✓ Database created: %s\n", dbPath)
+				fmt.Fprintf(cmd.OutOrStdout(), "✓ Keyfile created: %s\n", keyfilePath)
+				log.Info(fmt.Sprintf("Database created successfully: %s", dbPath))
+				log.Info(fmt.Sprintf("Keyfile created successfully: %s", keyfilePath))
 			}
 
-			// Create database with keyfile
-			log.Info("Creating KeePass database with keyfile...")
-			if err := dbMgr.Create(dbPath, keyfilePath, password); err != nil {
-				return fmt.Errorf("failed to create database: %w", err)
-			}
+			// Create profile structure if secrets.yml is present and valid
+			// This always runs whether database was created or already existed
+			config, err := secretsMgr.LoadAndValidateSecretsFile(secretsFilePath)
+			if err == nil && config.Metadata.Profile != "" {
+				log.Info("Creating profile structure in database...")
 
-			fmt.Fprintf(cmd.OutOrStdout(), "✓ Database created: %s\n", dbPath)
-			fmt.Fprintf(cmd.OutOrStdout(), "✓ Keyfile created: %s\n", keyfilePath)
-			log.Info(fmt.Sprintf("Database created successfully: %s", dbPath))
-			log.Info(fmt.Sprintf("Keyfile created successfully: %s", keyfilePath))
+				// Convert validator types to secrets types
+				environments := make(map[string][]secrets.SecretItem)
+				for envName, items := range config.Environments {
+					secretItems := make([]secrets.SecretItem, len(items))
+					for i, item := range items {
+						secretItems[i] = secrets.SecretItem{
+							Name:  item.Name,
+							Entry: item.Entry,
+							Key:   item.Key,
+							Type:  item.Type,
+						}
+					}
+					environments[envName] = secretItems
+				}
+
+				result, err := secretsMgr.EnsureProfileStructure(dbPath, keyfilePath, password, config.Metadata.Profile, environments)
+				if err != nil {
+					log.Debug(fmt.Sprintf("Warning: failed to create profile structure: %v", err))
+					// Don't fail the init process for profile structure issues - just warn
+				} else {
+					// Determine if any structural changes were made
+					structureUpdated := result.ProfileCreated || result.HeadCreated ||
+						len(result.EnvironmentsCreated) > 0 || len(result.EntriesCreated) > 0 || result.FieldsAdded > 0
+
+					// Show appropriate message based on what was actually created/found
+					if result.ProfileCreated && result.HeadCreated {
+						fmt.Fprintf(cmd.OutOrStdout(), "✓ Profile structure created: %s → HEAD\n", result.ProfileName)
+						fmt.Fprintf(cmd.OutOrStdout(), "✓ Profile metadata entry created with version 1\n")
+						log.Info(fmt.Sprintf("Profile structure created successfully: %s → HEAD", result.ProfileName))
+					} else if result.ProfileCreated {
+						fmt.Fprintf(cmd.OutOrStdout(), "✓ Profile created: %s (HEAD already existed)\n", result.ProfileName)
+						log.Info(fmt.Sprintf("Profile created: %s (HEAD already existed)", result.ProfileName))
+					} else if result.HeadCreated {
+						fmt.Fprintf(cmd.OutOrStdout(), "✓ HEAD created under profile: %s (profile already existed)\n", result.ProfileName)
+						fmt.Fprintf(cmd.OutOrStdout(), "✓ Profile metadata entry created with version 1\n")
+						log.Info(fmt.Sprintf("HEAD created under profile: %s (profile already existed)", result.ProfileName))
+					} else {
+						fmt.Fprintf(cmd.OutOrStdout(), "✓ Profile structure already exists: %s → HEAD\n", result.ProfileName)
+						log.Info(fmt.Sprintf("Profile structure already exists: %s → HEAD", result.ProfileName))
+					}
+
+					// Show structure update message if any changes were made
+					if structureUpdated {
+						fmt.Fprintf(cmd.OutOrStdout(), "✓ Profile tree data was updated\n")
+					}
+
+					// Show information about environments only in verbose mode
+					if len(result.EnvironmentsCreated) > 0 {
+						log.Info(fmt.Sprintf("Environments created: %v", result.EnvironmentsCreated))
+					}
+					if len(result.EnvironmentsExisted) > 0 {
+						log.Info(fmt.Sprintf("Environments already existed: %v", result.EnvironmentsExisted))
+					}
+				}
+			}
 
 			return nil
 		},
