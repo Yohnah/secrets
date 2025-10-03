@@ -66,8 +66,8 @@ func TestInitCommandExists(t *testing.T) {
 		t.Error("Expected init command to be created, got nil")
 	}
 
-	if cmd.Use != "init" {
-		t.Errorf("Expected command use to be 'init', got %s", cmd.Use)
+	if cmd.Use != "init [secrets-file]" {
+		t.Errorf("Expected command use to be 'init [secrets-file]', got %s", cmd.Use)
 	}
 
 	// Verify command-specific flags exist

@@ -189,7 +189,7 @@ keyfile_path: secrets.keyfile`
 
 	// Verify message indicates already initialized
 	output := buf.String()
-	if !strings.Contains(output, "ya ha sido inicializado") {
+	if !strings.Contains(output, "already been initialized") {
 		t.Errorf("Expected 'already initialized' message, got: %s", output)
 	}
 }

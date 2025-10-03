@@ -10,6 +10,7 @@ import (
 	"github.com/Yohnah/secrets/internal/keepass"
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/prompt"
+	"github.com/Yohnah/secrets/internal/secrets"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -18,29 +19,44 @@ import (
 // Follows SRP - Single Responsibility Principle: only handles init command creation
 func NewInitCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "init",
+		Use:   "init [secrets-file]",
 		Short: "Initialize a new secrets project with KeePass database and configuration",
 		Long: `Initialize a new secrets project with KeePass database and configuration.
 
 	This command will:
-	1. Check if current directory is within a git repository (unless --ignore-git-repository)
-	2. Create the necessary directory structure (.secrets_yohnah) in git root
-	3. Generate configuration files (config.yml)
-	4. Create KeePass database with keyfile (unless --no-database is specified)
-	5. Add .secrets_yohnah to .gitignore automatically
-	6. Respect flag and environment variable precedence
+	1. Read and validate secrets.yml file (from git root or specified path)
+	2. Check if current directory is within a git repository (unless --ignore-git-repository)
+	3. Create the necessary directory structure (.secrets_yohnah) in git root
+	4. Generate configuration files (config.yml)
+	5. Create KeePass database with keyfile (unless --no-database is specified)
+	6. Create profile structure based on secrets.yml metadata
+	7. Add .secrets_yohnah to .gitignore automatically
+	8. Respect flag and environment variable precedence
 
 	Examples:
-	  secrets init                              # Initialize with KeePass database (git required)
+	  secrets init                              # Initialize with secrets.yml from git root
+	  secrets init myproject.yml                # Initialize with specific secrets file
+	  secrets init /path/to/secrets.yml         # Initialize with absolute path
 	  secrets init --no-database                # Initialize configuration only (git required)
 	  secrets init --ignore-git-repository      # Initialize in current directory (no git required)
 	  secrets init --verbose                    # Initialize with verbose output
 	  secrets init --config myconf              # Initialize with custom config path`,
+		Args:          cobra.MaximumNArgs(1), // Accept 0 or 1 argument (optional secrets file path)
+		SilenceUsage:  true,                  // Don't show usage on execution errors
+		SilenceErrors: true,                  // Don't show errors twice
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Initialize managers following DDD
 			configMgr := configPkg.NewConfigManager()
 			dbMgr := keepass.NewDatabaseManager()
 			gitMgr := git.NewRepositoryManager()
+			secretsMgr := secrets.NewSecretsManager(dbMgr) // Add SecretsManager
+
+			// Determine secrets file path from args
+			var secretsFilePath string
+			if len(args) > 0 {
+				secretsFilePath = args[0]
+			}
+			// If no path provided, SecretsManager will search in git root
 
 			// ConfigManager is the SINGLE SOURCE OF TRUTH for all configuration
 			// Get configuration values respecting precedence: FLAGS > CONFIG.YML > ENV VARS > DEFAULTS
@@ -68,12 +84,12 @@ func NewInitCommand() *cobra.Command {
 			var secretsDir string
 			if !ignoreGitRepository {
 				if !gitMgr.IsGitRepository() {
-					return fmt.Errorf("el directorio actual no está dentro de un repositorio git. Use --ignore-git-repository para inicializar fuera de un repositorio git")
+					return fmt.Errorf("current directory is not within a git repository. Use --ignore-git-repository to initialize outside a git repository")
 				}
 
 				gitRoot, err := gitMgr.FindGitRoot()
 				if err != nil {
-					return fmt.Errorf("no se pudo encontrar la raíz del repositorio git: %w", err)
+					return fmt.Errorf("could not find git repository root: %w", err)
 				}
 
 				secretsDir = filepath.Join(gitRoot, ".secrets_yohnah")
@@ -94,27 +110,35 @@ func NewInitCommand() *cobra.Command {
 
 			configPath := filepath.Join(secretsDir, "config.yml")
 
-			// Initial confirmation after git validation
-			confirmed, err := prompter.Confirm("¿Está seguro que desea inicializar el proyecto de secretos en este directorio?")
+			// CRITICAL: Validate secrets.yml file before proceeding
+			// SecretsManager is the SINGLE SOURCE OF TRUTH for secrets validation
+			log.Debug("Validating secrets.yml file...")
+			if err := secretsMgr.ProcessSecretsForInit(secretsFilePath); err != nil {
+				return err // Return error directly without adding prefix
+			}
+			log.Info("✓ Secrets.yml file validated successfully")
+
+			// Initial confirmation after git validation and secrets.yml validation
+			confirmed, err := prompter.Confirm("Are you sure you want to execute this action?")
 			if err != nil {
 				return err
 			}
 			if !confirmed {
-				fmt.Fprintln(cmd.OutOrStdout(), "Operación cancelada por el usuario.")
+				fmt.Fprintln(cmd.OutOrStdout(), "Operation cancelled by user.")
 				return nil
 			}
 
 			// Check if already initialized
 			if _, err := os.Stat(secretsDir); err == nil {
 				if _, err := os.Stat(configPath); err == nil {
-					fmt.Fprintln(cmd.OutOrStdout(), "✓ Secrets ya ha sido inicializado en este directorio.")
+					fmt.Fprintln(cmd.OutOrStdout(), "✓ Secrets has already been initialized in this directory.")
 					return nil
 				}
 			}
 
 			// Create directory
 			if err := os.MkdirAll(secretsDir, 0o700); err != nil {
-				return fmt.Errorf("no se pudo crear el directorio %s: %w", secretsDir, err)
+				return fmt.Errorf("could not create directory %s: %w", secretsDir, err)
 			}
 			log.Debug(fmt.Sprintf("Created directory: %s", secretsDir))
 
@@ -131,10 +155,10 @@ database_path: secrets.kdbx
 keyfile_path: secrets.keyfile
 `
 				if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
-					return fmt.Errorf("no se pudo crear el archivo de configuración: %w", err)
+					return fmt.Errorf("could not create configuration file: %w", err)
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "✓ Proyecto inicializado: %s\n", secretsDir)
-				fmt.Fprintf(cmd.OutOrStdout(), "✓ Configuración creada: %s\n", configPath)
+				fmt.Fprintf(cmd.OutOrStdout(), "✓ Project initialized: %s\n", secretsDir)
+				fmt.Fprintf(cmd.OutOrStdout(), "✓ Configuration created: %s\n", configPath)
 				log.Debug(fmt.Sprintf("Created config file: %s", configPath))
 			}
 
@@ -174,7 +198,7 @@ keyfile_path: secrets.keyfile
 			cfg, err := configMgr.Load(configOptionsForLoad)
 			if err != nil {
 				log.Debug(fmt.Sprintf("Error loading configuration: %v", err))
-				return fmt.Errorf("error al cargar la configuración: %w", err)
+				return fmt.Errorf("error loading configuration: %w", err)
 			}
 
 			// Use resolved paths from configuration
@@ -187,13 +211,13 @@ keyfile_path: secrets.keyfile
 			// Create parent directories for database and keyfile if they don't exist
 			if dbParentDir := filepath.Dir(dbPath); dbParentDir != "." {
 				if err := os.MkdirAll(dbParentDir, 0o700); err != nil {
-					return fmt.Errorf("no se pudo crear el directorio padre para la base de datos %s: %w", dbParentDir, err)
+					return fmt.Errorf("could not create parent directory for database %s: %w", dbParentDir, err)
 				}
 				log.Debug(fmt.Sprintf("Created database parent directory: %s", dbParentDir))
 			}
 			if keyfileParentDir := filepath.Dir(keyfilePath); keyfileParentDir != "." {
 				if err := os.MkdirAll(keyfileParentDir, 0o700); err != nil {
-					return fmt.Errorf("no se pudo crear el directorio padre para el keyfile %s: %w", keyfileParentDir, err)
+					return fmt.Errorf("could not create parent directory for keyfile %s: %w", keyfileParentDir, err)
 				}
 				log.Debug(fmt.Sprintf("Created keyfile parent directory: %s", keyfileParentDir))
 			}
@@ -206,19 +230,19 @@ keyfile_path: secrets.keyfile
 			}
 
 			// Confirm database creation
-			dbConfirmed, err := prompter.Confirm("¿Desea crear la base de datos KeePass?")
+			dbConfirmed, err := prompter.ConfirmWithDefault("Do you want to create the KeePass database?", true)
 			if err != nil {
 				return err
 			}
 			if !dbConfirmed {
-				fmt.Fprintln(cmd.OutOrStdout(), "Creación de base de datos cancelada. El keyfile no será creado.")
+				fmt.Fprintln(cmd.OutOrStdout(), "Database creation cancelled. Keyfile will not be created.")
 				return nil
 			}
 
 			// Get password (interactive or from environment variable)
 			password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
 			if password == "" {
-				password, err = prompter.GetPassword("Ingrese contraseña para la base de datos: ")
+				password, err = prompter.GetPassword("Enter database password: ")
 				if err != nil {
 					return fmt.Errorf("failed to get password: %w", err)
 				}

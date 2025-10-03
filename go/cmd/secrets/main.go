@@ -50,8 +50,9 @@ FLAGS PRECEDENCE (Security Order):
 	// Add global flags
 	addGlobalFlags(rootCmd, globalFlags)
 
-	// Add commands
+	// Add commands to root command
 	rootCmd.AddCommand(cli.NewInitCommand())
+	rootCmd.AddCommand(cli.NewShowCommand())
 
 	// Execute
 	if err := rootCmd.Execute(); err != nil {

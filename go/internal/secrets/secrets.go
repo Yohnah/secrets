@@ -4,17 +4,21 @@ package secrets
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/Yohnah/secrets/internal/git"
 	"github.com/Yohnah/secrets/internal/keepass"
+	"github.com/Yohnah/secrets/internal/validator"
 )
 
 // SecretsManager defines the interface for secrets business logic operations
 // Following Interface Segregation Principle (ISP) - specific interface for secrets logic
 type SecretsManager interface {
-	// Profile and HEAD management
-	ValidateProfileUniqueness(profileName string) error
-	EnsureProfileStructure(profileName string) error
+	// Secrets.yml file operations (October 3, 2025)
+	LoadAndValidateSecretsFile(secretsPath string) (*validator.SecretsConfig, error)
+	ProcessSecretsForInit(secretsPath string) error
 
 	// Environment management
 	ValidateEnvironmentUniqueness(profileName string, environments []string) error
@@ -33,14 +37,18 @@ type SecretsManager interface {
 // SecretsBusinessManager implements SecretsManager
 // Following Single Responsibility Principle (SRP) - handles secrets business logic
 type SecretsBusinessManager struct {
-	dbManager keepass.DatabaseManager
+	dbManager  keepass.DatabaseManager
+	validator  validator.SecretsValidator
+	gitManager git.RepositoryManager
 }
 
 // NewSecretsManager creates a new secrets manager
 // Following Dependency Inversion Principle (DIP) - returns interface, depends on abstraction
 func NewSecretsManager(dbManager keepass.DatabaseManager) SecretsManager {
 	return &SecretsBusinessManager{
-		dbManager: dbManager,
+		dbManager:  dbManager,
+		validator:  validator.NewSecretsValidator(),
+		gitManager: git.NewRepositoryManager(),
 	}
 }
 
@@ -62,21 +70,6 @@ type SecretItem struct {
 	Entry string `yaml:"entry"`
 	Key   string `yaml:"key"`
 	Type  string `yaml:"type"`
-}
-
-// ValidateProfileUniqueness ensures only one profile with the given name exists in KeePass root
-func (m *SecretsBusinessManager) ValidateProfileUniqueness(profileName string) error {
-	// TODO: Implement logic to check KeePass root for duplicate profile groups
-	// This should throw an exception if duplicates are found
-	return fmt.Errorf("ValidateProfileUniqueness not implemented yet")
-}
-
-// EnsureProfileStructure creates profile and HEAD structure if they don't exist
-func (m *SecretsBusinessManager) EnsureProfileStructure(profileName string) error {
-	// TODO: Implement logic to create profile → HEAD structure
-	// 1. Create profile group in root if it doesn't exist
-	// 2. Create HEAD group under profile if it doesn't exist
-	return fmt.Errorf("EnsureProfileStructure not implemented yet")
 }
 
 // ValidateEnvironmentUniqueness ensures no duplicate environment names per profile
@@ -197,15 +190,7 @@ func (m *SecretsBusinessManager) ValidateSecretsFile(secretsData *SecretsData) e
 
 // SyncSecretsToDatabase synchronizes secrets.yml content with KeePass database
 func (m *SecretsBusinessManager) SyncSecretsToDatabase(secretsData *SecretsData) error {
-	// Validate profile uniqueness
-	if err := m.ValidateProfileUniqueness(secretsData.Metadata.Profile); err != nil {
-		return err
-	}
-
-	// Ensure profile structure exists
-	if err := m.EnsureProfileStructure(secretsData.Metadata.Profile); err != nil {
-		return err
-	}
+	// TODO: Implement when profile validation functions are ready
 
 	// Create environments
 	envNames := make([]string, 0, len(secretsData.Environments))
@@ -264,4 +249,82 @@ func IsAttachment(key string) (bool, string) {
 		return true, attachmentName
 	}
 	return false, ""
+}
+
+// LoadAndValidateSecretsFile loads and validates a secrets.yml file from the specified path
+// Following Single Responsibility Principle - handles file loading and validation
+func (m *SecretsBusinessManager) LoadAndValidateSecretsFile(secretsPath string) (*validator.SecretsConfig, error) {
+	// Determine the actual file path
+	filePath, err := m.resolveSecretsFilePath(secretsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve secrets file path: %w", err)
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("secrets.yml file not found at path: %s", filePath)
+	}
+
+	// Read file content
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read secrets file '%s': %w", filePath, err)
+	}
+
+	// Validate file using validator
+	config, err := m.validator.ValidateFile(content)
+	if err != nil {
+		return nil, fmt.Errorf("file '%s' does not meet format and definition requirements, please correct it: %w", filePath, err)
+	}
+
+	return config, nil
+}
+
+// ProcessSecretsForInit processes secrets.yml file for init command
+// Following Single Responsibility Principle - only validates the secrets file when present
+func (m *SecretsBusinessManager) ProcessSecretsForInit(secretsPath string) error {
+	// Try to resolve the file path first
+	filePath, err := m.resolveSecretsFilePath(secretsPath)
+	if err != nil {
+		// If we can't resolve path (e.g., not in git repo and no path provided),
+		// skip validation for now - this allows init without secrets.yml
+		return nil
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		// If file doesn't exist, skip validation for now
+		// This allows init without requiring secrets.yml to exist
+		return nil
+	}
+
+	// If file exists, validate it
+	_, err = m.LoadAndValidateSecretsFile(secretsPath)
+	return err
+}
+
+// resolveSecretsFilePath resolves the secrets file path based on input
+// Following Single Responsibility Principle - handles path resolution logic
+func (m *SecretsBusinessManager) resolveSecretsFilePath(secretsPath string) (string, error) {
+	// If no path provided, search in git repository root
+	if secretsPath == "" {
+		gitRoot, err := m.gitManager.FindGitRoot()
+		if err != nil {
+			return "", fmt.Errorf("not in a git repository and no secrets file path provided")
+		}
+		return filepath.Join(gitRoot, "secrets.yml"), nil
+	}
+
+	// If path provided, resolve it (could be relative or absolute)
+	if filepath.IsAbs(secretsPath) {
+		return secretsPath, nil
+	}
+
+	// For relative paths, resolve from current directory
+	absPath, err := filepath.Abs(secretsPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve relative path '%s': %w", secretsPath, err)
+	}
+
+	return absPath, nil
 }

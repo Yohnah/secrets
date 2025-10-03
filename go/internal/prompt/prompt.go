@@ -15,6 +15,7 @@ import (
 // Following Interface Segregation Principle (ISP) - specific interface for confirmation
 type ConfirmationProvider interface {
 	Confirm(message string) (bool, error)
+	ConfirmWithDefault(message string, defaultYes bool) (bool, error)
 }
 
 // PasswordProvider defines the interface for secure password input
@@ -43,12 +44,27 @@ func NewInteractivePrompter(forceMode bool) *InteractivePrompter {
 // Returns true if user confirms or force mode is active
 // Following Open/Closed Principle (OCP) - extensible for different confirmation types
 func (p *InteractivePrompter) Confirm(message string) (bool, error) {
+	return p.ConfirmWithDefault(message, false)
+}
+
+// ConfirmWithDefault prompts the user for confirmation with specified default
+// Returns true if user confirms or force mode is active
+// Following Open/Closed Principle (OCP) - extensible for different confirmation types
+func (p *InteractivePrompter) ConfirmWithDefault(message string, defaultYes bool) (bool, error) {
 	// Skip confirmation in force mode
 	if p.forceMode {
 		return true, nil
 	}
 
-	fmt.Printf("%s (y/N): ", message)
+	// Format the prompt based on default
+	var prompt string
+	if defaultYes {
+		prompt = fmt.Sprintf("%s (Y/n): ", message)
+	} else {
+		prompt = fmt.Sprintf("%s (y/N): ", message)
+	}
+
+	fmt.Print(prompt)
 
 	response, err := p.reader.ReadString('\n')
 	if err != nil {
@@ -56,7 +72,22 @@ func (p *InteractivePrompter) Confirm(message string) (bool, error) {
 	}
 
 	response = strings.TrimSpace(strings.ToLower(response))
-	return response == "y" || response == "yes", nil
+
+	// Handle empty response based on default
+	if response == "" {
+		return defaultYes, nil
+	}
+
+	// Handle explicit responses
+	if response == "y" || response == "yes" {
+		return true, nil
+	}
+	if response == "n" || response == "no" {
+		return false, nil
+	}
+
+	// Invalid response, use default
+	return defaultYes, nil
 }
 
 // GetPassword prompts for a password with hidden input
