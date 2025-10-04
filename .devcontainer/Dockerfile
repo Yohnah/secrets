@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Go with version control and update notifications
-ARG GO_VERSION=1.21.5
+ARG GO_VERSION=1.25.1
 ARG AUTO_UPDATE_GO=false
 
 RUN echo "Checking Go version configuration..." && \
@@ -102,6 +102,16 @@ RUN echo "Setting up VS Code Go tools compatibility..." && \
     echo "fi" >> /usr/local/bin/setup-go-tools && \
     chmod +x /usr/local/bin/setup-go-tools && \
     echo "Go tools compatibility script created"
+
+# Fix Go module cache permissions automatically on container start
+RUN echo "Creating permission fix script..." && \
+    echo "#!/bin/bash" > /usr/local/bin/fix-go-permissions && \
+    echo "# Fix Go module cache and bin permissions" >> /usr/local/bin/fix-go-permissions && \
+    echo "if [ -d /go/pkg ]; then" >> /usr/local/bin/fix-go-permissions && \
+    echo "  sudo chown -R vscode:vscode /go/pkg /go/bin 2>/dev/null || true" >> /usr/local/bin/fix-go-permissions && \
+    echo "fi" >> /usr/local/bin/fix-go-permissions && \
+    chmod +x /usr/local/bin/fix-go-permissions && \
+    echo "Permission fix script created"
 
 # Set working directory
 WORKDIR /workspaces/secrets

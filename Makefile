@@ -61,14 +61,7 @@ build: deps ## Build the secrets binary for current platform
 
 # Install dependencies
 .PHONY: deps
-deps: ## Install Go dependencies (go mod download + tidy)
-	@echo "Checking and fixing Go module cache permissions..."
-	@if [ -d /go/pkg ]; then \
-		sudo chmod -R 777 /go/pkg 2>/dev/null || true; \
-	fi
-	@if [ -d /go/bin ]; then \
-		sudo chmod -R 777 /go/bin 2>/dev/null || true; \
-	fi
+deps: 
 	@echo "Installing Go dependencies..."
 	cd $(GO_DIR) && $(GOMOD) download
 	cd $(GO_DIR) && $(GOMOD) tidy
