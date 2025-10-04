@@ -38,7 +38,7 @@ func TestPopulateEntryFields_NewFieldsWithCount(t *testing.T) {
 	mockLogger := logger.NewLogger(false) // Non-verbose for testing
 
 	// Create SecretsManager
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Test PopulateEntryFields - should return count of added fields
 	fieldsAdded, err := manager.PopulateEntryFields(&entry, "DATABASE_URL", items)
@@ -110,7 +110,7 @@ func TestPopulateEntryFields_PreventsDuplicatesWithCount(t *testing.T) {
 	mockLogger := logger.NewLogger(false)
 
 	// Create SecretsManager
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Test PopulateEntryFields - should only add 1 field (URL)
 	fieldsAdded, err := manager.PopulateEntryFields(&entry, "DATABASE_URL", items)
@@ -194,7 +194,7 @@ func TestPopulateEntryFields_AttachmentFieldsIgnored(t *testing.T) {
 	mockLogger := logger.NewLogger(false)
 
 	// Create SecretsManager
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Test PopulateEntryFields - should only add Password and URL (ignore attachments)
 	fieldsAdded, err := manager.PopulateEntryFields(&entry, "API_TOKEN", items)
@@ -257,7 +257,7 @@ func TestPopulateEntryFields_NoMatchingItems(t *testing.T) {
 	mockLogger := logger.NewLogger(false)
 
 	// Create SecretsManager
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Test PopulateEntryFields - should add 0 fields
 	fieldsAdded, err := manager.PopulateEntryFields(&entry, "DATABASE_URL", items)
@@ -311,7 +311,7 @@ func TestPopulateEntryFields_PathBasedEntryMatching(t *testing.T) {
 	mockLogger := logger.NewLogger(false)
 
 	// Create SecretsManager
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Test PopulateEntryFields - should match and add fields
 	fieldsAdded, err := manager.PopulateEntryFields(&entry, "API_TOKEN", items)
@@ -360,7 +360,7 @@ func TestPopulateEntryFields_EmptyItems(t *testing.T) {
 	mockLogger := logger.NewLogger(false)
 
 	// Create SecretsManager
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Test PopulateEntryFields - should add 0 fields
 	fieldsAdded, err := manager.PopulateEntryFields(&entry, "DATABASE_URL", items)
@@ -404,7 +404,7 @@ func TestPopulateEntryFields_VerboseLogging(t *testing.T) {
 	mockLogger := logger.NewLogger(true) // Verbose logging enabled
 
 	// Create SecretsManager
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Test PopulateEntryFields with verbose logging
 	fieldsAdded, err := manager.PopulateEntryFields(&entry, "DATABASE_URL", items)
@@ -458,7 +458,7 @@ func TestPopulateEntryFields_MultipleEntriesWithSameName(t *testing.T) {
 	mockLogger := logger.NewLogger(false)
 
 	// Create SecretsManager
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Test PopulateEntryFields - should add all matching fields
 	fieldsAdded, err := manager.PopulateEntryFields(&entry, "CONFIG", items)

@@ -53,6 +53,7 @@ FLAGS PRECEDENCE (Security Order):
 	// Add commands to root command
 	rootCmd.AddCommand(cli.NewInitCommand())
 	rootCmd.AddCommand(cli.NewShowCommand())
+	rootCmd.AddCommand(cli.NewSnapshotsCommand())
 
 	// Execute
 	if err := rootCmd.Execute(); err != nil {

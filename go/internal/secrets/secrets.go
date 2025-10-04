@@ -23,6 +23,12 @@ type SecretsManager interface {
 	LoadAndValidateSecretsFile(secretsPath string) (*validator.SecretsConfig, error)
 	ProcessSecretsForInit(secretsPath string) error
 
+	// Database initialization (October 4, 2025)
+	// InitializeDatabase handles all business logic for database creation/access
+	// This includes: existence check, user confirmation, password retrieval, database creation
+	// Returns password for subsequent operations (profile structure creation)
+	InitializeDatabase(dbPath, keyfilePath string, skipCreation bool) (string, error)
+
 	// Profile and structure management (October 3, 2025)
 	EnsureProfileStructure(dbPath, keyfilePath, password, profileName string, environments map[string][]SecretItem) (*ProfileStructureResult, error)
 
@@ -42,6 +48,23 @@ type SecretsManager interface {
 	// Attachment management (October 3, 2025)
 	PopulateEntryAttachments(db *gokeepasslib.Database, entry *gokeepasslib.Entry, entryName string, items []SecretItem) (int, error)
 
+	// Snapshot management (October 4, 2025)
+	// CreateSnapshot creates a new snapshot from HEAD
+	// This includes: password retrieval, validation, version calculation, user confirmation, group cloning
+	// Returns SnapshotResult with version and profile information
+	CreateSnapshot(dbPath, keyfilePath, profileName string) (*SnapshotResult, error)
+
+	// DeleteSnapshot deletes a specific snapshot version
+	// This includes: password retrieval, validation, HEAD protection, user confirmation, group deletion
+	// Returns SnapshotDeleteResult with version and deletion status
+	DeleteSnapshot(dbPath, keyfilePath, profileName, version string) (*SnapshotDeleteResult, error)
+
+	// ListSnapshots lists all snapshots with detailed information
+	// This includes: password retrieval, validation, stats calculation (environments, entries per env)
+	// The extended parameter controls whether to include detailed per-environment breakdown
+	// Returns SnapshotsListResult with snapshot information (detailed or basic based on extended)
+	ListSnapshots(dbPath, keyfilePath, profileName string, extended bool) (*SnapshotsListResult, error)
+
 	// Secrets.yml integration
 	ValidateSecretsFile(secretsData *SecretsData) error
 	SyncSecretsToDatabase(secretsData *SecretsData) error
@@ -49,21 +72,34 @@ type SecretsManager interface {
 
 // SecretsBusinessManager implements SecretsManager
 // Following Single Responsibility Principle (SRP) - handles secrets business logic
+// Updated October 4, 2025: Added Prompter and OutputFormatter for complete business decision making
 type SecretsBusinessManager struct {
 	dbManager  keepass.DatabaseManager
 	validator  validator.SecretsValidator
 	gitManager git.RepositoryManager
 	logger     logger.Logger
+	prompter   interface{} // For user confirmations - interface{} for now to avoid import cycles
+	formatter  interface{} // For output formatting - interface{} for now to avoid import cycles
 }
 
 // NewSecretsManager creates a new secrets manager
 // Following Dependency Inversion Principle (DIP) - returns interface, depends on abstraction
-func NewSecretsManager(dbManager keepass.DatabaseManager, log logger.Logger) SecretsManager {
+// Updated October 4, 2025: Receives all manager dependencies via constructor injection
+// This allows SecretsManager to make business decisions based on configuration
+// while keeping method signatures clean (receiving primitives, not Config object)
+// Parameters:
+//   - dbManager: KeePass database operations
+//   - log: Logger for structured logging
+//   - prompter: User interaction for confirmations (can be nil for now)
+//   - formatter: Output formatting according to user preference (can be nil for now)
+func NewSecretsManager(dbManager keepass.DatabaseManager, log logger.Logger, prompter interface{}, formatter interface{}) SecretsManager {
 	return &SecretsBusinessManager{
 		dbManager:  dbManager,
 		validator:  validator.NewSecretsValidator(),
 		gitManager: git.NewRepositoryManager(),
 		logger:     log,
+		prompter:   prompter,  // User interaction manager
+		formatter:  formatter, // Output formatting manager
 	}
 }
 
@@ -97,6 +133,127 @@ type ProfileStructureResult struct {
 	EntriesCreated      []string
 	EntriesExisted      []string
 	FieldsAdded         int // Number of fields added to existing entries
+}
+
+// SnapshotResult represents the result of snapshot operations (October 4, 2025)
+type SnapshotResult struct {
+	Version     string // e.g., "v4"
+	ProfileName string // e.g., "myproject"
+	Created     bool   // true if created, false if cancelled
+}
+
+// SnapshotDeleteResult represents the result of a snapshot deletion operation
+type SnapshotDeleteResult struct {
+	Version     string // e.g., "v2"
+	ProfileName string // e.g., "myproject"
+	Deleted     bool   // true if deleted, false if cancelled
+}
+
+// SnapshotInfo represents detailed information about a snapshot
+type SnapshotInfo struct {
+	Version      string         `json:"version"`        // e.g., "v2"
+	Since        string         `json:"since"`          // Date from metadata (e.g., "2025-10-04 12:30:45")
+	Environments int            `json:"environments"`   // Number of environments
+	EntriesByEnv map[string]int `json:"entries_by_env"` // Entries count per environment
+	TotalEntries int            `json:"total_entries"`  // Total entries across all environments
+}
+
+// SnapshotsListResult represents the result of listing snapshots
+type SnapshotsListResult struct {
+	ProfileName string         `json:"profile_name"`
+	Snapshots   []SnapshotInfo `json:"snapshots"`
+}
+
+// InitializeDatabase handles all business logic for database initialization
+// Following SRP - Single Responsibility: manages database creation/access workflow
+// This method encapsulates the complete database initialization business logic:
+//  1. Check if database exists
+//  2. Get password from environment or prompt user
+//  3. If database doesn't exist, confirm creation with user
+//  4. Create database with keyfile if confirmed
+//
+// Returns the password for subsequent operations (profile structure creation)
+// Following DDD: This is business logic, not infrastructure - SecretsManager decides what to do
+func (m *SecretsBusinessManager) InitializeDatabase(dbPath, keyfilePath string, skipCreation bool) (string, error) {
+	// Check if database already exists
+	var password string
+	if m.dbManager.Exists(dbPath) {
+		m.logger.Info(fmt.Sprintf("Database already exists, skipping creation: %s", dbPath))
+
+		// Get password for existing database operations
+		password = os.Getenv("SECRETS_YOHNAH_PASSWORD")
+		if password == "" {
+			// Cast prompter to PasswordProvider interface
+			if passwordProvider, ok := m.prompter.(interface {
+				GetPassword(prompt string) (string, error)
+			}); ok {
+				var err error
+				password, err = passwordProvider.GetPassword("Enter database password: ")
+				if err != nil {
+					return "", fmt.Errorf("failed to get password: %w", err)
+				}
+				if password == "" {
+					return "", fmt.Errorf("password cannot be empty")
+				}
+			} else {
+				return "", fmt.Errorf("password provider not available")
+			}
+		} else {
+			m.logger.Debug("Using password from SECRETS_YOHNAH_PASSWORD environment variable")
+		}
+
+		return password, nil
+	}
+
+	// Database doesn't exist - check if we should skip creation
+	if skipCreation {
+		return "", fmt.Errorf("database does not exist and creation was skipped (--no-create-database flag)")
+	}
+
+	// Confirm database creation with user
+	if confirmProvider, ok := m.prompter.(interface {
+		ConfirmWithDefault(message string, defaultYes bool) (bool, error)
+	}); ok {
+		dbConfirmed, err := confirmProvider.ConfirmWithDefault("Do you want to create the KeePass database?", true)
+		if err != nil {
+			return "", err
+		}
+		if !dbConfirmed {
+			return "", fmt.Errorf("database creation cancelled by user")
+		}
+	} else {
+		return "", fmt.Errorf("confirmation provider not available")
+	}
+
+	// Get password (interactive or from environment variable)
+	password = os.Getenv("SECRETS_YOHNAH_PASSWORD")
+	if password == "" {
+		// Cast prompter to PasswordProvider interface for confirmation
+		if passwordProvider, ok := m.prompter.(interface {
+			GetPasswordWithConfirmation(prompt string) (string, error)
+		}); ok {
+			var err error
+			password, err = passwordProvider.GetPasswordWithConfirmation("Enter database password: ")
+			if err != nil {
+				return "", fmt.Errorf("failed to get password: %w", err)
+			}
+		} else {
+			return "", fmt.Errorf("password provider not available")
+		}
+	} else {
+		m.logger.Debug("Using password from SECRETS_YOHNAH_PASSWORD environment variable")
+	}
+
+	// Create database with keyfile
+	m.logger.Info("Creating KeePass database with keyfile...")
+	if err := m.dbManager.Create(dbPath, keyfilePath, password); err != nil {
+		return "", fmt.Errorf("failed to create database: %w", err)
+	}
+
+	m.logger.Info(fmt.Sprintf("Database created successfully: %s", dbPath))
+	m.logger.Info(fmt.Sprintf("Keyfile created successfully: %s", keyfilePath))
+
+	return password, nil
 }
 
 // ValidateEnvironmentUniqueness ensures no duplicate environment names per profile
@@ -760,4 +917,439 @@ func (m *SecretsBusinessManager) ensureItemsInEnvironments(db *gokeepasslib.Data
 	}
 
 	return entriesCreated, entriesExisted, totalFieldsAdded, nil
+}
+
+// CreateSnapshot creates a new snapshot from HEAD
+// Following SRP - Single Responsibility: manages snapshot creation workflow
+// This method encapsulates the complete snapshot creation business logic:
+//  1. Get password from environment or prompt user
+//  2. Open database and validate profile/HEAD structure
+//  3. Calculate next version number
+//  4. Confirm snapshot creation with user
+//  5. Clone HEAD group to new version
+//  6. Save database
+//
+// Returns SnapshotResult with version and profile information
+// Following DDD: This is business logic, not infrastructure - SecretsManager decides what to do
+func (m *SecretsBusinessManager) CreateSnapshot(dbPath, keyfilePath, profileName string) (*SnapshotResult, error) {
+	// Get password from environment or prompt user
+	password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
+	if password == "" {
+		// Cast prompter to PasswordProvider interface
+		if passwordProvider, ok := m.prompter.(interface {
+			GetPassword(prompt string) (string, error)
+		}); ok {
+			var err error
+			password, err = passwordProvider.GetPassword("Enter database password: ")
+			if err != nil {
+				return nil, fmt.Errorf("failed to get password: %w", err)
+			}
+			if password == "" {
+				return nil, fmt.Errorf("password cannot be empty")
+			}
+		} else {
+			return nil, fmt.Errorf("password provider not available")
+		}
+	} else {
+		m.logger.Debug("Using password from SECRETS_YOHNAH_PASSWORD environment variable")
+	}
+
+	// Open database
+	db, err := m.dbManager.Open(dbPath, keyfilePath, password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Find "SECRETS YOHNAH" root group
+	var rootGroup *gokeepasslib.Group
+	for i := range db.Content.Root.Groups {
+		if db.Content.Root.Groups[i].Name == "SECRETS YOHNAH" {
+			rootGroup = &db.Content.Root.Groups[i]
+			break
+		}
+	}
+	if rootGroup == nil {
+		return nil, fmt.Errorf("SECRETS YOHNAH root group not found in database")
+	}
+
+	// Find profile group under root
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+	if profileGroup == nil {
+		return nil, fmt.Errorf("profile '%s' not found in database", profileName)
+	}
+
+	// Find HEAD group under profile
+	var headGroup *gokeepasslib.Group
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == "HEAD" {
+			headGroup = &profileGroup.Groups[i]
+			break
+		}
+	}
+	if headGroup == nil {
+		return nil, fmt.Errorf("HEAD not found under profile '%s'", profileName)
+	}
+
+	// Calculate next version number by finding existing snapshots
+	existingVersions := make([]int, 0)
+	for _, group := range profileGroup.Groups {
+		if strings.HasPrefix(group.Name, "v") && group.Name != "HEAD" {
+			// Try to parse version number
+			var versionNum int
+			if _, err := fmt.Sscanf(group.Name, "v%d", &versionNum); err == nil {
+				existingVersions = append(existingVersions, versionNum)
+			}
+		}
+	}
+
+	// Find maximum version
+	nextVersion := 1
+	for _, v := range existingVersions {
+		if v >= nextVersion {
+			nextVersion = v + 1
+		}
+	}
+	versionName := fmt.Sprintf("v%d", nextVersion)
+
+	m.logger.Debug(fmt.Sprintf("Next snapshot version: %s", versionName))
+
+	// Confirm snapshot creation with user
+	if confirmProvider, ok := m.prompter.(interface {
+		Confirm(message string) (bool, error)
+	}); ok {
+		confirmed, err := confirmProvider.Confirm(fmt.Sprintf("Create snapshot %s from HEAD?", versionName))
+		if err != nil {
+			return nil, err
+		}
+		if !confirmed {
+			return &SnapshotResult{
+				Version:     versionName,
+				ProfileName: profileName,
+				Created:     false,
+			}, nil
+		}
+	} else {
+		return nil, fmt.Errorf("confirmation provider not available")
+	}
+
+	// Clone HEAD group to new snapshot version
+	m.logger.Info(fmt.Sprintf("Cloning HEAD to %s...", versionName))
+	snapshotGroup, err := m.dbManager.CloneGroup(headGroup, versionName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to clone HEAD group: %w", err)
+	}
+
+	// Add snapshot group to profile (as sibling of HEAD)
+	profileGroup.Groups = append(profileGroup.Groups, *snapshotGroup)
+
+	// Update metadata in HEAD: increment version and update date
+	m.logger.Debug("Updating HEAD metadata...")
+	var metadataEntry *gokeepasslib.Entry
+	for i := range headGroup.Entries {
+		if headGroup.Entries[i].GetTitle() == "Profile metadata" {
+			metadataEntry = &headGroup.Entries[i]
+			break
+		}
+	}
+
+	if metadataEntry != nil {
+		// Get current version and increment it
+		currentVersionStr := metadataEntry.GetContent("version")
+		currentVersion := 1 // Default to 1 if not found or invalid
+		if currentVersionStr != "" {
+			if parsed, err := fmt.Sscanf(currentVersionStr, "%d", &currentVersion); err == nil && parsed == 1 {
+				// Successfully parsed, increment
+				currentVersion++
+			}
+		} else {
+			// No version field found, start at 2 (since we're creating first snapshot)
+			currentVersion = 2
+		}
+
+		// Update version field
+		m.dbManager.SetEntryField(metadataEntry, "version", fmt.Sprintf("%d", currentVersion))
+
+		// Update since field with current timestamp
+		currentTime := time.Now().Format("2006-01-02 15:04:05")
+		m.dbManager.SetEntryField(metadataEntry, "since", currentTime)
+
+		m.logger.Debug(fmt.Sprintf("Updated HEAD metadata: version=%d, since=%s", currentVersion, currentTime))
+	} else {
+		// If no metadata entry exists, create it
+		m.logger.Debug("No metadata entry found in HEAD, creating one...")
+		metadataEntry = m.dbManager.CreateEntry(headGroup, "Profile metadata")
+		m.dbManager.SetEntryField(metadataEntry, "version", "2") // Start at 2 since we're creating first snapshot
+		currentTime := time.Now().Format("2006-01-02 15:04:05")
+		m.dbManager.SetEntryField(metadataEntry, "since", currentTime)
+	}
+
+	// Save database
+	if err := m.dbManager.Save(db, dbPath, keyfilePath, password); err != nil {
+		return nil, fmt.Errorf("failed to save database: %w", err)
+	}
+
+	m.logger.Info(fmt.Sprintf("Snapshot %s created successfully", versionName))
+
+	return &SnapshotResult{
+		Version:     versionName,
+		ProfileName: profileName,
+		Created:     true,
+	}, nil
+}
+
+// DeleteSnapshot deletes a specific snapshot version from the database
+// Following SRP - Single Responsibility: manages snapshot deletion workflow
+// This method encapsulates the complete snapshot deletion business logic:
+//  1. Validate version is not HEAD (HEAD cannot be deleted)
+//  2. Get password from environment or prompt user
+//  3. Open database and validate profile/snapshot structure
+//  4. Confirm deletion with user
+//  5. Delete snapshot group
+//  6. Save database
+//
+// Returns SnapshotDeleteResult with version and deletion status
+// Following DDD: This is business logic, not infrastructure - SecretsManager decides what to do
+func (m *SecretsBusinessManager) DeleteSnapshot(dbPath, keyfilePath, profileName, version string) (*SnapshotDeleteResult, error) {
+	// Validate version is not HEAD
+	if version == "HEAD" {
+		return nil, fmt.Errorf("HEAD cannot be deleted")
+	}
+
+	// Get password from environment or prompt user
+	password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
+	if password == "" {
+		// Cast prompter to PasswordProvider interface
+		if passwordProvider, ok := m.prompter.(interface {
+			GetPassword(prompt string) (string, error)
+		}); ok {
+			var err error
+			password, err = passwordProvider.GetPassword("Enter database password: ")
+			if err != nil {
+				return nil, fmt.Errorf("failed to get password: %w", err)
+			}
+			if password == "" {
+				return nil, fmt.Errorf("password cannot be empty")
+			}
+		} else {
+			return nil, fmt.Errorf("password provider not available")
+		}
+	} else {
+		m.logger.Debug("Using password from SECRETS_YOHNAH_PASSWORD environment variable")
+	}
+
+	// Open database
+	db, err := m.dbManager.Open(dbPath, keyfilePath, password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Find "SECRETS YOHNAH" root group
+	var rootGroup *gokeepasslib.Group
+	for i := range db.Content.Root.Groups {
+		if db.Content.Root.Groups[i].Name == "SECRETS YOHNAH" {
+			rootGroup = &db.Content.Root.Groups[i]
+			break
+		}
+	}
+	if rootGroup == nil {
+		return nil, fmt.Errorf("SECRETS YOHNAH root group not found in database")
+	}
+
+	// Find profile group under root
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+	if profileGroup == nil {
+		return nil, fmt.Errorf("profile '%s' not found in database", profileName)
+	}
+
+	// Verify snapshot group exists under profile
+	snapshotExists := false
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == version {
+			snapshotExists = true
+			break
+		}
+	}
+	if !snapshotExists {
+		return nil, fmt.Errorf("snapshot '%s' not found under profile '%s'", version, profileName)
+	}
+
+	m.logger.Debug(fmt.Sprintf("Found snapshot %s under profile %s", version, profileName))
+
+	// Confirm deletion with user
+	if confirmProvider, ok := m.prompter.(interface {
+		Confirm(message string) (bool, error)
+	}); ok {
+		confirmed, err := confirmProvider.Confirm(fmt.Sprintf("Delete snapshot %s? This action cannot be undone.", version))
+		if err != nil {
+			return nil, err
+		}
+		if !confirmed {
+			return &SnapshotDeleteResult{
+				Version:     version,
+				ProfileName: profileName,
+				Deleted:     false,
+			}, nil
+		}
+	} else {
+		return nil, fmt.Errorf("confirmation provider not available")
+	}
+
+	// Delete snapshot group using KeePassManager CRUD operation
+	m.logger.Info(fmt.Sprintf("Deleting snapshot %s...", version))
+	if err := m.dbManager.DeleteGroup(profileGroup, version); err != nil {
+		return nil, fmt.Errorf("failed to delete snapshot group: %w", err)
+	}
+
+	// Save database
+	if err := m.dbManager.Save(db, dbPath, keyfilePath, password); err != nil {
+		return nil, fmt.Errorf("failed to save database: %w", err)
+	}
+
+	m.logger.Info(fmt.Sprintf("Snapshot %s deleted successfully", version))
+
+	return &SnapshotDeleteResult{
+		Version:     version,
+		ProfileName: profileName,
+		Deleted:     true,
+	}, nil
+}
+
+// ListSnapshots lists all snapshots with detailed information and statistics
+// Following SRP - Single Responsibility: manages snapshot listing workflow
+// This method encapsulates the complete snapshot listing business logic:
+//  1. Get password from environment or prompt user
+//  2. Open database and validate profile structure
+//  3. Find all snapshot groups (excluding HEAD)
+//  4. Calculate statistics for each snapshot (environments, entries count)
+//  5. Extract metadata (date/time) from Profile metadata entry if available
+//
+// Returns SnapshotsListResult with snapshot information (detailed or basic based on extended)
+// Following DDD: This is business logic, not infrastructure - SecretsManager decides what to collect
+// The extended parameter controls whether to include detailed per-environment breakdown
+func (m *SecretsBusinessManager) ListSnapshots(dbPath, keyfilePath, profileName string, extended bool) (*SnapshotsListResult, error) {
+	// Get password from environment or prompt user
+	password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
+	if password == "" {
+		// Cast prompter to PasswordProvider interface
+		if passwordProvider, ok := m.prompter.(interface {
+			GetPassword(prompt string) (string, error)
+		}); ok {
+			var err error
+			password, err = passwordProvider.GetPassword("Enter database password: ")
+			if err != nil {
+				return nil, fmt.Errorf("failed to get password: %w", err)
+			}
+			if password == "" {
+				return nil, fmt.Errorf("password cannot be empty")
+			}
+		} else {
+			return nil, fmt.Errorf("password provider not available")
+		}
+	} else {
+		m.logger.Debug("Using password from SECRETS_YOHNAH_PASSWORD environment variable")
+	}
+
+	// Open database
+	db, err := m.dbManager.Open(dbPath, keyfilePath, password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Find "SECRETS YOHNAH" root group
+	var rootGroup *gokeepasslib.Group
+	for i := range db.Content.Root.Groups {
+		if db.Content.Root.Groups[i].Name == "SECRETS YOHNAH" {
+			rootGroup = &db.Content.Root.Groups[i]
+			break
+		}
+	}
+	if rootGroup == nil {
+		return nil, fmt.Errorf("SECRETS YOHNAH root group not found in database")
+	}
+
+	// Find profile group under root
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+	if profileGroup == nil {
+		return nil, fmt.Errorf("profile '%s' not found in database", profileName)
+	}
+
+	m.logger.Debug(fmt.Sprintf("Found profile %s, analyzing snapshots...", profileName))
+
+	// Collect all snapshots (excluding HEAD)
+	var snapshots []SnapshotInfo
+	for _, group := range profileGroup.Groups {
+		// Skip HEAD - we only want actual snapshots
+		if group.Name == "HEAD" {
+			continue
+		}
+
+		// Only process groups that look like version numbers (v1, v2, v3...)
+		if !strings.HasPrefix(group.Name, "v") {
+			continue
+		}
+
+		m.logger.Debug(fmt.Sprintf("Processing snapshot %s...", group.Name))
+
+		// Calculate statistics for this snapshot
+		info := SnapshotInfo{
+			Version:      group.Name,
+			Since:        "Unknown", // Default if no metadata found
+			Environments: len(group.Groups),
+		}
+
+		// Try to extract date from Profile metadata entry if it exists
+		for _, entry := range group.Entries {
+			if entry.GetTitle() == "Profile metadata" {
+				sinceValue := entry.GetContent("since")
+				if sinceValue != "" {
+					info.Since = sinceValue
+				}
+				break
+			}
+		}
+
+		// Count entries per environment (include detailed breakdown only if extended is true)
+		totalEntries := 0
+		if extended {
+			info.EntriesByEnv = make(map[string]int)
+			for _, envGroup := range group.Groups {
+				entryCount := len(envGroup.Entries)
+				info.EntriesByEnv[envGroup.Name] = entryCount
+				totalEntries += entryCount
+			}
+		} else {
+			// Just count total entries without breakdown
+			for _, envGroup := range group.Groups {
+				totalEntries += len(envGroup.Entries)
+			}
+		}
+		info.TotalEntries = totalEntries
+
+		snapshots = append(snapshots, info)
+	}
+
+	m.logger.Info(fmt.Sprintf("Found %d snapshots for profile %s", len(snapshots), profileName))
+
+	return &SnapshotsListResult{
+		ProfileName: profileName,
+		Snapshots:   snapshots,
+	}, nil
 }

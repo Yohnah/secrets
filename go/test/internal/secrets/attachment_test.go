@@ -11,7 +11,7 @@ import (
 func TestSecretsManager_PopulateEntryAttachments_Basic(t *testing.T) {
 	log := logger.NewLogger(false)
 	mockDB := &MockDatabaseManager{}
-	manager := secrets.NewSecretsManager(mockDB, log)
+	manager := secrets.NewSecretsManager(mockDB, log, nil, nil)
 
 	// Create test database and entry
 	db := gokeepasslib.NewDatabase()

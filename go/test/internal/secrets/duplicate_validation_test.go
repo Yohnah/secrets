@@ -92,7 +92,7 @@ func TestSecretsManager_DuplicateEnvironmentDetection(t *testing.T) {
 	// Create mock with duplicate environments
 	mockDB := NewMockDatabaseManagerForEntries()
 	mockLogger := logger.NewLogger(false)
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Simulate finding duplicate environments
 	mockDB.FindGroupsByNameInParentFunc = func(parentGroup *gokeepasslib.Group, groupName string) ([]*gokeepasslib.Group, error) {
@@ -134,7 +134,7 @@ func TestSecretsManager_DuplicateEntryDetection(t *testing.T) {
 	// Create mock with duplicate entries
 	mockDB := NewMockDatabaseManagerForEntries()
 	mockLogger := logger.NewLogger(false)
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Simulate finding duplicate entries
 	mockDB.FindEntriesByTitleFunc = func(group *gokeepasslib.Group, entryTitle string) []*gokeepasslib.Entry {

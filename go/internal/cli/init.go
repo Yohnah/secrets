@@ -57,30 +57,20 @@ func NewInitCommand() *cobra.Command {
 			}
 			// If no path provided, SecretsManager will search in git root
 
-			// ConfigManager is the SINGLE SOURCE OF TRUTH for all configuration
-			// Get configuration values respecting precedence: FLAGS > CONFIG.YML > ENV VARS > DEFAULTS
-
-			// Get force flag - try command first, then parent
-			force := false
-			if cmd.Flags().Lookup("force") != nil {
-				force, _ = cmd.Flags().GetBool("force")
-			} else if cmd.Parent() != nil && cmd.Parent().Flags().Lookup("force") != nil {
-				force, _ = cmd.Parent().Flags().GetBool("force")
-			}
-
-			// Get other flags
+			// Get command-specific flags
 			verbose, _ := cmd.Flags().GetBool("verbose")
+			force, _ := cmd.Flags().GetBool("force")
 			noCreateDatabase, _ := cmd.Flags().GetBool("no-create-database")
 			ignoreGitRepository, _ := cmd.Flags().GetBool("ignore-git-repository")
 
-			// Initialize logger with configuration
-			log := logger.NewLogger(verbose)
-
-			// Initialize SecretsManager with logger
-			secretsMgr := secrets.NewSecretsManager(dbMgr, log)
-
-			// Initialize prompter with configuration
-			prompter := prompt.NewInteractivePrompter(force)
+			// Detect global flags if explicitly set
+			var databaseFlag, keyfileFlag string
+			if cmd.Parent() != nil && cmd.Parent().Flags().Changed("database") {
+				databaseFlag = viper.GetString("database")
+			}
+			if cmd.Parent() != nil && cmd.Parent().Flags().Changed("keyfile") {
+				keyfileFlag = viper.GetString("keyfile")
+			}
 
 			// Git repository validation unless explicitly ignored
 			var secretsDir string
@@ -95,28 +85,72 @@ func NewInitCommand() *cobra.Command {
 				}
 
 				secretsDir = filepath.Join(gitRoot, ".secrets_yohnah")
+			} else {
+				secretsDir = ".secrets_yohnah"
+			}
+
+			configPath := filepath.Join(secretsDir, "config.yml")
+
+			// Determine final config path
+			externalConfig := viper.GetString("config")
+			configForLoad := configPath
+			if externalConfig != "" {
+				configForLoad = externalConfig
+			}
+
+			// ConfigManager is the SINGLE SOURCE OF TRUTH for ALL configuration
+			// Load configuration with automatic precedence: FLAGS > CONFIG.YML > ENV VARS > DEFAULTS
+			cfg, err := configMgr.Load(configPkg.ConfigOptions{
+				DatabaseFlag: databaseFlag,
+				KeyfileFlag:  keyfileFlag,
+				VerboseFlag:  verbose,
+				ForceFlag:    force,
+				CommandFlags: map[string]interface{}{
+					"no-create-database":    noCreateDatabase,
+					"ignore-git-repository": ignoreGitRepository,
+				},
+				ConfigPath: configForLoad,
+				BasePath:   secretsDir,
+			})
+			if err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("error loading configuration: %w", err)
+			}
+
+			// Initialize logger with configuration from ConfigManager
+			log := logger.NewLogger(cfg.Verbose)
+
+			// Initialize prompter with configuration from ConfigManager
+			prompter := prompt.NewInteractivePrompter(cfg.Force)
+
+			// TODO: Initialize output formatter when needed
+			// outputFormatter := output.NewFormatter(cfg.OutputFormat)
+
+			// Initialize SecretsManager with all dependencies (DIP)
+			// SecretsManager receives pre-configured managers to make business decisions
+			// Methods still receive primitives (ISP) extracted from Config by CLI
+			secretsMgr := secrets.NewSecretsManager(dbMgr, log, prompter, nil)
+
+			// Log git repository status
+			if !ignoreGitRepository {
+				gitRoot, _ := gitMgr.FindGitRoot()
 				log.Debug(fmt.Sprintf("Git repository detected. Using git root: %s", gitRoot))
 				log.Debug(fmt.Sprintf("Secrets directory will be: %s", secretsDir))
 
 				// Add .secrets_yohnah to .gitignore if not already present
 				if err := gitMgr.EnsureGitIgnore(gitRoot, ".secrets_yohnah"); err != nil {
 					log.Debug(fmt.Sprintf("Warning: could not update .gitignore: %v", err))
-					// Don't fail the init process for .gitignore issues
 				} else {
 					log.Debug("Added .secrets_yohnah to .gitignore")
 				}
 			} else {
-				secretsDir = ".secrets_yohnah"
 				log.Debug("Git repository validation ignored by user request")
 			}
-
-			configPath := filepath.Join(secretsDir, "config.yml")
 
 			// CRITICAL: Validate secrets.yml file before proceeding
 			// SecretsManager is the SINGLE SOURCE OF TRUTH for secrets validation
 			log.Debug("Validating secrets.yml file...")
 			if err := secretsMgr.ProcessSecretsForInit(secretsFilePath); err != nil {
-				return err // Return error directly without adding prefix
+				return err
 			}
 			log.Info("✓ Secrets.yml file validated successfully")
 
@@ -134,7 +168,6 @@ func NewInitCommand() *cobra.Command {
 			if _, err := os.Stat(secretsDir); err == nil {
 				if _, err := os.Stat(configPath); err == nil {
 					fmt.Fprintln(cmd.OutOrStdout(), "✓ Secrets has already been initialized in this directory.")
-					// Continue to database operations - don't return here
 				}
 			} else {
 				// Create directory if it doesn't exist
@@ -170,40 +203,7 @@ keyfile_path: secrets.keyfile
 				return nil
 			}
 
-			// Load configuration with automatic precedence: flags > config.yml > env > defaults
-			// ConfigManager is the SINGLE SOURCE OF TRUTH for all configuration
-			externalConfig := viper.GetString("config")
-			configForLoad := configPath // Default to local config
-			if externalConfig != "" {
-				configForLoad = externalConfig // Use external config if specified
-			}
-
-			// Only pass flag values if they were explicitly set (not from viper's env fallback)
-			var databaseFlag, keyfileFlag string
-
-			// Check for database flag in parent command
-			if cmd.Parent() != nil && cmd.Parent().Flags().Changed("database") {
-				databaseFlag = viper.GetString("database")
-			}
-
-			// Check for keyfile flag in parent command
-			if cmd.Parent() != nil && cmd.Parent().Flags().Changed("keyfile") {
-				keyfileFlag = viper.GetString("keyfile")
-			}
-
-			configOptionsForLoad := configPkg.ConfigOptions{
-				DatabaseFlag: databaseFlag,
-				KeyfileFlag:  keyfileFlag,
-				ConfigPath:   configForLoad,
-				BasePath:     secretsDir,
-			}
-			cfg, err := configMgr.Load(configOptionsForLoad)
-			if err != nil {
-				log.Debug(fmt.Sprintf("Error loading configuration: %v", err))
-				return fmt.Errorf("error loading configuration: %w", err)
-			}
-
-			// Use resolved paths from configuration
+			// Use resolved paths from configuration (ConfigManager already applied precedence)
 			dbPath := cfg.DatabasePath
 			keyfilePath := cfg.KeyfilePath
 
@@ -224,59 +224,18 @@ keyfile_path: secrets.keyfile
 				log.Debug(fmt.Sprintf("Created keyfile parent directory: %s", keyfileParentDir))
 			}
 
-			// Check if database already exists
-			var password string
+			// Initialize database through SecretsManager (business logic layer)
+			// SecretsManager handles: existence check, user confirmation, password retrieval, database creation
+			// Following DDD: SecretsManager is the CORE that takes ALL business decisions
+			password, err := secretsMgr.InitializeDatabase(dbPath, keyfilePath, noCreateDatabase)
+			if err != nil {
+				return err
+			}
+
+			// Display success messages to user
 			if dbMgr.Exists(dbPath) {
-				fmt.Fprintf(cmd.OutOrStdout(), "✓ Database already exists: %s\n", dbPath)
-				log.Info(fmt.Sprintf("Database already exists, skipping creation: %s", dbPath))
-
-				// Get password for existing database operations
-				password = os.Getenv("SECRETS_YOHNAH_PASSWORD")
-				if password == "" {
-					password, err = prompter.GetPassword("Enter database password: ")
-					if err != nil {
-						return fmt.Errorf("failed to get password: %w", err)
-					}
-					if password == "" {
-						return fmt.Errorf("password cannot be empty")
-					}
-				} else {
-					log.Debug("Using password from SECRETS_YOHNAH_PASSWORD environment variable")
-				}
-			} else {
-				// Database doesn't exist, create it
-				// Confirm database creation
-				dbConfirmed, err := prompter.ConfirmWithDefault("Do you want to create the KeePass database?", true)
-				if err != nil {
-					return err
-				}
-				if !dbConfirmed {
-					fmt.Fprintln(cmd.OutOrStdout(), "Database creation cancelled. Keyfile will not be created.")
-					return nil
-				}
-
-				// Get password (interactive or from environment variable)
-				password = os.Getenv("SECRETS_YOHNAH_PASSWORD")
-				if password == "" {
-					// For new database creation, require password confirmation
-					password, err = prompter.GetPasswordWithConfirmation("Enter database password: ")
-					if err != nil {
-						return fmt.Errorf("failed to get password: %w", err)
-					}
-				} else {
-					log.Debug("Using password from SECRETS_YOHNAH_PASSWORD environment variable")
-				}
-
-				// Create database with keyfile
-				log.Info("Creating KeePass database with keyfile...")
-				if err := dbMgr.Create(dbPath, keyfilePath, password); err != nil {
-					return fmt.Errorf("failed to create database: %w", err)
-				}
-
-				fmt.Fprintf(cmd.OutOrStdout(), "✓ Database created: %s\n", dbPath)
-				fmt.Fprintf(cmd.OutOrStdout(), "✓ Keyfile created: %s\n", keyfilePath)
-				log.Info(fmt.Sprintf("Database created successfully: %s", dbPath))
-				log.Info(fmt.Sprintf("Keyfile created successfully: %s", keyfilePath))
+				fmt.Fprintf(cmd.OutOrStdout(), "✓ Database: %s\n", dbPath)
+				fmt.Fprintf(cmd.OutOrStdout(), "✓ Keyfile: %s\n", keyfilePath)
 			}
 
 			// Create profile structure if secrets.yml is present and valid

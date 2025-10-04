@@ -19,11 +19,15 @@ type DatabaseManager interface {
 	// Database access operations
 	OpenDatabase(dbPath, keyfilePath, password string) (*gokeepasslib.Database, error)
 	SaveDatabase(db *gokeepasslib.Database, dbPath string) error
+	Open(dbPath, keyfilePath, password string) (*gokeepasslib.Database, error)  // Alias for OpenDatabase
+	Save(db *gokeepasslib.Database, dbPath, keyfilePath, password string) error // Enhanced save with re-locking
 
 	// Group CRUD operations
 	FindGroupsByName(db *gokeepasslib.Database, groupName string) ([]*gokeepasslib.Group, error)
 	FindGroupsByNameInParent(parentGroup *gokeepasslib.Group, groupName string) ([]*gokeepasslib.Group, error)
 	CreateGroup(parentGroup *gokeepasslib.Group, groupName string) *gokeepasslib.Group
+	CloneGroup(sourceGroup *gokeepasslib.Group, newName string) (*gokeepasslib.Group, error) // Clone group recursively
+	DeleteGroup(parentGroup *gokeepasslib.Group, groupName string) error                     // Delete group by name from parent
 
 	// Entry CRUD operations
 	CreateEntry(parentGroup *gokeepasslib.Group, entryTitle string) *gokeepasslib.Entry
@@ -362,4 +366,108 @@ func (m *KeePassManager) ListAttachments(entry *gokeepasslib.Entry) []string {
 		attachments = append(attachments, binRef.Name)
 	}
 	return attachments
+}
+
+// Open is an alias for OpenDatabase for consistency (October 4, 2025)
+func (m *KeePassManager) Open(dbPath, keyfilePath, password string) (*gokeepasslib.Database, error) {
+	return m.OpenDatabase(dbPath, keyfilePath, password)
+}
+
+// Save saves the database with proper locking and credentials (October 4, 2025)
+func (m *KeePassManager) Save(db *gokeepasslib.Database, dbPath, keyfilePath, password string) error {
+	// Set credentials
+	credentials, err := gokeepasslib.NewPasswordAndKeyCredentials(password, keyfilePath)
+	if err != nil {
+		return fmt.Errorf("failed to create credentials: %w", err)
+	}
+	db.Credentials = credentials
+
+	// Lock protected entries before saving
+	if err := db.LockProtectedEntries(); err != nil {
+		return fmt.Errorf("failed to lock database: %w", err)
+	}
+
+	// Save database
+	return m.SaveDatabase(db, dbPath)
+}
+
+// CloneGroup creates a deep copy of a group with all its contents (October 4, 2025)
+// Following SRP - Single Responsibility: handles group cloning with new UUIDs
+func (m *KeePassManager) CloneGroup(sourceGroup *gokeepasslib.Group, newName string) (*gokeepasslib.Group, error) {
+	if sourceGroup == nil {
+		return nil, fmt.Errorf("source group cannot be nil")
+	}
+
+	// Create new group with new name
+	clonedGroup := gokeepasslib.NewGroup()
+	clonedGroup.Name = newName
+
+	// Clone all entries in the group
+	clonedGroup.Entries = make([]gokeepasslib.Entry, len(sourceGroup.Entries))
+	for i, entry := range sourceGroup.Entries {
+		// Create new entry with new UUID
+		clonedEntry := gokeepasslib.NewEntry()
+
+		// Copy all values (Title, Password, UserName, URL, Notes, custom fields)
+		clonedEntry.Values = make([]gokeepasslib.ValueData, len(entry.Values))
+		for j, value := range entry.Values {
+			clonedEntry.Values[j] = gokeepasslib.ValueData{
+				Key:   value.Key,
+				Value: gokeepasslib.V{Content: value.Value.Content},
+			}
+		}
+
+		// Copy binaries (attachments)
+		clonedEntry.Binaries = make([]gokeepasslib.BinaryReference, len(entry.Binaries))
+		for j, binRef := range entry.Binaries {
+			clonedEntry.Binaries[j] = gokeepasslib.BinaryReference{
+				Name:  binRef.Name,
+				Value: binRef.Value,
+			}
+		}
+
+		// Copy times
+		clonedEntry.Times = entry.Times
+
+		clonedGroup.Entries[i] = clonedEntry
+	}
+
+	// Recursively clone all subgroups
+	clonedGroup.Groups = make([]gokeepasslib.Group, len(sourceGroup.Groups))
+	for i, subGroup := range sourceGroup.Groups {
+		clonedSubGroup, err := m.CloneGroup(&subGroup, subGroup.Name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to clone subgroup '%s': %w", subGroup.Name, err)
+		}
+		clonedGroup.Groups[i] = *clonedSubGroup
+	}
+
+	// Copy times
+	clonedGroup.Times = sourceGroup.Times
+
+	return &clonedGroup, nil
+}
+
+// DeleteGroup deletes a group by name from a parent group
+// Following SRP - Single Responsibility: handles group deletion
+// Returns error if group not found
+func (m *KeePassManager) DeleteGroup(parentGroup *gokeepasslib.Group, groupName string) error {
+	// Find the index of the group to delete
+	groupIndex := -1
+	for i := range parentGroup.Groups {
+		if parentGroup.Groups[i].Name == groupName {
+			groupIndex = i
+			break
+		}
+	}
+
+	// If not found, return error
+	if groupIndex == -1 {
+		return fmt.Errorf("group '%s' not found in parent group", groupName)
+	}
+
+	// Delete the group by removing it from the slice
+	parentGroup.Groups = append(parentGroup.Groups[:groupIndex], parentGroup.Groups[groupIndex+1:]...)
+
+	return nil
 }

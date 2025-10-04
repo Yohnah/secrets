@@ -84,6 +84,24 @@ func (m *MockDatabaseManagerForEntries) FindEntriesByTitle(group *gokeepasslib.G
 	return foundEntries
 }
 
+func (m *MockDatabaseManagerForEntries) CloneGroup(sourceGroup *gokeepasslib.Group, newName string) (*gokeepasslib.Group, error) {
+	newGroup := gokeepasslib.NewGroup()
+	newGroup.Name = newName
+	return &newGroup, nil
+}
+
+func (m *MockDatabaseManagerForEntries) DeleteGroup(parentGroup *gokeepasslib.Group, groupName string) error {
+	return nil // Mock implementation
+}
+
+func (m *MockDatabaseManagerForEntries) Open(dbPath, keyfilePath, password string) (*gokeepasslib.Database, error) {
+	return gokeepasslib.NewDatabase(), nil
+}
+
+func (m *MockDatabaseManagerForEntries) Save(db *gokeepasslib.Database, dbPath, keyfilePath, password string) error {
+	return nil
+}
+
 func (m *MockDatabaseManagerForEntries) CreateGroupChain(parentGroup *gokeepasslib.Group, pathSegments []string) *gokeepasslib.Group {
 	// Track the call for verification
 	m.GroupChainCalls = append(m.GroupChainCalls, GroupChainCall{
@@ -144,7 +162,7 @@ func (m *MockDatabaseManagerForEntries) FindGroupsByNameInParent(parentGroup *go
 func TestSecretsManager_EnsureProfileStructure_WithEntries(t *testing.T) {
 	mockDB := NewMockDatabaseManagerForEntries()
 	mockLogger := logger.NewLogger(false)
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Create test environments with entries
 	environments := map[string][]secrets.SecretItem{
@@ -206,7 +224,7 @@ func TestSecretsManager_EnsureProfileStructure_WithEntries(t *testing.T) {
 func TestSecretsManager_ParseEntryPath_Functionality(t *testing.T) {
 	mockDB := NewMockDatabaseManagerForEntries()
 	mockLogger := logger.NewLogger(false)
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Test cases for entry path parsing
 	testCases := []struct {
@@ -288,7 +306,7 @@ func TestSecretsManager_ParseEntryPath_Functionality(t *testing.T) {
 func TestSecretsManager_IncrementalEntryCreation(t *testing.T) {
 	mockDB := NewMockDatabaseManagerForEntries()
 	mockLogger := logger.NewLogger(false)
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	environments := map[string][]secrets.SecretItem{
 		"development": {
@@ -328,7 +346,7 @@ func TestSecretsManager_IncrementalEntryCreation(t *testing.T) {
 func TestSecretsManager_EntryCreationWithDuplicateItems(t *testing.T) {
 	mockDB := NewMockDatabaseManagerForEntries()
 	mockLogger := logger.NewLogger(false)
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Test with multiple items referencing the same entry (allowed by validation rules)
 	environments := map[string][]secrets.SecretItem{

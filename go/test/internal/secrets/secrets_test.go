@@ -39,6 +39,14 @@ func (m *MockDatabaseManager) SaveDatabase(db *gokeepasslib.Database, dbPath str
 	return nil
 }
 
+func (m *MockDatabaseManager) Open(dbPath, keyfilePath, password string) (*gokeepasslib.Database, error) {
+	return gokeepasslib.NewDatabase(), nil
+}
+
+func (m *MockDatabaseManager) Save(db *gokeepasslib.Database, dbPath, keyfilePath, password string) error {
+	return nil
+}
+
 func (m *MockDatabaseManager) FindGroupsByName(db *gokeepasslib.Database, groupName string) ([]*gokeepasslib.Group, error) {
 	return []*gokeepasslib.Group{}, nil
 }
@@ -71,6 +79,16 @@ func (m *MockDatabaseManager) CreateGroupChain(parentGroup *gokeepasslib.Group, 
 	return parentGroup // Mock implementation - just return parent for simplicity
 }
 
+func (m *MockDatabaseManager) CloneGroup(sourceGroup *gokeepasslib.Group, newName string) (*gokeepasslib.Group, error) {
+	newGroup := gokeepasslib.NewGroup()
+	newGroup.Name = newName
+	return &newGroup, nil
+}
+
+func (m *MockDatabaseManager) DeleteGroup(parentGroup *gokeepasslib.Group, groupName string) error {
+	return nil // Mock implementation
+}
+
 // Attachment methods for MockDatabaseManager
 func (m *MockDatabaseManager) AddAttachment(db *gokeepasslib.Database, entry *gokeepasslib.Entry, filename string, content []byte) error {
 	// Mock implementation - just add to entry's Binaries slice
@@ -101,7 +119,7 @@ func (m *MockDatabaseManager) ListAttachments(entry *gokeepasslib.Entry) []strin
 func TestNewSecretsManager(t *testing.T) {
 	mockDB := &MockDatabaseManager{}
 	mockLogger := logger.NewLogger(false)
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	if manager == nil {
 		t.Error("Expected SecretsManager to be created, got nil")
@@ -114,7 +132,7 @@ func TestNewSecretsManager(t *testing.T) {
 func TestBasicSecretsManagerOperation(t *testing.T) {
 	mockDB := &MockDatabaseManager{}
 	mockLogger := logger.NewLogger(false)
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	if manager == nil {
 		t.Error("Expected SecretsManager to be created, got nil")

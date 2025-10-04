@@ -37,7 +37,7 @@ func TestPopulateEntryFields_NewFields(t *testing.T) {
 	mockLogger := logger.NewLogger(false)
 
 	// Create SecretsManager
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Test PopulateEntryFields
 	fieldsAdded, err := manager.PopulateEntryFields(&entry, "DATABASE_URL", items)
@@ -96,7 +96,7 @@ func TestIsEntryMatchForItem_SimpleEntryName(t *testing.T) {
 	mockLogger := logger.NewLogger(false)
 
 	// Create SecretsManager
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Test entry matching
 	matches := manager.IsEntryMatchForItem(&entry, item)
@@ -138,7 +138,7 @@ func TestPopulateEntryFields_PreventsDuplicates(t *testing.T) {
 	mockLogger := logger.NewLogger(false)
 
 	// Create SecretsManager
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Test PopulateEntryFields
 	fieldsAdded, err := manager.PopulateEntryFields(&entry, "DATABASE_URL", items)
@@ -201,7 +201,7 @@ func TestIsEntryMatchForItem_PathBasedEntryName(t *testing.T) {
 	mockLogger := logger.NewLogger(false)
 
 	// Create SecretsManager
-	manager := secrets.NewSecretsManager(mockDB, mockLogger)
+	manager := secrets.NewSecretsManager(mockDB, mockLogger, nil, nil)
 
 	// Test entry matching
 	matches := manager.IsEntryMatchForItem(&entry, item)

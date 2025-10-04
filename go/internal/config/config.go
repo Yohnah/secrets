@@ -10,9 +10,19 @@ import (
 
 // Config represents the application configuration
 // Following SRP - Single Responsibility Principle: only handles configuration structure
+// Includes all configuration: paths, flags, and runtime options
 type Config struct {
+	// Database configuration
 	DatabasePath string `yaml:"database_path"`
 	KeyfilePath  string `yaml:"keyfile_path"`
+
+	// Runtime flags (not persisted to config.yml)
+	Verbose  bool // Verbose output mode
+	Force    bool // Force mode (skip confirmations)
+	Extended bool // Extended output mode (detailed information)
+
+	// Command-specific configuration (extensible)
+	CommandFlags map[string]interface{} // Additional command-specific flags
 }
 
 // ConfigOptions holds all possible configuration sources for precedence resolution
@@ -21,6 +31,9 @@ type ConfigOptions struct {
 	// Global flags - highest precedence
 	DatabaseFlag string
 	KeyfileFlag  string
+	VerboseFlag  bool
+	ForceFlag    bool
+	ExtendedFlag bool
 
 	// Command-specific flags - same precedence as global flags
 	CommandFlags map[string]interface{}
@@ -57,6 +70,9 @@ func (m *FileConfigManager) Load(options ConfigOptions) (*Config, error) {
 	config := &Config{
 		DatabasePath: "secrets.kdbx",    // Default relative to base path
 		KeyfilePath:  "secrets.keyfile", // Default relative to base path
+		Verbose:      false,             // Default: no verbose output
+		Force:        false,             // Default: require confirmations
+		CommandFlags: make(map[string]interface{}),
 	}
 
 	// 1. Apply environment variables (overwrites defaults)
@@ -66,8 +82,15 @@ func (m *FileConfigManager) Load(options ConfigOptions) (*Config, error) {
 	if envKey := os.Getenv("SECRETS_YOHNAH_KEYFILE_PATH"); envKey != "" {
 		config.KeyfilePath = envKey
 	}
+	if envVerbose := os.Getenv("SECRETS_YOHNAH_VERBOSE"); envVerbose == "true" || envVerbose == "1" {
+		config.Verbose = true
+	}
+	if envForce := os.Getenv("SECRETS_YOHNAH_FORCE"); envForce == "true" || envForce == "1" {
+		config.Force = true
+	}
 
 	// 2. Load from config file if exists (overwrites env vars)
+	// Note: config.yml only stores DatabasePath and KeyfilePath, not runtime flags
 	if options.ConfigPath != "" {
 		if _, err := os.Stat(options.ConfigPath); err == nil {
 			data, err := os.ReadFile(options.ConfigPath)
@@ -75,7 +98,10 @@ func (m *FileConfigManager) Load(options ConfigOptions) (*Config, error) {
 				return nil, fmt.Errorf("failed to read config file: %w", err)
 			}
 
-			var fileConfig Config
+			var fileConfig struct {
+				DatabasePath string `yaml:"database_path"`
+				KeyfilePath  string `yaml:"keyfile_path"`
+			}
 			if err := yaml.Unmarshal(data, &fileConfig); err != nil {
 				return nil, fmt.Errorf("failed to parse config file: %w", err)
 			}
@@ -97,9 +123,18 @@ func (m *FileConfigManager) Load(options ConfigOptions) (*Config, error) {
 	if options.KeyfileFlag != "" {
 		config.KeyfilePath = options.KeyfileFlag
 	}
+	// Verbose, Force, and Extended flags are boolean, so we check if they were explicitly set
+	// By convention, if these flags are passed, they override previous values
+	config.Verbose = options.VerboseFlag
+	config.Force = options.ForceFlag
+	config.Extended = options.ExtendedFlag
 
 	// 4. Apply command-specific flags (same precedence as global flags)
 	if options.CommandFlags != nil {
+		// Store command-specific flags for later use
+		config.CommandFlags = options.CommandFlags
+
+		// Also check if command-specific flags override global settings
 		if dbFlag, exists := options.CommandFlags["database"]; exists {
 			if dbStr, ok := dbFlag.(string); ok && dbStr != "" {
 				config.DatabasePath = dbStr
@@ -108,6 +143,16 @@ func (m *FileConfigManager) Load(options ConfigOptions) (*Config, error) {
 		if keyfileFlag, exists := options.CommandFlags["keyfile"]; exists {
 			if keyfileStr, ok := keyfileFlag.(string); ok && keyfileStr != "" {
 				config.KeyfilePath = keyfileStr
+			}
+		}
+		if verboseFlag, exists := options.CommandFlags["verbose"]; exists {
+			if verboseBool, ok := verboseFlag.(bool); ok {
+				config.Verbose = verboseBool
+			}
+		}
+		if forceFlag, exists := options.CommandFlags["force"]; exists {
+			if forceBool, ok := forceFlag.(bool); ok {
+				config.Force = forceBool
 			}
 		}
 	}
@@ -122,8 +167,18 @@ func (m *FileConfigManager) Load(options ConfigOptions) (*Config, error) {
 }
 
 // Save writes configuration to YAML file
+// Only persists DatabasePath and KeyfilePath (not runtime flags like Verbose/Force)
 func (m *FileConfigManager) Save(configPath string, config *Config) error {
-	data, err := yaml.Marshal(config)
+	// Create a struct with only persistable fields
+	persistable := struct {
+		DatabasePath string `yaml:"database_path"`
+		KeyfilePath  string `yaml:"keyfile_path"`
+	}{
+		DatabasePath: config.DatabasePath,
+		KeyfilePath:  config.KeyfilePath,
+	}
+
+	data, err := yaml.Marshal(persistable)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
