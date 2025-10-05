@@ -22,12 +22,11 @@ var secretsTemplate string
 type InitOptions struct {
 	ForceRecreate    bool
 	NoCreateDatabase bool
+	DatabaseName     string
 }
 
 type Manager interface {
-	Init() error
-	InitWithRecreate(forceRecreate bool) error
-	InitWithOptions(opts InitOptions) error
+	Init(opts InitOptions) error
 	Status(format string) error
 	ShowTemplate(minimal bool) error
 }
@@ -41,28 +40,18 @@ type manager struct {
 }
 
 // NewManager creates a new SecretsManager instance
-func NewManager(cfg config.Manager, log logger.Manager, prm prompt.Manager, out output.Manager) Manager {
+func NewManager(cfg config.Manager, log logger.Manager, prm prompt.Manager, kp keepass.Manager, out output.Manager) Manager {
 	return &manager{
 		config:  cfg,
 		logger:  log,
 		prompt:  prm,
-		keepass: keepass.NewManager(),
+		keepass: kp,
 		output:  out,
 	}
 }
 
-// Init implements the initialization command logic (compatibility wrapper)
-func (m *manager) Init() error {
-	return m.InitWithOptions(InitOptions{ForceRecreate: false, NoCreateDatabase: false})
-}
-
-// InitWithRecreate implements the initialization logic with force recreate (compatibility wrapper)
-func (m *manager) InitWithRecreate(forceRecreate bool) error {
-	return m.InitWithOptions(InitOptions{ForceRecreate: forceRecreate, NoCreateDatabase: false})
-}
-
-// InitWithOptions implements the full initialization logic with options
-func (m *manager) InitWithOptions(opts InitOptions) error {
+// Init implements the full initialization logic with options
+func (m *manager) Init(opts InitOptions) error {
 	// Step 1: PULL configuration from ConfigManager
 	cfg, err := m.config.GetConfig()
 	if err != nil {
@@ -312,7 +301,20 @@ func (m *manager) InitWithOptions(opts InitOptions) error {
 
 	// Create database
 	m.logger.Debug("Creating KeePass database in KDBX4 format...")
-	if err := m.keepass.CreateDatabase(dbPath, keyfilePath, password); err != nil {
+
+	// Determine root group name
+	rootGroupName := opts.DatabaseName
+	if rootGroupName == "" {
+		// Use git repo name or default
+		if gitName, err := m.getGitRepoName(); err == nil {
+			rootGroupName = gitName
+		} else {
+			rootGroupName = "Secrets"
+		}
+	}
+	m.logger.Debug(fmt.Sprintf("Using root group name: %s", rootGroupName))
+
+	if err := m.keepass.CreateDatabase(dbPath, keyfilePath, password, rootGroupName); err != nil {
 		return fmt.Errorf("failed to create database: %w", err)
 	}
 	m.logger.Debug(fmt.Sprintf("Database created: %s", dbPath))
@@ -366,6 +368,15 @@ func (m *manager) getPassword(cfg *config.Config, creating bool) (string, error)
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// getGitRepoName gets the name of the git repository
+func (m *manager) getGitRepoName() (string, error) {
+	gitRoot, err := m.findGitRoot()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Base(gitRoot), nil
 }
 
 // findGitRoot searches for the git repository root starting from current directory

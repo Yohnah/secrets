@@ -38,7 +38,7 @@ func TestManagersUseInterfaces(t *testing.T) {
 
 	internalDir := filepath.Join(root, "internal")
 
-	managers := []string{"config", "logger", "prompt", "secrets"}
+	managers := []string{"config", "logger", "prompt", "secrets", "keepass", "output", "validator"}
 
 	for _, mgr := range managers {
 		mgrPath := filepath.Join(internalDir, mgr, "manager.go")
@@ -56,11 +56,11 @@ func TestManagersUseInterfaces(t *testing.T) {
 			t.Fatalf("Failed to parse %s: %v", mgrPath, err)
 		}
 
-		// Check that an interface named "Manager" exists
+		// Check that an interface named "Manager" or "ValidatorManager" exists
 		hasInterface := false
 		ast.Inspect(node, func(n ast.Node) bool {
 			if typeSpec, ok := n.(*ast.TypeSpec); ok {
-				if typeSpec.Name.Name == "Manager" {
+				if typeSpec.Name.Name == "Manager" || typeSpec.Name.Name == "ValidatorManager" {
 					if _, isInterface := typeSpec.Type.(*ast.InterfaceType); isInterface {
 						hasInterface = true
 						return false
@@ -85,7 +85,7 @@ func TestNoCircularDependencies(t *testing.T) {
 
 	internalDir := filepath.Join(root, "internal")
 
-	managers := []string{"config", "logger", "prompt", "secrets", "cli", "types"}
+	managers := []string{"config", "logger", "prompt", "secrets", "cli", "types", "keepass", "output", "validator"}
 
 	// Build dependency graph
 	deps := make(map[string][]string)
@@ -152,6 +152,9 @@ func TestDirectoryStructure(t *testing.T) {
 		"internal/prompt",
 		"internal/secrets",
 		"internal/types",
+		"internal/keepass",
+		"internal/output",
+		"internal/validator",
 		"tests/architecture",
 	}
 
@@ -203,10 +206,13 @@ func TestManagersSRP(t *testing.T) {
 	}
 
 	managers := map[string]string{
-		"config":  "configuration",
-		"logger":  "logging",
-		"prompt":  "user interaction",
-		"secrets": "business logic",
+		"config":    "configuration",
+		"logger":    "logging",
+		"prompt":    "user interaction",
+		"secrets":   "business logic",
+		"keepass":   "database operations",
+		"output":    "output formatting",
+		"validator": "data validation",
 	}
 
 	internalDir := filepath.Join(root, "internal")
@@ -285,4 +291,63 @@ func hasCycle(node string, graph map[string][]string, visited, recStack map[stri
 
 	recStack[node] = false
 	return false
+}
+
+// TestSecretsMgrReceivesInterfaces validates that SecretsManager receives all dependencies as interfaces
+func TestSecretsMgrReceivesInterfaces(t *testing.T) {
+	root, err := findModuleRoot()
+	if err != nil {
+		t.Fatalf("Failed to find module root: %v", err)
+	}
+
+	secretsMgrPath := filepath.Join(root, "internal", "secrets", "manager.go")
+
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, secretsMgrPath, nil, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("Failed to parse secrets manager: %v", err)
+	}
+
+	// Check that NewManager function receives interfaces, not concrete types
+	foundNewManager := false
+	ast.Inspect(node, func(n ast.Node) bool {
+		if funcDecl, ok := n.(*ast.FuncDecl); ok {
+			if funcDecl.Name.Name == "NewManager" {
+				foundNewManager = true
+				// Check parameters
+				if len(funcDecl.Type.Params.List) < 5 {
+					t.Errorf("NewManager should have at least 5 parameters (interfaces)")
+					return false
+				}
+				// First parameter should be config.Manager
+				if len(funcDecl.Type.Params.List[0].Names) > 0 {
+					paramType := funcDecl.Type.Params.List[0].Type
+					if sel, ok := paramType.(*ast.SelectorExpr); ok {
+						if sel.Sel.Name != "Manager" {
+							t.Errorf("First parameter should be config.Manager interface")
+						}
+					} else {
+						t.Errorf("First parameter should be config.Manager interface")
+					}
+				}
+				// Check that keepass parameter is Manager interface
+				if len(funcDecl.Type.Params.List) >= 4 {
+					paramType := funcDecl.Type.Params.List[3].Type
+					if sel, ok := paramType.(*ast.SelectorExpr); ok {
+						if sel.Sel.Name != "Manager" {
+							t.Errorf("Fourth parameter should be keepass.Manager interface")
+						}
+					} else {
+						t.Errorf("Fourth parameter should be keepass.Manager interface")
+					}
+				}
+				return false
+			}
+		}
+		return true
+	})
+
+	if !foundNewManager {
+		t.Error("NewManager function not found in secrets manager")
+	}
 }

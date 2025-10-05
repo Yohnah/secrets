@@ -101,9 +101,6 @@ func (m *manager) GetConfig() (*Config, error) {
 	if envConfig := os.Getenv("SECRETS_YOHNAH_CONFIG"); envConfig != "" {
 		config.ConfigPath = envConfig
 	}
-	if envOutput := os.Getenv("SECRETS_YOHNAH_OUTPUT_FORMAT"); envOutput != "" {
-		config.OutputFormat = envOutput
-	}
 	if envVerbose := os.Getenv("SECRETS_YOHNAH_VERBOSE"); envVerbose == "true" {
 		config.Verbose = true
 	}
@@ -146,9 +143,6 @@ func (m *manager) GetConfig() (*Config, error) {
 	}
 	if m.globalFlags.Config != "" {
 		config.ConfigPath = m.globalFlags.Config
-	}
-	if m.globalFlags.OutputFormat != "" {
-		config.OutputFormat = m.globalFlags.OutputFormat
 	}
 	config.Verbose = m.globalFlags.Verbose
 	config.NoInteractive = m.globalFlags.Force

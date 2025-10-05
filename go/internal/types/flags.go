@@ -10,5 +10,4 @@ type GlobalFlags struct {
 	Config           string
 	IgnoreConfigFile bool
 	IgnoreGitProject bool
-	OutputFormat     string
 }

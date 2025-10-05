@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/Yohnah/secrets/internal/config"
+	"github.com/Yohnah/secrets/internal/keepass"
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
@@ -26,7 +27,7 @@ type ManagerContext struct {
 }
 
 // NewManagerContext creates all managers with standard setup.
-// This follows the 7-step initialization pattern used across all CLI commands:
+// This follows the 8-step initialization pattern used across all CLI commands:
 //
 //  1. Get global flags from Cobra
 //  2. Instantiate ValidatorManager
@@ -34,7 +35,8 @@ type ManagerContext struct {
 //  4. Instantiate LoggerManager (with verbose flag)
 //  5. Instantiate PromptManager
 //  6. Instantiate OutputManager
-//  7. Instantiate SecretsManager (CORE - with all dependencies)
+//  7. Instantiate KeePassManager
+//  8. Instantiate SecretsManager (CORE - with all dependencies)
 //
 // This function ensures consistency across all CLI commands and centralizes
 // the dependency injection pattern. All managers communicate through interfaces,
@@ -67,9 +69,12 @@ func NewManagerContext() *ManagerContext {
 	// Step 6: Instantiate OutputManager
 	outputMgr := output.NewManager()
 
-	// Step 7: Instantiate SecretsManager (CORE - business logic)
+	// Step 7: Instantiate KeePassManager
+	keepassMgr := keepass.NewManager()
+
+	// Step 8: Instantiate SecretsManager (CORE - business logic)
 	// SecretsManager receives all dependencies via constructor injection
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, outputMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr)
 
 	return &ManagerContext{
 		Config:    configMgr,

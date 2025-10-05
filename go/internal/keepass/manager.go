@@ -10,7 +10,7 @@ import (
 
 // Manager interface defines operations for KeePass database management
 type Manager interface {
-	CreateDatabase(dbPath, keyfilePath, password string) error
+	CreateDatabase(dbPath, keyfilePath, password, rootGroupName string) error
 	OpenDatabase(dbPath, keyfilePath, password string) (*gokeepasslib.Database, error)
 	GenerateKeyfile(keyfilePath string) error
 }
@@ -44,7 +44,7 @@ func (m *manager) GenerateKeyfile(keyfilePath string) error {
 
 // CreateDatabase creates a new KeePass database in KDBX4 format
 // Protected with both password and keyfile
-func (m *manager) CreateDatabase(dbPath, keyfilePath, password string) error {
+func (m *manager) CreateDatabase(dbPath, keyfilePath, password, rootGroupName string) error {
 	// Create new database in KDBX4 format
 	db := gokeepasslib.NewDatabase(
 		gokeepasslib.WithDatabaseKDBXVersion4(),
@@ -58,6 +58,13 @@ func (m *manager) CreateDatabase(dbPath, keyfilePath, password string) error {
 
 	// Assign credentials to database
 	db.Credentials = credentials
+
+	// Create root group with custom name if provided
+	if rootGroupName != "" {
+		rootGroup := gokeepasslib.NewGroup()
+		rootGroup.Name = rootGroupName
+		db.Content.Root.Groups = []gokeepasslib.Group{rootGroup}
+	}
 
 	// Lock protected entries (encrypt sensitive data)
 	err = db.LockProtectedEntries()

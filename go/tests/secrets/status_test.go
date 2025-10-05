@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Yohnah/secrets/internal/config"
+	"github.com/Yohnah/secrets/internal/keepass"
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
@@ -33,10 +34,10 @@ func TestStatus_WithValidDatabase(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
 	// Initialize first
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -66,7 +67,7 @@ func TestStatus_WithoutDatabase(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
 	// Run status without initializing first
 	err := secretsMgr.Status("table")
@@ -95,10 +96,10 @@ func TestStatus_WithIgnoreConfigFile(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
 	// Initialize first
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -148,10 +149,10 @@ func TestStatus_WithCustomPaths(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
 	// Initialize first
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("Init failed with custom paths: %v", err)
 	}
@@ -190,10 +191,10 @@ func TestStatus_WithWrongPassword(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
 	// Initialize with correct password
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -227,10 +228,10 @@ func TestStatus_AfterInit(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
 	// Initialize
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}

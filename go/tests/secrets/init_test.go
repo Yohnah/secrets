@@ -9,6 +9,7 @@ import (
 	"github.com/Yohnah/secrets/internal/validator"
 
 	"github.com/Yohnah/secrets/internal/config"
+	"github.com/Yohnah/secrets/internal/keepass"
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
@@ -67,10 +68,10 @@ func TestInitCreatesSecretsYohnahDirectory(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
 	// Execute init
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -101,9 +102,9 @@ func TestInitCreatesConfigYml(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -149,9 +150,9 @@ func TestInitWithIgnoreConfigFile(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -201,9 +202,9 @@ func TestInitWithIgnoreGitProject(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -233,9 +234,9 @@ func TestInitWithoutGitFails(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err == nil {
 		t.Errorf("Init should have failed without git repository and without --ignore-git-project")
 	}
@@ -262,9 +263,9 @@ func TestInitDoesNotOverwriteExistingConfig(t *testing.T) {
 	configMgr1 := config.NewManager(flags1, validatorMgr)
 	loggerMgr1 := logger.NewManager(false)
 	promptMgr1 := prompt.NewManager()
-	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, output.NewManager())
+	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, keepass.NewManager(), output.NewManager())
 
-	err := secretsMgr1.Init()
+	err := secretsMgr1.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("First init failed: %v", err)
 	}
@@ -295,9 +296,9 @@ func TestInitDoesNotOverwriteExistingConfig(t *testing.T) {
 	configMgr2 := config.NewManager(flags2, validatorMgr)
 	loggerMgr2 := logger.NewManager(false)
 	promptMgr2 := prompt.NewManager()
-	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, output.NewManager())
+	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, keepass.NewManager(), output.NewManager())
 
-	err = secretsMgr2.Init()
+	err = secretsMgr2.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("Second init failed: %v", err)
 	}
@@ -348,9 +349,9 @@ func TestInitWithCustomPaths(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -394,9 +395,9 @@ func TestInitFindsGitRootFromSubdirectory(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -437,9 +438,9 @@ func TestInitAddsToGitignore(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -483,9 +484,9 @@ func TestInitCreatesGitignoreIfNotExists(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -530,9 +531,9 @@ func TestInitDoesNotDuplicateGitignoreEntry(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -608,10 +609,10 @@ unknown_field: "this is invalid"
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager())
 
 	// Init should fail due to invalid config
-	err := secretsMgr.Init()
+	err := secretsMgr.Init(secrets.InitOptions{})
 	if err == nil {
 		t.Fatal("Expected init to fail with invalid config, but it succeeded")
 	}
