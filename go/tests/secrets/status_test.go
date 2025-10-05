@@ -7,6 +7,7 @@ import (
 
 	"github.com/Yohnah/secrets/internal/config"
 	"github.com/Yohnah/secrets/internal/logger"
+	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/secrets"
 	"github.com/Yohnah/secrets/internal/types"
@@ -32,7 +33,7 @@ func TestStatus_WithValidDatabase(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
 
 	// Initialize first
 	err := secretsMgr.Init()
@@ -41,7 +42,7 @@ func TestStatus_WithValidDatabase(t *testing.T) {
 	}
 
 	// Run status
-	err = secretsMgr.Status()
+	err = secretsMgr.Status("table")
 	if err != nil {
 		t.Errorf("Status failed with valid database: %v", err)
 	}
@@ -65,10 +66,10 @@ func TestStatus_WithoutDatabase(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
 
 	// Run status without initializing first
-	err := secretsMgr.Status()
+	err := secretsMgr.Status("table")
 	if err != nil {
 		t.Errorf("Status should not fail when database doesn't exist: %v", err)
 	}
@@ -94,7 +95,7 @@ func TestStatus_WithIgnoreConfigFile(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
 
 	// Initialize first
 	err := secretsMgr.Init()
@@ -103,7 +104,7 @@ func TestStatus_WithIgnoreConfigFile(t *testing.T) {
 	}
 
 	// Run status
-	err = secretsMgr.Status()
+	err = secretsMgr.Status("table")
 	if err != nil {
 		t.Errorf("Status failed with --ignore-config-file: %v", err)
 	}
@@ -147,7 +148,7 @@ func TestStatus_WithCustomPaths(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
 
 	// Initialize first
 	err := secretsMgr.Init()
@@ -156,7 +157,7 @@ func TestStatus_WithCustomPaths(t *testing.T) {
 	}
 
 	// Run status
-	err = secretsMgr.Status()
+	err = secretsMgr.Status("table")
 	if err != nil {
 		t.Errorf("Status failed with custom paths: %v", err)
 	}
@@ -189,7 +190,7 @@ func TestStatus_WithWrongPassword(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
 
 	// Initialize with correct password
 	err := secretsMgr.Init()
@@ -201,7 +202,7 @@ func TestStatus_WithWrongPassword(t *testing.T) {
 	os.Setenv("SECRETS_YOHNAH_PASSWORD", "wrong-password")
 
 	// Run status (should not fail, but should report database not accessible)
-	err = secretsMgr.Status()
+	err = secretsMgr.Status("table")
 	if err != nil {
 		t.Errorf("Status should not fail with wrong password, just report inaccessible: %v", err)
 	}
@@ -226,7 +227,7 @@ func TestStatus_AfterInit(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
 
 	// Initialize
 	err := secretsMgr.Init()
@@ -235,7 +236,7 @@ func TestStatus_AfterInit(t *testing.T) {
 	}
 
 	// Immediately run status (should work)
-	err = secretsMgr.Status()
+	err = secretsMgr.Status("table")
 	if err != nil {
 		t.Errorf("Status failed after init: %v", err)
 	}

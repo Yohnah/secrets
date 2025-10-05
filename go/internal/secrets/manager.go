@@ -1,15 +1,21 @@
 package secrets
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Yohnah/secrets/internal/config"
 	"github.com/Yohnah/secrets/internal/keepass"
 	"github.com/Yohnah/secrets/internal/logger"
+	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
 )
+
+//go:embed templates/secrets.tpl.yml
+var secretsTemplate string
 
 // Manager defines the interface for secrets business logic
 // InitOptions holds options for the Init command
@@ -22,6 +28,8 @@ type Manager interface {
 	Init() error
 	InitWithRecreate(forceRecreate bool) error
 	InitWithOptions(opts InitOptions) error
+	Status(format string) error
+	ShowTemplate(minimal bool) error
 }
 
 type manager struct {
@@ -29,15 +37,17 @@ type manager struct {
 	logger  logger.Manager
 	prompt  prompt.Manager
 	keepass keepass.Manager
+	output  output.Manager
 }
 
 // NewManager creates a new SecretsManager instance
-func NewManager(cfg config.Manager, log logger.Manager, prm prompt.Manager) Manager {
+func NewManager(cfg config.Manager, log logger.Manager, prm prompt.Manager, out output.Manager) Manager {
 	return &manager{
 		config:  cfg,
 		logger:  log,
 		prompt:  prm,
 		keepass: keepass.NewManager(),
+		output:  out,
 	}
 }
 
@@ -110,6 +120,14 @@ func (m *manager) InitWithOptions(opts InitOptions) error {
 			return fmt.Errorf("failed to create directory %s: %w", secretsDir, err)
 		}
 
+		// Add .secrets_yohnah to .gitignore if in a git repository
+		if !m.config.ShouldIgnoreGitProject() {
+			if err := m.addToGitignore(targetDir); err != nil {
+				m.logger.Error(fmt.Sprintf("Failed to add .secrets_yohnah to .gitignore: %v", err))
+				m.logger.Info("Please manually add .secrets_yohnah to your .gitignore file")
+			}
+		}
+
 		// Create config.yml with no_create_database: true (only if it doesn't exist)
 		configPath := filepath.Join(secretsDir, "config.yml")
 		if err := m.config.CreateDefaultConfigWithNoCreate(configPath, true); err != nil {
@@ -148,6 +166,14 @@ func (m *manager) InitWithOptions(opts InitOptions) error {
 		return fmt.Errorf("failed to create directory %s: %w", secretsDir, err)
 	}
 	m.logger.Debug(fmt.Sprintf("Created directory: %s", secretsDir))
+
+	// Step 6.1: Add .secrets_yohnah to .gitignore if in a git repository
+	if !m.config.ShouldIgnoreGitProject() {
+		if err := m.addToGitignore(targetDir); err != nil {
+			m.logger.Error(fmt.Sprintf("Failed to add .secrets_yohnah to .gitignore: %v", err))
+			m.logger.Info("Please manually add .secrets_yohnah to your .gitignore file")
+		}
+	}
 
 	// Step 7: Will create config.yml later (after knowing if user wants database or not)
 	configPath := filepath.Join(secretsDir, "config.yml")
@@ -364,4 +390,260 @@ func (m *manager) findGitRoot() (string, error) {
 		}
 		currentDir = parent
 	}
+}
+
+// addToGitignore adds .secrets_yohnah to .gitignore if not already present
+func (m *manager) addToGitignore(gitRoot string) error {
+	gitignorePath := filepath.Join(gitRoot, ".gitignore")
+	entryToAdd := ".secrets_yohnah"
+
+	// Read existing .gitignore if it exists
+	var existingContent []byte
+	var err error
+	if fileExists(gitignorePath) {
+		existingContent, err = os.ReadFile(gitignorePath)
+		if err != nil {
+			return fmt.Errorf("failed to read .gitignore: %w", err)
+		}
+
+		// Check if .secrets_yohnah is already in .gitignore
+		lines := strings.Split(string(existingContent), "\n")
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == entryToAdd {
+				m.logger.Debug(".secrets_yohnah already in .gitignore")
+				return nil
+			}
+		}
+	}
+
+	// Add .secrets_yohnah to .gitignore
+	var newContent string
+	if len(existingContent) > 0 {
+		// Ensure file ends with newline before adding new entry
+		if !strings.HasSuffix(string(existingContent), "\n") {
+			newContent = string(existingContent) + "\n" + entryToAdd + "\n"
+		} else {
+			newContent = string(existingContent) + entryToAdd + "\n"
+		}
+	} else {
+		// Create new .gitignore with comment
+		newContent = "# Secrets Manager - Do not commit sensitive data\n" + entryToAdd + "\n"
+	}
+
+	// Write updated .gitignore
+	if err := os.WriteFile(gitignorePath, []byte(newContent), 0644); err != nil {
+		return fmt.Errorf("failed to write .gitignore: %w", err)
+	}
+
+	m.logger.Debug(fmt.Sprintf("Added .secrets_yohnah to .gitignore"))
+	return nil
+}
+
+// Status displays the current status of the secrets database
+func (m *manager) Status(format string) error {
+	m.logger.Debug("Checking database status...")
+
+	// Get configuration
+	cfg, err := m.config.GetConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get configuration: %w", err)
+	}
+
+	// Get database and keyfile paths
+	dbPath := m.config.GetDatabasePath()
+	keyfilePath := m.config.GetKeyfilePath()
+
+	// Make paths absolute if they are relative
+	if !filepath.IsAbs(dbPath) {
+		cwd, _ := os.Getwd()
+		dbPath = filepath.Join(cwd, dbPath)
+	}
+	if !filepath.IsAbs(keyfilePath) {
+		cwd, _ := os.Getwd()
+		keyfilePath = filepath.Join(cwd, keyfilePath)
+	}
+
+	// Check if config.yml exists (unless --ignore-config-file is active)
+	var configExists bool
+	var configPath string
+	if !m.config.ShouldIgnoreConfigFile() {
+		configPath = filepath.Join(filepath.Dir(dbPath), "config.yml")
+		if _, err := os.Stat(configPath); err == nil {
+			configExists = true
+		}
+	}
+
+	// Check if database exists
+	dbInfo, dbErr := os.Stat(dbPath)
+	dbExists := dbErr == nil
+
+	// Check if keyfile exists
+	keyfileInfo, keyfileErr := os.Stat(keyfilePath)
+	keyfileExists := keyfileErr == nil
+
+	// Try to open database to verify accessibility
+	var accessible bool
+	var accessError string
+	if dbExists && keyfileExists {
+		password := cfg.Password
+		if password == "" {
+			if cfg.NoInteractive {
+				accessError = "password required (use SECRETS_YOHNAH_PASSWORD environment variable)"
+			} else {
+				// Ask for password
+				pwd, err := m.prompt.PromptPassword("Enter database password: ")
+				if err != nil {
+					accessError = fmt.Sprintf("failed to get password: %v", err)
+				} else {
+					password = pwd
+				}
+			}
+		}
+
+		if password != "" {
+			m.logger.Debug("Attempting to open database...")
+			db, err := m.keepass.OpenDatabase(dbPath, keyfilePath, password)
+			if err != nil {
+				accessError = fmt.Sprintf("cannot access database: %v", err)
+				accessible = false
+			} else {
+				accessible = true
+				m.logger.Debug("Database opened successfully")
+				// Close database (not needed for gokeepasslib, it's in-memory)
+				_ = db
+			}
+		}
+	} else {
+		accessible = false
+		if !dbExists {
+			accessError = "database file not found"
+		} else if !keyfileExists {
+			accessError = "keyfile not found"
+		}
+	}
+
+	// Build structured status data
+	statusData := make(map[string]interface{})
+
+	// Configuration section (only if not ignored)
+	if !m.config.ShouldIgnoreConfigFile() {
+		statusData["configuration"] = map[string]interface{}{
+			"path":   configPath,
+			"exists": configExists,
+		}
+	}
+
+	// Database section
+	dbData := map[string]interface{}{
+		"path":   dbPath,
+		"exists": dbExists,
+	}
+	if dbExists {
+		dbData["size_bytes"] = dbInfo.Size()
+		dbData["size_human"] = formatFileSize(dbInfo.Size())
+		dbData["modified"] = dbInfo.ModTime().Format("2006-01-02 15:04:05")
+		dbData["accessible"] = accessible
+		if !accessible {
+			dbData["error"] = accessError
+		}
+	}
+	statusData["database"] = dbData
+
+	// Keyfile section
+	keyfileData := map[string]interface{}{
+		"path":   keyfilePath,
+		"exists": keyfileExists,
+	}
+	if keyfileExists {
+		keyfileData["modified"] = keyfileInfo.ModTime().Format("2006-01-02 15:04:05")
+	}
+	statusData["keyfile"] = keyfileData
+
+	// Pass structured data + format to OutputManager
+	if err := m.output.Output(statusData, format); err != nil {
+		return fmt.Errorf("failed to output status: %w", err)
+	}
+
+	// Return error if database is not accessible
+	if !accessible && dbExists {
+		return fmt.Errorf("database is not accessible: %s", accessError)
+	}
+
+	return nil
+}
+
+// formatFileSize formats a file size in bytes to a human-readable string
+func formatFileSize(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// ShowTemplate outputs the embedded secrets.yml template
+func (m *manager) ShowTemplate(minimal bool) error {
+	var content string
+	if minimal {
+		content = m.processMinimalTemplate()
+	} else {
+		content = secretsTemplate
+	}
+	return m.output.OutputRaw(content)
+}
+
+// processMinimalTemplate generates a minimal version of the template
+func (m *manager) processMinimalTemplate() string {
+	lines := strings.Split(secretsTemplate, "\n")
+	var result strings.Builder
+	inSkipSection := false
+
+	for _, line := range lines {
+		// Skip decorative lines
+		if strings.HasPrefix(line, "# ═══════════════════") {
+			continue
+		}
+		if strings.HasPrefix(line, "# SECRETS.YML TEMPLATE") {
+			continue
+		}
+		if strings.Contains(line, "This file defines") {
+			continue
+		}
+
+		// Detect start of COMPLETE EXAMPLE section
+		if strings.Contains(line, "COMPLETE EXAMPLE") {
+			inSkipSection = true
+			continue
+		}
+
+		// Detect start of FIELD REFERENCE section
+		if strings.Contains(line, "FIELD REFERENCE") {
+			inSkipSection = true
+			continue
+		}
+
+		// Detect end of skip section (when we find metadata or environments or outputs)
+		if strings.HasPrefix(line, "metadata:") ||
+			strings.HasPrefix(line, "environments:") ||
+			strings.HasPrefix(line, "outputs:") {
+			inSkipSection = false
+		}
+
+		// Skip lines in sections we're skipping
+		if inSkipSection {
+			continue
+		}
+
+		// Include the line
+		result.WriteString(line)
+		result.WriteString("\n")
+	}
+
+	return result.String()
 }

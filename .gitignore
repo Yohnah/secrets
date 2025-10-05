@@ -126,3 +126,4 @@ test-results/
 .secrets_yohnah
 *.py
 *.pyc
+.stuffs

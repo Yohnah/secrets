@@ -16,7 +16,6 @@ var (
 	flagConfig       string
 	flagIgnoreConfig bool
 	flagIgnoreGit    bool
-	flagOutputFormat string
 )
 
 // rootCmd represents the base command
@@ -57,7 +56,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flagConfig, "config", ".secrets_yohnah/config.yml", "Path to configuration file")
 	rootCmd.PersistentFlags().BoolVar(&flagIgnoreConfig, "ignore-config-file", false, "Ignore configuration file")
 	rootCmd.PersistentFlags().BoolVar(&flagIgnoreGit, "ignore-git-project", false, "Ignore git project root detection (create in current directory)")
-	rootCmd.PersistentFlags().StringVarP(&flagOutputFormat, "output", "o", "table", "Output format: json, yaml, table")
 
 	// Bind environment variables to flags
 	bindEnvVars()
@@ -76,7 +74,10 @@ Examples:
 {{.Example}}{{end}}{{if .HasAvailableSubCommands}}
 
 Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
-  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailablePersistentFlags}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailablePersistentFlags}}
 
 Global Flags:
 {{.PersistentFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
@@ -91,7 +92,6 @@ Environment Variables:
   SECRETS_YOHNAH_DATABASE       Path to the KeePass database file
   SECRETS_YOHNAH_KEYFILE        Path to the key file for database authentication
   SECRETS_YOHNAH_CONFIG         Path to the configuration file
-  SECRETS_YOHNAH_OUTPUT_FORMAT  Default output format (json, yaml, table)
   SECRETS_YOHNAH_VERBOSE        Enable verbose mode (true/false)
 
 Configuration Precedence:
@@ -117,10 +117,6 @@ func bindEnvVars() {
 	if envConfig := os.Getenv("SECRETS_YOHNAH_CONFIG"); envConfig != "" && !rootCmd.PersistentFlags().Changed("config") {
 		flagConfig = envConfig
 	}
-
-	if envFormat := os.Getenv("SECRETS_YOHNAH_OUTPUT_FORMAT"); envFormat != "" && !rootCmd.PersistentFlags().Changed("output") {
-		flagOutputFormat = envFormat
-	}
 }
 
 // GetGlobalFlags returns all global flag values as a struct
@@ -133,7 +129,6 @@ func GetGlobalFlags() *types.GlobalFlags {
 		Config:           flagConfig,
 		IgnoreConfigFile: flagIgnoreConfig,
 		IgnoreGitProject: flagIgnoreGit,
-		OutputFormat:     flagOutputFormat,
 	}
 }
 
@@ -160,8 +155,4 @@ func GetConfig() string {
 
 func ShouldIgnoreConfig() bool {
 	return flagIgnoreConfig
-}
-
-func GetOutputFormat() string {
-	return flagOutputFormat
 }

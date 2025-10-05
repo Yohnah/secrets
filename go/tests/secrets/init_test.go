@@ -3,12 +3,14 @@ package secrets_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Yohnah/secrets/internal/validator"
 
 	"github.com/Yohnah/secrets/internal/config"
 	"github.com/Yohnah/secrets/internal/logger"
+	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/secrets"
 	"github.com/Yohnah/secrets/internal/types"
@@ -65,7 +67,7 @@ func TestInitCreatesSecretsYohnahDirectory(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
 
 	// Execute init
 	err := secretsMgr.Init()
@@ -99,7 +101,7 @@ func TestInitCreatesConfigYml(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
 
 	err := secretsMgr.Init()
 	if err != nil {
@@ -147,7 +149,7 @@ func TestInitWithIgnoreConfigFile(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
 
 	err := secretsMgr.Init()
 	if err != nil {
@@ -199,7 +201,7 @@ func TestInitWithIgnoreGitProject(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
 
 	err := secretsMgr.Init()
 	if err != nil {
@@ -231,7 +233,7 @@ func TestInitWithoutGitFails(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
 
 	err := secretsMgr.Init()
 	if err == nil {
@@ -260,7 +262,7 @@ func TestInitDoesNotOverwriteExistingConfig(t *testing.T) {
 	configMgr1 := config.NewManager(flags1, validatorMgr)
 	loggerMgr1 := logger.NewManager(false)
 	promptMgr1 := prompt.NewManager()
-	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1)
+	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, output.NewManager())
 
 	err := secretsMgr1.Init()
 	if err != nil {
@@ -293,7 +295,7 @@ func TestInitDoesNotOverwriteExistingConfig(t *testing.T) {
 	configMgr2 := config.NewManager(flags2, validatorMgr)
 	loggerMgr2 := logger.NewManager(false)
 	promptMgr2 := prompt.NewManager()
-	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2)
+	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, output.NewManager())
 
 	err = secretsMgr2.Init()
 	if err != nil {
@@ -346,7 +348,7 @@ func TestInitWithCustomPaths(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
 
 	err := secretsMgr.Init()
 	if err != nil {
@@ -392,7 +394,7 @@ func TestInitFindsGitRootFromSubdirectory(t *testing.T) {
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
 
 	err := secretsMgr.Init()
 	if err != nil {
@@ -409,6 +411,151 @@ func TestInitFindsGitRootFromSubdirectory(t *testing.T) {
 	secretsDirSub := filepath.Join(subDir, ".secrets_yohnah")
 	if _, err := os.Stat(secretsDirSub); !os.IsNotExist(err) {
 		t.Errorf(".secrets_yohnah directory should not have been created in subdirectory")
+	}
+}
+
+// TestInitAddsToGitignore tests that init adds .secrets_yohnah to .gitignore
+func TestInitAddsToGitignore(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpDir)
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
+
+	// Create existing .gitignore with some content
+	existingGitignore := "*.log\nnode_modules/\n"
+	gitignorePath := filepath.Join(tmpDir, ".gitignore")
+	os.WriteFile(gitignorePath, []byte(existingGitignore), 0644)
+
+	flags := &types.GlobalFlags{
+		Force: true,
+	}
+
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(flags, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+
+	err := secretsMgr.Init()
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Read .gitignore and verify .secrets_yohnah was added
+	content, err := os.ReadFile(gitignorePath)
+	if err != nil {
+		t.Fatalf("Failed to read .gitignore: %v", err)
+	}
+
+	gitignoreContent := string(content)
+	if !contains(gitignoreContent, ".secrets_yohnah") {
+		t.Errorf(".secrets_yohnah was not added to .gitignore. Content:\n%s", gitignoreContent)
+	}
+
+	// Verify existing content is preserved
+	if !contains(gitignoreContent, "*.log") {
+		t.Errorf("Existing .gitignore content was lost")
+	}
+}
+
+// TestInitCreatesGitignoreIfNotExists tests that init creates .gitignore if it doesn't exist
+func TestInitCreatesGitignoreIfNotExists(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpDir)
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
+
+	// Ensure .gitignore doesn't exist
+	gitignorePath := filepath.Join(tmpDir, ".gitignore")
+	os.Remove(gitignorePath)
+
+	flags := &types.GlobalFlags{
+		Force: true,
+	}
+
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(flags, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+
+	err := secretsMgr.Init()
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Verify .gitignore was created
+	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
+		t.Error(".gitignore was not created")
+	}
+
+	// Read .gitignore and verify .secrets_yohnah is there
+	content, err := os.ReadFile(gitignorePath)
+	if err != nil {
+		t.Fatalf("Failed to read .gitignore: %v", err)
+	}
+
+	gitignoreContent := string(content)
+	if !contains(gitignoreContent, ".secrets_yohnah") {
+		t.Errorf(".secrets_yohnah was not added to .gitignore. Content:\n%s", gitignoreContent)
+	}
+}
+
+// TestInitDoesNotDuplicateGitignoreEntry tests that .secrets_yohnah is not added twice
+func TestInitDoesNotDuplicateGitignoreEntry(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpDir)
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
+
+	// Create .gitignore with .secrets_yohnah already present
+	existingGitignore := "*.log\n.secrets_yohnah\nnode_modules/\n"
+	gitignorePath := filepath.Join(tmpDir, ".gitignore")
+	os.WriteFile(gitignorePath, []byte(existingGitignore), 0644)
+
+	flags := &types.GlobalFlags{
+		Force: true,
+	}
+
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(flags, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
+
+	err := secretsMgr.Init()
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Read .gitignore and count occurrences
+	content, err := os.ReadFile(gitignorePath)
+	if err != nil {
+		t.Fatalf("Failed to read .gitignore: %v", err)
+	}
+
+	gitignoreContent := string(content)
+
+	// Count occurrences of .secrets_yohnah
+	count := 0
+	lines := strings.Split(gitignoreContent, "\n")
+	for _, line := range lines {
+		if strings.TrimSpace(line) == ".secrets_yohnah" {
+			count++
+		}
+	}
+
+	if count != 1 {
+		t.Errorf("Expected .secrets_yohnah to appear exactly once, but found %d occurrences", count)
 	}
 }
 
@@ -461,7 +608,7 @@ unknown_field: "this is invalid"
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, output.NewManager())
 
 	// Init should fail due to invalid config
 	err := secretsMgr.Init()
