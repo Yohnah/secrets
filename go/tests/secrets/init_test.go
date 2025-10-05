@@ -1,0 +1,389 @@
+package secrets_test
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/Yohnah/secrets/internal/config"
+	"github.com/Yohnah/secrets/internal/logger"
+	"github.com/Yohnah/secrets/internal/prompt"
+	"github.com/Yohnah/secrets/internal/secrets"
+	"github.com/Yohnah/secrets/internal/types"
+)
+
+// setupTestDir creates a temporary test directory
+func setupTestDir(t *testing.T) string {
+	tmpDir, err := os.MkdirTemp("", "secrets-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+	return tmpDir
+}
+
+// setupTestPassword sets up the password environment variable for tests
+// and ensures it's cleaned up after the test completes
+func setupTestPassword(t *testing.T) {
+	testPassword := "test-password-123"
+	os.Setenv("SECRETS_YOHNAH_PASSWORD", testPassword)
+	t.Cleanup(func() {
+		os.Unsetenv("SECRETS_YOHNAH_PASSWORD")
+	})
+}
+
+// initGitRepo initializes a git repository in the given directory
+func initGitRepo(t *testing.T, dir string) {
+	gitDir := filepath.Join(dir, ".git")
+	if err := os.Mkdir(gitDir, 0755); err != nil {
+		t.Fatalf("Failed to create .git directory: %v", err)
+	}
+}
+
+// TestInitCreatesSecretsYohnahDirectory tests that init creates .secrets_yohnah directory
+func TestInitCreatesSecretsYohnahDirectory(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpDir)
+
+	// Change to tmpDir
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
+
+	// Setup managers
+	flags := &types.GlobalFlags{
+		Force: true, // Non-interactive mode
+	}
+
+	configMgr := config.NewManager(flags)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+
+	// Execute init
+	err := secretsMgr.Init()
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Verify .secrets_yohnah was created
+	secretsDir := filepath.Join(tmpDir, ".secrets_yohnah")
+	if _, err := os.Stat(secretsDir); os.IsNotExist(err) {
+		t.Errorf(".secrets_yohnah directory was not created")
+	}
+}
+
+// TestInitCreatesConfigYml tests that init creates config.yml file
+func TestInitCreatesConfigYml(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpDir)
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
+
+	flags := &types.GlobalFlags{
+		Force: true,
+	}
+
+	configMgr := config.NewManager(flags)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+
+	err := secretsMgr.Init()
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Verify config.yml was created
+	configFile := filepath.Join(tmpDir, ".secrets_yohnah", "config.yml")
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		t.Errorf("config.yml was not created")
+	}
+
+	// Verify config.yml content
+	content, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Fatalf("Failed to read config.yml: %v", err)
+	}
+
+	contentStr := string(content)
+	if !contains(contentStr, "database:") {
+		t.Errorf("config.yml does not contain 'database:' field")
+	}
+	if !contains(contentStr, "keyfile:") {
+		t.Errorf("config.yml does not contain 'keyfile:' field")
+	}
+}
+
+// TestInitWithIgnoreConfigFile tests that init with --ignore-config-file does not create anything
+func TestInitWithIgnoreConfigFile(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	initGitRepo(t, tmpDir)
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
+
+	flags := &types.GlobalFlags{
+		Force:            true,
+		IgnoreConfigFile: true,
+	}
+
+	configMgr := config.NewManager(flags)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+
+	err := secretsMgr.Init()
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Verify .secrets_yohnah was NOT created
+	secretsDir := filepath.Join(tmpDir, ".secrets_yohnah")
+	if _, err := os.Stat(secretsDir); !os.IsNotExist(err) {
+		t.Errorf(".secrets_yohnah directory should not have been created with --ignore-config-file")
+	}
+}
+
+// TestInitWithIgnoreGitProject tests that init with --ignore-git-project creates in current directory
+func TestInitWithIgnoreGitProject(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
+	// Don't create .git directory
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
+
+	flags := &types.GlobalFlags{
+		Force:            true,
+		IgnoreGitProject: true,
+	}
+
+	configMgr := config.NewManager(flags)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+
+	err := secretsMgr.Init()
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Verify .secrets_yohnah was created in current directory
+	secretsDir := filepath.Join(tmpDir, ".secrets_yohnah")
+	if _, err := os.Stat(secretsDir); os.IsNotExist(err) {
+		t.Errorf(".secrets_yohnah directory was not created in current directory")
+	}
+}
+
+// TestInitWithoutGitFails tests that init without git and without --ignore-git-project fails
+func TestInitWithoutGitFails(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	// Don't create .git directory
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
+
+	flags := &types.GlobalFlags{
+		Force: true,
+	}
+
+	configMgr := config.NewManager(flags)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+
+	err := secretsMgr.Init()
+	if err == nil {
+		t.Errorf("Init should have failed without git repository and without --ignore-git-project")
+	}
+}
+
+// TestInitDoesNotOverwriteExistingConfig tests that existing config.yml is not overwritten
+// and that existing database/keyfile are verified instead of recreated
+func TestInitDoesNotOverwriteExistingConfig(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpDir)
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
+
+	// First, run init normally to create everything
+	flags1 := &types.GlobalFlags{
+		Force: true,
+	}
+
+	configMgr1 := config.NewManager(flags1)
+	loggerMgr1 := logger.NewManager(false)
+	promptMgr1 := prompt.NewManager()
+	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1)
+
+	err := secretsMgr1.Init()
+	if err != nil {
+		t.Fatalf("First init failed: %v", err)
+	}
+
+	// Read the config.yml content
+	configFile := filepath.Join(tmpDir, ".secrets_yohnah", "config.yml")
+	originalContent, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Fatalf("Failed to read config.yml: %v", err)
+	}
+
+	// Get modification time of database and keyfile
+	dbPath := filepath.Join(tmpDir, ".secrets_yohnah", "secrets.kdbx")
+	keyfilePath := filepath.Join(tmpDir, ".secrets_yohnah", "secrets.keyfile")
+
+	dbInfo, _ := os.Stat(dbPath)
+	keyInfo, _ := os.Stat(keyfilePath)
+	originalDbModTime := dbInfo.ModTime()
+	originalKeyModTime := keyInfo.ModTime()
+
+	// Run init again - should verify, not recreate
+	flags2 := &types.GlobalFlags{
+		Force: true,
+	}
+
+	configMgr2 := config.NewManager(flags2)
+	loggerMgr2 := logger.NewManager(false)
+	promptMgr2 := prompt.NewManager()
+	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2)
+
+	err = secretsMgr2.Init()
+	if err != nil {
+		t.Fatalf("Second init failed: %v", err)
+	}
+
+	// Verify config.yml was not modified
+	newContent, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Fatalf("Failed to read config.yml after second init: %v", err)
+	}
+
+	if string(newContent) != string(originalContent) {
+		t.Errorf("config.yml was modified on second init")
+	}
+
+	// Verify database and keyfile were not recreated (modification time unchanged)
+	dbInfo2, _ := os.Stat(dbPath)
+	keyInfo2, _ := os.Stat(keyfilePath)
+
+	if !dbInfo2.ModTime().Equal(originalDbModTime) {
+		t.Errorf("Database was recreated on second init")
+	}
+
+	if !keyInfo2.ModTime().Equal(originalKeyModTime) {
+		t.Errorf("Keyfile was recreated on second init")
+	}
+} // TestInitWithCustomPaths tests that init uses custom paths from flags
+func TestInitWithCustomPaths(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpDir)
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
+
+	// Create directories for custom paths
+	customDir := filepath.Join(tmpDir, "custom")
+	os.MkdirAll(customDir, 0755)
+
+	flags := &types.GlobalFlags{
+		Force:    true,
+		Database: filepath.Join(customDir, "db.kdbx"),
+		Keyfile:  filepath.Join(customDir, "key.file"),
+	}
+
+	configMgr := config.NewManager(flags)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+
+	err := secretsMgr.Init()
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Verify config.yml contains custom paths
+	configFile := filepath.Join(tmpDir, ".secrets_yohnah", "config.yml")
+	content, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Fatalf("Failed to read config.yml: %v", err)
+	}
+
+	contentStr := string(content)
+	if !contains(contentStr, "/custom/db.kdbx") {
+		t.Errorf("config.yml does not contain custom database path")
+	}
+	if !contains(contentStr, "/custom/key.file") {
+		t.Errorf("config.yml does not contain custom keyfile path")
+	}
+}
+
+// TestInitFindsGitRootFromSubdirectory tests that init finds git root from a subdirectory
+func TestInitFindsGitRootFromSubdirectory(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpDir)
+
+	// Create a subdirectory
+	subDir := filepath.Join(tmpDir, "subdir1", "subdir2")
+	os.MkdirAll(subDir, 0755)
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(subDir)
+
+	flags := &types.GlobalFlags{
+		Force: true,
+	}
+
+	configMgr := config.NewManager(flags)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+
+	err := secretsMgr.Init()
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Verify .secrets_yohnah was created in git root, not in subdirectory
+	secretsDir := filepath.Join(tmpDir, ".secrets_yohnah")
+	if _, err := os.Stat(secretsDir); os.IsNotExist(err) {
+		t.Errorf(".secrets_yohnah directory was not created in git root")
+	}
+
+	// Verify it was NOT created in subdirectory
+	secretsDirSub := filepath.Join(subDir, ".secrets_yohnah")
+	if _, err := os.Stat(secretsDirSub); !os.IsNotExist(err) {
+		t.Errorf(".secrets_yohnah directory should not have been created in subdirectory")
+	}
+}
+
+// Helper function
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > 0 && len(substr) > 0 && findSubstring(s, substr)))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
