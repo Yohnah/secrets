@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"os"
-
 	"github.com/Yohnah/secrets/internal/types"
 	"github.com/spf13/cobra"
 )
@@ -57,12 +55,9 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&flagIgnoreConfig, "ignore-config-file", false, "Ignore configuration file")
 	rootCmd.PersistentFlags().BoolVar(&flagIgnoreGit, "ignore-git-project", false, "Ignore git project root detection (create in current directory)")
 
-	// Bind environment variables to flags
-	bindEnvVars()
-
 	// Custom help template to show environment variables prominently
-	// Note: Only shows "Global Flags" section (not "Flags") to avoid duplication
-	// since all flags are PersistentFlags (global) at root level
+	// Root command: Shows only "Global Flags" (all PersistentFlags)
+	// Subcommands: Shows "Flags" (local flags) + "Global Flags" (inherited)
 	rootCmd.SetUsageTemplate(`Usage:{{if .Runnable}}
   {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
   {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
@@ -74,13 +69,13 @@ Examples:
 {{.Example}}{{end}}{{if .HasAvailableSubCommands}}
 
 Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
-  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if and .HasAvailableLocalFlags .HasParent}}
 
 Flags:
-{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailablePersistentFlags}}
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if or .HasAvailableInheritedFlags (not .HasParent)}}
 
 Global Flags:
-{{.PersistentFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
+{{if .HasParent}}{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{else}}{{.PersistentFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{end}}{{if .HasHelpSubCommands}}
 
 Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
   {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
@@ -99,60 +94,28 @@ Configuration Precedence:
 `)
 }
 
-// bindEnvVars binds environment variables to flag values if not explicitly set
-func bindEnvVars() {
-	// Check environment variables and set defaults if flags are not provided
-	if os.Getenv("SECRETS_YOHNAH_VERBOSE") == "true" && !rootCmd.PersistentFlags().Changed("verbose") {
-		flagVerbose = true
-	}
-
-	if envDB := os.Getenv("SECRETS_YOHNAH_DATABASE"); envDB != "" && !rootCmd.PersistentFlags().Changed("database") {
-		flagDatabase = envDB
-	}
-
-	if envKeyfile := os.Getenv("SECRETS_YOHNAH_KEYFILE"); envKeyfile != "" && !rootCmd.PersistentFlags().Changed("keyfile") {
-		flagKeyfile = envKeyfile
-	}
-
-	if envConfig := os.Getenv("SECRETS_YOHNAH_CONFIG"); envConfig != "" && !rootCmd.PersistentFlags().Changed("config") {
-		flagConfig = envConfig
-	}
-}
-
 // GetGlobalFlags returns all global flag values as a struct
+// Only returns flag values that were explicitly set by the user.
+// For flags not set, returns empty/zero values so ConfigManager
+// can apply proper precedence (FLAGS > CONFIG.YML > ENV VARS > DEFAULTS)
 func GetGlobalFlags() *types.GlobalFlags {
-	return &types.GlobalFlags{
+	flags := &types.GlobalFlags{
 		Verbose:          flagVerbose,
 		Force:            flagForce,
-		Database:         flagDatabase,
-		Keyfile:          flagKeyfile,
-		Config:           flagConfig,
 		IgnoreConfigFile: flagIgnoreConfig,
 		IgnoreGitProject: flagIgnoreGit,
 	}
-}
 
-// Helper functions to access individual flags (for CliManager)
-func IsVerbose() bool {
-	return flagVerbose
-}
+	// Only set these if explicitly provided by user (not Cobra defaults)
+	if rootCmd.PersistentFlags().Changed("database") {
+		flags.Database = flagDatabase
+	}
+	if rootCmd.PersistentFlags().Changed("keyfile") {
+		flags.Keyfile = flagKeyfile
+	}
+	if rootCmd.PersistentFlags().Changed("config") {
+		flags.Config = flagConfig
+	}
 
-func IsForce() bool {
-	return flagForce
-}
-
-func GetDatabase() string {
-	return flagDatabase
-}
-
-func GetKeyfile() string {
-	return flagKeyfile
-}
-
-func GetConfig() string {
-	return flagConfig
-}
-
-func ShouldIgnoreConfig() bool {
-	return flagIgnoreConfig
+	return flags
 }
