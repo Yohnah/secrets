@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Yohnah/secrets/internal/validator"
+
 	"github.com/Yohnah/secrets/internal/config"
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/prompt"
@@ -58,7 +60,9 @@ func TestInitCreatesSecretsYohnahDirectory(t *testing.T) {
 		Force: true, // Non-interactive mode
 	}
 
-	configMgr := config.NewManager(flags)
+	validatorMgr := validator.NewManager()
+
+	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
@@ -90,7 +94,9 @@ func TestInitCreatesConfigYml(t *testing.T) {
 		Force: true,
 	}
 
-	configMgr := config.NewManager(flags)
+	validatorMgr := validator.NewManager()
+
+	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
@@ -121,9 +127,10 @@ func TestInitCreatesConfigYml(t *testing.T) {
 	}
 }
 
-// TestInitWithIgnoreConfigFile tests that init with --ignore-config-file does not create anything
+// TestInitWithIgnoreConfigFile tests that init with --ignore-config-file creates database but not config.yml
 func TestInitWithIgnoreConfigFile(t *testing.T) {
 	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
 	initGitRepo(t, tmpDir)
 
 	originalDir, _ := os.Getwd()
@@ -135,7 +142,9 @@ func TestInitWithIgnoreConfigFile(t *testing.T) {
 		IgnoreConfigFile: true,
 	}
 
-	configMgr := config.NewManager(flags)
+	validatorMgr := validator.NewManager()
+
+	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
@@ -145,10 +154,28 @@ func TestInitWithIgnoreConfigFile(t *testing.T) {
 		t.Fatalf("Init failed: %v", err)
 	}
 
-	// Verify .secrets_yohnah was NOT created
+	// Verify .secrets_yohnah directory WAS created
 	secretsDir := filepath.Join(tmpDir, ".secrets_yohnah")
-	if _, err := os.Stat(secretsDir); !os.IsNotExist(err) {
-		t.Errorf(".secrets_yohnah directory should not have been created with --ignore-config-file")
+	if _, err := os.Stat(secretsDir); os.IsNotExist(err) {
+		t.Errorf(".secrets_yohnah directory should have been created")
+	}
+
+	// Verify database WAS created
+	dbPath := filepath.Join(tmpDir, ".secrets_yohnah", "secrets.kdbx")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		t.Errorf("Database should have been created")
+	}
+
+	// Verify keyfile WAS created
+	keyfilePath := filepath.Join(tmpDir, ".secrets_yohnah", "secrets.keyfile")
+	if _, err := os.Stat(keyfilePath); os.IsNotExist(err) {
+		t.Errorf("Keyfile should have been created")
+	}
+
+	// Verify config.yml was NOT created (--ignore-config-file)
+	configPath := filepath.Join(secretsDir, "config.yml")
+	if _, err := os.Stat(configPath); !os.IsNotExist(err) {
+		t.Errorf("config.yml should NOT have been created with --ignore-config-file")
 	}
 }
 
@@ -167,7 +194,9 @@ func TestInitWithIgnoreGitProject(t *testing.T) {
 		IgnoreGitProject: true,
 	}
 
-	configMgr := config.NewManager(flags)
+	validatorMgr := validator.NewManager()
+
+	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
@@ -197,7 +226,9 @@ func TestInitWithoutGitFails(t *testing.T) {
 		Force: true,
 	}
 
-	configMgr := config.NewManager(flags)
+	validatorMgr := validator.NewManager()
+
+	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
@@ -224,7 +255,9 @@ func TestInitDoesNotOverwriteExistingConfig(t *testing.T) {
 		Force: true,
 	}
 
-	configMgr1 := config.NewManager(flags1)
+	validatorMgr := validator.NewManager()
+
+	configMgr1 := config.NewManager(flags1, validatorMgr)
 	loggerMgr1 := logger.NewManager(false)
 	promptMgr1 := prompt.NewManager()
 	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1)
@@ -255,7 +288,9 @@ func TestInitDoesNotOverwriteExistingConfig(t *testing.T) {
 		Force: true,
 	}
 
-	configMgr2 := config.NewManager(flags2)
+	validatorMgr = validator.NewManager()
+
+	configMgr2 := config.NewManager(flags2, validatorMgr)
 	loggerMgr2 := logger.NewManager(false)
 	promptMgr2 := prompt.NewManager()
 	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2)
@@ -306,7 +341,9 @@ func TestInitWithCustomPaths(t *testing.T) {
 		Keyfile:  filepath.Join(customDir, "key.file"),
 	}
 
-	configMgr := config.NewManager(flags)
+	validatorMgr := validator.NewManager()
+
+	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
@@ -350,7 +387,9 @@ func TestInitFindsGitRootFromSubdirectory(t *testing.T) {
 		Force: true,
 	}
 
-	configMgr := config.NewManager(flags)
+	validatorMgr := validator.NewManager()
+
+	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
@@ -380,6 +419,67 @@ func contains(s, substr string) bool {
 }
 
 func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+// TestInitWithInvalidConfigFile tests that init fails with invalid config.yml
+func TestInitWithInvalidConfigFile(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpDir)
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
+
+	// Create .secrets_yohnah directory
+	secretsDir := filepath.Join(tmpDir, ".secrets_yohnah")
+	if err := os.MkdirAll(secretsDir, 0755); err != nil {
+		t.Fatalf("Failed to create secrets directory: %v", err)
+	}
+
+	// Create invalid config.yml with unknown field
+	invalidConfig := `database: /tmp/test.kdbx
+keyfile: /tmp/test.keyfile
+unknown_field: "this is invalid"
+`
+	configPath := filepath.Join(secretsDir, "config.yml")
+	if err := os.WriteFile(configPath, []byte(invalidConfig), 0644); err != nil {
+		t.Fatalf("Failed to create invalid config file: %v", err)
+	}
+
+	flags := &types.GlobalFlags{
+		Force: true,
+	}
+
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(flags, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
+
+	// Init should fail due to invalid config
+	err := secretsMgr.Init()
+	if err == nil {
+		t.Fatal("Expected init to fail with invalid config, but it succeeded")
+	}
+
+	// Verify error message mentions validation
+	if !containsString(err.Error(), "validation") && !containsString(err.Error(), "unknown field") {
+		t.Errorf("Expected error to mention validation or unknown field, got: %v", err)
+	}
+}
+
+func containsString(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsStringHelper(s, substr)))
+}
+
+func containsStringHelper(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {
 			return true

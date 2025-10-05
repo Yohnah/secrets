@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"github.com/Yohnah/secrets/internal/validator"
 
 	"github.com/Yohnah/secrets/internal/config"
 	"github.com/Yohnah/secrets/internal/logger"
@@ -27,7 +28,10 @@ func TestInitCreatesDatabaseAndKeyfile(t *testing.T) {
 		Force: true,
 	}
 
-	configMgr := config.NewManager(flags)
+	validatorMgr := validator.NewManager()
+
+
+	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
@@ -79,7 +83,9 @@ func TestInitVerifiesExistingDatabase(t *testing.T) {
 	}
 
 	// First init - creates database
-	configMgr1 := config.NewManager(flags)
+	validatorMgr := validator.NewManager()
+
+	configMgr1 := config.NewManager(flags, validatorMgr)
 	loggerMgr1 := logger.NewManager(false)
 	promptMgr1 := prompt.NewManager()
 	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1)
@@ -100,7 +106,8 @@ func TestInitVerifiesExistingDatabase(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Second init - should verify, not recreate
-	configMgr2 := config.NewManager(flags)
+
+	configMgr2 := config.NewManager(flags, validatorMgr)
 	loggerMgr2 := logger.NewManager(false)
 	promptMgr2 := prompt.NewManager()
 	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2)
@@ -138,7 +145,10 @@ func TestInitWithForceRecreate(t *testing.T) {
 		Force: true,
 	}
 
-	configMgr1 := config.NewManager(flags1)
+	validatorMgr := validator.NewManager()
+
+
+	configMgr1 := config.NewManager(flags1, validatorMgr)
 	loggerMgr1 := logger.NewManager(false)
 	promptMgr1 := prompt.NewManager()
 	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1)
@@ -161,7 +171,8 @@ func TestInitWithForceRecreate(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Second init with force-recreate - should delete and recreate
-	configMgr2 := config.NewManager(flags1)
+
+	configMgr2 := config.NewManager(flags1, validatorMgr)
 	loggerMgr2 := logger.NewManager(false)
 	promptMgr2 := prompt.NewManager()
 	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2)
@@ -209,7 +220,10 @@ func TestInitFailsWithInconsistentFiles(t *testing.T) {
 		Force: true,
 	}
 
-	configMgr := config.NewManager(flags)
+	validatorMgr := validator.NewManager()
+
+
+	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)
@@ -226,7 +240,9 @@ func TestInitFailsWithInconsistentFiles(t *testing.T) {
 	keyfilePath := filepath.Join(secretsDir, "secrets.keyfile")
 	os.WriteFile(keyfilePath, []byte("dummy keyfile content"), 0600)
 
-	configMgr2 := config.NewManager(flags)
+
+
+	configMgr2 := config.NewManager(flags, validatorMgr)
 	loggerMgr2 := logger.NewManager(false)
 	promptMgr2 := prompt.NewManager()
 	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2)
@@ -252,7 +268,9 @@ func TestInitWithWrongPassword(t *testing.T) {
 	}
 
 	// First init - creates database with "test-password-123"
-	configMgr1 := config.NewManager(flags)
+	validatorMgr := validator.NewManager()
+
+	configMgr1 := config.NewManager(flags, validatorMgr)
 	loggerMgr1 := logger.NewManager(false)
 	promptMgr1 := prompt.NewManager()
 	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1)
@@ -269,7 +287,8 @@ func TestInitWithWrongPassword(t *testing.T) {
 	})
 
 	// Second init - should fail with wrong password
-	configMgr2 := config.NewManager(flags)
+
+	configMgr2 := config.NewManager(flags, validatorMgr)
 	loggerMgr2 := logger.NewManager(false)
 	promptMgr2 := prompt.NewManager()
 	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2)
@@ -294,7 +313,10 @@ func TestInitWithoutPasswordInNonInteractiveMode(t *testing.T) {
 		Force: true, // Non-interactive mode
 	}
 
-	configMgr := config.NewManager(flags)
+	validatorMgr := validator.NewManager()
+
+
+	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr)

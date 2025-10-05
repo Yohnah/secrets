@@ -1,0 +1,16 @@
+# Secrets Yohnah Configuration
+# Precedence: FLAGS > CONFIG.YML > ENV VARS > DEFAULTS
+
+# Database file path (KDBX4 format)
+# Default (if not specified): .secrets_yohnah/secrets.kdbx
+database: {{.Database}}
+
+# Keyfile path for database authentication
+# Default (if not specified): .secrets_yohnah/secrets.keyfile
+keyfile: {{.Keyfile}}
+
+# Disable database creation (optional)
+# When set to 'true', the init command will not create the database or keyfile.
+# Default (if not specified): false (database will be created)
+# Uncomment the line below to disable database creation:
+{{.NoCreateDatabaseLine}}

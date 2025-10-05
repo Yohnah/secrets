@@ -1,18 +1,26 @@
 package config
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"text/template"
 
 	"github.com/Yohnah/secrets/internal/types"
+	"github.com/Yohnah/secrets/internal/validator"
 	"gopkg.in/yaml.v3"
 )
+
+//go:embed templates/config.tpl.yml
+var configTemplate string
 
 // Manager defines the interface for configuration management
 type Manager interface {
 	GetConfig() (*Config, error)
 	CreateDefaultConfig(path string) error
+	CreateDefaultConfigWithNoCreate(path string, noCreateDatabase bool) error
 	GetDatabasePath() string
 	GetKeyfilePath() string
 	ShouldIgnoreConfigFile() bool
@@ -21,32 +29,43 @@ type Manager interface {
 
 // Config holds the complete application configuration
 type Config struct {
-	DatabasePath  string
-	KeyfilePath   string
-	ConfigPath    string
-	Verbose       bool
-	NoInteractive bool
-	Password      string
-	OutputFormat  string
-	IgnoreConfig  bool
+	DatabasePath     string
+	KeyfilePath      string
+	ConfigPath       string
+	Verbose          bool
+	NoInteractive    bool
+	Password         string
+	OutputFormat     string
+	IgnoreConfig     bool
+	NoCreateDatabase bool
 }
 
 type manager struct {
 	globalFlags *types.GlobalFlags
 	config      *Config
+	validator   validator.ValidatorManager
 }
 
 // FileConfig represents the structure of config.yml
 type FileConfig struct {
-	Database string `yaml:"database"`
-	Keyfile  string `yaml:"keyfile"`
+	Database         string `yaml:"database"`
+	Keyfile          string `yaml:"keyfile"`
+	NoCreateDatabase *bool  `yaml:"no_create_database,omitempty"`
 }
 
 // NewManager creates a new ConfigManager instance
-func NewManager(flags *types.GlobalFlags) Manager {
-	return &manager{
+func NewManager(flags *types.GlobalFlags, validator validator.ValidatorManager) Manager {
+	manager := &manager{
 		globalFlags: flags,
+		validator:   validator,
 	}
+
+	// Validate template at startup
+	if err := validator.ValidateTemplate(configTemplate); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Config template validation failed: %v\n", err)
+	}
+
+	return manager
 }
 
 // GetConfig processes and returns the complete configuration
@@ -67,6 +86,7 @@ func (m *manager) GetConfig() (*Config, error) {
 	config.NoInteractive = false
 	config.IgnoreConfig = false
 	config.Password = ""
+	config.NoCreateDatabase = false
 
 	// Step 2: Read ENV VARS
 	if envPassword := os.Getenv("SECRETS_YOHNAH_PASSWORD"); envPassword != "" {
@@ -95,15 +115,26 @@ func (m *manager) GetConfig() (*Config, error) {
 			configPath = m.globalFlags.Config
 		}
 
-		if fileConfig, err := m.readConfigFile(configPath); err == nil {
+		fileConfig, err := m.readConfigFile(configPath)
+		if err != nil {
+			// Only ignore "file not found" errors
+			// Any other error (validation, parsing, etc.) is critical
+			if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("failed to read config file: %w", err)
+			}
+			// File doesn't exist - continue with defaults
+		} else {
+			// File exists and is valid - apply config
 			if fileConfig.Database != "" {
 				config.DatabasePath = fileConfig.Database
 			}
 			if fileConfig.Keyfile != "" {
 				config.KeyfilePath = fileConfig.Keyfile
 			}
+			if fileConfig.NoCreateDatabase != nil {
+				config.NoCreateDatabase = *fileConfig.NoCreateDatabase
+			}
 		}
-		// Ignore error if config file doesn't exist
 	}
 
 	// Step 4: Apply FLAGS (highest priority)
@@ -131,9 +162,16 @@ func (m *manager) GetConfig() (*Config, error) {
 
 // readConfigFile reads and parses the config.yml file
 func (m *manager) readConfigFile(path string) (*FileConfig, error) {
+	// Check if file exists first
 	data, err := os.ReadFile(path)
 	if err != nil {
+		// If file doesn't exist, return error (caller will handle it)
 		return nil, err
+	}
+
+	// Validate config file structure ONLY if file exists
+	if err := m.validator.ValidateConfigFile(path); err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
 
 	var fileConfig FileConfig
@@ -147,6 +185,12 @@ func (m *manager) readConfigFile(path string) (*FileConfig, error) {
 // CreateDefaultConfig creates a default config.yml file with inline format
 // dbPath and keyPath should be the paths to write in the config file
 func (m *manager) CreateDefaultConfig(path string) error {
+	return m.CreateDefaultConfigWithNoCreate(path, false)
+}
+
+// CreateDefaultConfigWithNoCreate creates a default config.yml file with inline format
+// If noCreateDatabase is true, the no_create_database field will be set to true
+func (m *manager) CreateDefaultConfigWithNoCreate(path string, noCreateDatabase bool) error {
 	// Ensure directory exists
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -167,8 +211,36 @@ func (m *manager) CreateDefaultConfig(path string) error {
 	dbPath := config.DatabasePath
 	keyPath := config.KeyfilePath
 
-	// Create inline YAML content
-	content := fmt.Sprintf("database: %s\nkeyfile: %s\n", dbPath, keyPath)
+	// Prepare template data
+	type TemplateData struct {
+		Database             string
+		Keyfile              string
+		NoCreateDatabaseLine string
+	}
+
+	noCreateLine := "# no_create_database: true"
+	if noCreateDatabase {
+		noCreateLine = "no_create_database: true"
+	}
+
+	data := TemplateData{
+		Database:             dbPath,
+		Keyfile:              keyPath,
+		NoCreateDatabaseLine: noCreateLine,
+	}
+
+	// Parse and execute template
+	tmpl, err := template.New("config").Parse(configTemplate)
+	if err != nil {
+		return fmt.Errorf("failed to parse config template: %w", err)
+	}
+
+	var buf strings.Builder
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return fmt.Errorf("failed to execute config template: %w", err)
+	}
+
+	content := buf.String()
 
 	// Write to file
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
