@@ -23,6 +23,7 @@ type Manager interface {
 	CreateDefaultConfigWithNoCreate(path string, noCreateDatabase bool) error
 	GetDatabasePath() string
 	GetKeyfilePath() string
+	GetSecretsFilePath() string
 	ShouldIgnoreConfigFile() bool
 	ShouldIgnoreGitProject() bool
 }
@@ -260,6 +261,23 @@ func (m *manager) GetKeyfilePath() string {
 		return config.KeyfilePath
 	}
 	return ".secrets_yohnah/secrets.keyfile"
+}
+
+// GetSecretsFilePath returns the secrets.yml file path
+// Precedence: FLAG -s > secrets.yml in current directory > empty string
+func (m *manager) GetSecretsFilePath() string {
+	// Priority 1: Check if --secrets-file flag was explicitly set
+	if m.globalFlags.SecretsFile != "" {
+		return m.globalFlags.SecretsFile
+	}
+
+	// Priority 2: Check if secrets.yml exists in current directory
+	if _, err := os.Stat("secrets.yml"); err == nil {
+		return "secrets.yml"
+	}
+
+	// No secrets.yml available
+	return ""
 }
 
 // ShouldIgnoreConfigFile returns whether config file should be ignored

@@ -74,7 +74,7 @@ func NewManagerContext() *ManagerContext {
 
 	// Step 8: Instantiate SecretsManager (CORE - business logic)
 	// SecretsManager receives all dependencies via constructor injection
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 
 	return &ManagerContext{
 		Config:    configMgr,

@@ -44,7 +44,7 @@ func TestShowTemplate_FullTemplate(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	outputMock := &mockOutputManager{}
 
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), outputMock)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), outputMock, validator.NewManager())
 
 	// Test full template
 	err := secretsMgr.ShowTemplate(false)
@@ -92,7 +92,7 @@ func TestShowTemplate_MinimalTemplate(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	outputMock := &mockOutputManager{}
 
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), outputMock)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), outputMock, validator.NewManager())
 
 	// Test minimal template
 	err := secretsMgr.ShowTemplate(true)
@@ -133,7 +133,7 @@ func TestShowTemplate_MinimalTemplate(t *testing.T) {
 
 	// Minimal should be shorter than full
 	outputMock2 := &mockOutputManager{}
-	secretsMgr2 := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), outputMock2)
+	secretsMgr2 := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), outputMock2, validator.NewManager())
 	_ = secretsMgr2.ShowTemplate(false)
 	fullTemplate := outputMock2.output
 
@@ -158,7 +158,7 @@ func TestShowTemplate_UsesOutputManager(t *testing.T) {
 
 	// Use real OutputManager to ensure integration works
 	outputMgr := output.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), outputMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), outputMgr, validator.NewManager())
 
 	// This should not panic or error - output goes to stdout
 	err := secretsMgr.ShowTemplate(false)

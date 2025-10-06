@@ -13,6 +13,7 @@ import (
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
+	"github.com/Yohnah/secrets/internal/validator"
 	"github.com/tobischo/gokeepasslib/v3"
 )
 
@@ -34,21 +35,23 @@ type Manager interface {
 }
 
 type manager struct {
-	config  config.Manager
-	logger  logger.Manager
-	prompt  prompt.Manager
-	keepass keepass.Manager
-	output  output.Manager
+	config    config.Manager
+	logger    logger.Manager
+	prompt    prompt.Manager
+	keepass   keepass.Manager
+	output    output.Manager
+	validator validator.ValidatorManager
 }
 
 // NewManager creates a new SecretsManager instance
-func NewManager(cfg config.Manager, log logger.Manager, prm prompt.Manager, kp keepass.Manager, out output.Manager) Manager {
+func NewManager(cfg config.Manager, log logger.Manager, prm prompt.Manager, kp keepass.Manager, out output.Manager, val validator.ValidatorManager) Manager {
 	return &manager{
-		config:  cfg,
-		logger:  log,
-		prompt:  prm,
-		keepass: kp,
-		output:  out,
+		config:    cfg,
+		logger:    log,
+		prompt:    prm,
+		keepass:   kp,
+		output:    out,
+		validator: val,
 	}
 }
 
@@ -530,6 +533,7 @@ func (m *manager) Status(format string) error {
 	var accessible bool
 	var accessError string
 	var entriesCount int
+	var db *gokeepasslib.Database // Keep reference for validation later
 	if dbExists && keyfileExists {
 		password := cfg.Password
 		if password == "" {
@@ -548,12 +552,13 @@ func (m *manager) Status(format string) error {
 
 		if password != "" {
 			m.logger.Debug("Attempting to open database...")
-			db, err := m.keepass.OpenDatabase(dbPath, keyfilePath, password)
+			openedDB, err := m.keepass.OpenDatabase(dbPath, keyfilePath, password)
 			if err != nil {
 				accessError = fmt.Sprintf("cannot access database: %v", err)
 				accessible = false
 			} else {
 				accessible = true
+				db = openedDB // Save database reference for validation
 				m.logger.Debug("Database opened successfully")
 				// Read database name from root group (first group in root)
 				if len(db.Content.Root.Groups) > 0 {
@@ -564,8 +569,6 @@ func (m *manager) Status(format string) error {
 				// Count entries
 				entriesCount = countEntries(db.Content.Root.Groups)
 				m.logger.Debug(fmt.Sprintf("Database has %d entries", entriesCount))
-				// Close database (not needed for gokeepasslib, it's in-memory)
-				_ = db
 			}
 		}
 	} else {
@@ -577,20 +580,51 @@ func (m *manager) Status(format string) error {
 		}
 	}
 
-	// Build structured status data
+	// Build structured status data with display metadata
 	statusData := make(map[string]interface{})
+
+	// Top-level display metadata
+	statusData["_display"] = map[string]interface{}{
+		"type":            "status_report",
+		"title":           "Secrets Database Status",
+		"title_separator": "=",
+		"section_spacing": true,
+	}
 
 	// Configuration section (only if not ignored)
 	if !m.config.ShouldIgnoreConfigFile() {
-		statusData["configuration"] = map[string]interface{}{
-			"path":   configPath,
-			"exists": configExists,
+		configData := map[string]interface{}{
+			"_display": map[string]interface{}{
+				"label": "Configuration",
+				"fields": []map[string]interface{}{
+					{
+						"key":    "config_file",
+						"label":  "Config file",
+						"format": "path_with_status",
+					},
+				},
+			},
+			"config_file": configPath,
+			"exists":      configExists,
 		}
+		statusData["configuration"] = configData
 	}
 
 	// Database section
 	dbData := map[string]interface{}{
-		"path":          dbPath,
+		"_display": map[string]interface{}{
+			"label": "Database",
+			"fields": []map[string]interface{}{
+				{"key": "location", "label": "Location", "format": "path_with_status"},
+				{"key": "size_human", "label": "Size", "format": "simple", "condition": "exists"},
+				{"key": "modified", "label": "Modified", "format": "simple", "condition": "exists"},
+				{"key": "accessible", "label": "Accessible", "format": "accessible_status", "condition": "exists"},
+				{"key": "database_name", "label": "Database Name", "format": "simple", "condition": "accessible"},
+				{"key": "entries_count", "label": "Entries Count", "format": "simple", "condition": "accessible"},
+			},
+			"not_found_message": "Run 'secrets init' to create the database.",
+		},
+		"location":      dbPath,
 		"exists":        dbExists,
 		"database_name": databaseName,
 	}
@@ -600,21 +634,124 @@ func (m *manager) Status(format string) error {
 		dbData["modified"] = dbInfo.ModTime().Format("2006-01-02 15:04:05")
 		dbData["accessible"] = accessible
 		dbData["entries_count"] = entriesCount
+		dbData["accessible_message"] = "password verified"
 		if !accessible {
-			dbData["error"] = accessError
+			dbData["accessible_message"] = accessError
 		}
 	}
 	statusData["database"] = dbData
 
 	// Keyfile section
 	keyfileData := map[string]interface{}{
-		"path":   keyfilePath,
-		"exists": keyfileExists,
+		"_display": map[string]interface{}{
+			"label": "Keyfile",
+			"fields": []map[string]interface{}{
+				{"key": "location", "label": "Location", "format": "path_with_status"},
+				{"key": "modified", "label": "Modified", "format": "simple", "condition": "exists"},
+			},
+			"not_found_message": "Run 'secrets init' to create the keyfile.",
+		},
+		"location": keyfilePath,
+		"exists":   keyfileExists,
 	}
 	if keyfileExists {
 		keyfileData["modified"] = keyfileInfo.ModTime().Format("2006-01-02 15:04:05")
 	}
 	statusData["keyfile"] = keyfileData
+
+	// VALIDATION SECTION: Check secrets.yml and database compliance
+	m.logger.Debug("Running validation checks...")
+
+	var allErrors []error
+	validationData := make(map[string]interface{})
+
+	// Validation display metadata
+	validationData["_display"] = map[string]interface{}{
+		"label": "Validation",
+		"fields": []map[string]interface{}{
+			{"key": "secrets_file", "label": "Secrets file", "format": "compliance_with_file"},
+			{"key": "database_validation", "label": "Database", "format": "compliance_simple"},
+		},
+		"subsections": []map[string]interface{}{
+			{
+				"key":             "reports",
+				"title":           "Validation Reports",
+				"title_separator": "=",
+				"format":          "numbered_list",
+			},
+		},
+	}
+
+	// Validate secrets.yml (if available)
+	secretsYMLPath := m.config.GetSecretsFilePath()
+	secretsYMLData := make(map[string]interface{})
+
+	if secretsYMLPath != "" {
+		// Convert to absolute path for consistency with other file paths
+		absSecretsYMLPath := makeAbsolutePath(secretsYMLPath)
+		m.logger.Debug(fmt.Sprintf("Validating secrets.yml: %s", absSecretsYMLPath))
+		secretsYMLData["file"] = absSecretsYMLPath
+		secretsYMLData["checked"] = true
+
+		_, validationErrors := m.validator.ReadAndValidateSecretsYML(secretsYMLPath)
+		if len(validationErrors) == 0 {
+			secretsYMLData["status"] = "Compliance"
+			secretsYMLData["symbol"] = "✓"
+			m.logger.Debug("secrets.yml validation: Compliance")
+		} else {
+			secretsYMLData["status"] = "Not compliance"
+			secretsYMLData["symbol"] = "✗"
+			m.logger.Debug(fmt.Sprintf("secrets.yml validation: Not compliance (%d errors)", len(validationErrors)))
+			allErrors = append(allErrors, validationErrors...)
+		}
+	} else {
+		secretsYMLData["checked"] = false
+		secretsYMLData["status"] = "Not checked (file not found)"
+		m.logger.Debug("secrets.yml validation: Skipped (file not found)")
+	}
+	validationData["secrets_file"] = secretsYMLData
+
+	// Validate database duplicates (if accessible)
+	dbValidationData := make(map[string]interface{})
+
+	if accessible && db != nil {
+		m.logger.Debug("Validating database for duplicates...")
+		dbValidationData["checked"] = true
+
+		// Create adapter to pass database to validator
+		dbAdapter := keepass.NewDatabaseAdapter(db)
+		duplicateErrors := m.validator.ValidateKeePassDuplicates(dbAdapter)
+
+		if len(duplicateErrors) == 0 {
+			dbValidationData["status"] = "Compliance"
+			dbValidationData["symbol"] = "✓"
+			m.logger.Debug("Database validation: Compliance")
+		} else {
+			dbValidationData["status"] = "Not compliance"
+			dbValidationData["symbol"] = "✗"
+			m.logger.Debug(fmt.Sprintf("Database validation: Not compliance (%d errors)", len(duplicateErrors)))
+			allErrors = append(allErrors, duplicateErrors...)
+		}
+	} else {
+		dbValidationData["checked"] = false
+		dbValidationData["status"] = "Not checked (database not accessible)"
+		if !accessible {
+			m.logger.Debug("Database validation: Skipped (database not accessible)")
+		}
+	}
+	validationData["database_validation"] = dbValidationData
+
+	// Add reports section only if there are errors
+	if len(allErrors) > 0 {
+		reports := []string{}
+		for _, err := range allErrors {
+			reports = append(reports, err.Error())
+		}
+		validationData["reports"] = reports
+		m.logger.Debug(fmt.Sprintf("Validation reports: %d total errors", len(allErrors)))
+	}
+
+	statusData["validation"] = validationData
 
 	// Pass structured data + format to OutputManager
 	if err := m.output.Output(statusData, format); err != nil {
