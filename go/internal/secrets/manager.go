@@ -20,6 +20,9 @@ import (
 //go:embed templates/secrets.tpl.yml
 var secretsTemplate string
 
+// Default database name when git repository name cannot be determined
+const defaultDatabaseName = "SECRETS YOHNAH"
+
 // Manager defines the interface for secrets business logic
 // InitOptions holds options for the Init command
 type InitOptions struct {
@@ -354,15 +357,13 @@ func (m *manager) Init(opts InitOptions) error {
 	return nil
 }
 
-// getPassword retrieves password from env var or prompts user
+// getPassword retrieves password from config or prompts user
 // If creating is true, prompts twice for confirmation
 func (m *manager) getPassword(cfg *config.Config, creating bool) (string, error) {
-	// Check if password is provided via environment variable
-	password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
-
-	if password != "" {
-		m.logger.Debug("Using password from SECRETS_YOHNAH_PASSWORD environment variable")
-		return password, nil
+	// Check if password is provided via config (from env var or other sources)
+	if cfg.Password != "" {
+		m.logger.Debug("Using password from configuration (SECRETS_YOHNAH_PASSWORD environment variable)")
+		return cfg.Password, nil
 	}
 
 	// If in non-interactive mode and no password provided, fail
@@ -396,17 +397,17 @@ func makeAbsolutePath(path string) string {
 }
 
 // getGitRepoName gets the full repository name from git remote origin URL
-// Returns "SECRETS YOHNAH" as fallback if not in git repo or parsing fails
+// Returns defaultDatabaseName as fallback if not in git repo or parsing fails
 func (m *manager) getGitRepoName() string {
 	gitRoot, err := m.findGitRoot()
 	if err != nil {
-		return "SECRETS YOHNAH" // Fallback if not in git repo
+		return defaultDatabaseName // Fallback if not in git repo
 	}
 
 	configPath := filepath.Join(gitRoot, ".git", "config")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return "SECRETS YOHNAH" // Fallback if cannot read config
+		return defaultDatabaseName // Fallback if cannot read config
 	}
 
 	lines := strings.Split(string(data), "\n")
@@ -434,7 +435,7 @@ func (m *manager) getGitRepoName() string {
 		}
 	}
 
-	return "SECRETS YOHNAH" // Fallback if parsing fails
+	return defaultDatabaseName // Fallback if parsing fails
 }
 
 // findGitRoot searches for the git repository root starting from current directory
@@ -579,7 +580,7 @@ func (m *manager) Status(format string) error {
 				if len(db.Content.Root.Groups) > 0 {
 					databaseName = db.Content.Root.Groups[0].Name
 				} else {
-					databaseName = "SECRETS YOHNAH" // Fallback if no groups
+					databaseName = defaultDatabaseName // Fallback if no groups
 				}
 				// Count entries
 				entriesCount = countEntries(db.Content.Root.Groups)
