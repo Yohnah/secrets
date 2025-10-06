@@ -3,6 +3,7 @@ package secrets
 import (
 	_ "embed"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
+	"github.com/tobischo/gokeepasslib/v3"
 )
 
 //go:embed templates/secrets.tpl.yml
@@ -370,13 +372,45 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-// getGitRepoName gets the name of the git repository
+// getGitRepoName gets the full repository name from git remote origin URL
 func (m *manager) getGitRepoName() (string, error) {
 	gitRoot, err := m.findGitRoot()
 	if err != nil {
-		return "", err
+		return "SECRETS YOHNAH", nil // Fallback if not in git repo
 	}
-	return filepath.Base(gitRoot), nil
+
+	configPath := filepath.Join(gitRoot, ".git", "config")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return "SECRETS YOHNAH", nil // Fallback if cannot read config
+	}
+
+	lines := strings.Split(string(data), "\n")
+	inOrigin := false
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[remote \"origin\"]") {
+			inOrigin = true
+			continue
+		}
+		if inOrigin && strings.HasPrefix(line, "url = ") {
+			urlStr := strings.TrimPrefix(line, "url = ")
+			// Parse URL to extract github.com/owner/repo
+			if parsed, err := url.Parse(urlStr); err == nil {
+				path := strings.TrimSuffix(parsed.Path, ".git")
+				path = strings.TrimPrefix(path, "/")
+				if parsed.Host != "" {
+					return parsed.Host + "/" + path, nil
+				}
+			}
+			break
+		}
+		if strings.HasPrefix(line, "[") && inOrigin {
+			break // Next section
+		}
+	}
+
+	return "SECRETS YOHNAH", nil // Fallback if parsing fails
 }
 
 // findGitRoot searches for the git repository root starting from current directory
@@ -461,6 +495,14 @@ func (m *manager) Status(format string) error {
 		return fmt.Errorf("failed to get configuration: %w", err)
 	}
 
+	// Determine database name
+	var databaseName string
+	if gitName, err := m.getGitRepoName(); err == nil {
+		databaseName = gitName
+	} else {
+		databaseName = "SECRETS YOHNAH"
+	}
+
 	// Get database and keyfile paths
 	dbPath := m.config.GetDatabasePath()
 	keyfilePath := m.config.GetKeyfilePath()
@@ -496,6 +538,7 @@ func (m *manager) Status(format string) error {
 	// Try to open database to verify accessibility
 	var accessible bool
 	var accessError string
+	var entriesCount int
 	if dbExists && keyfileExists {
 		password := cfg.Password
 		if password == "" {
@@ -521,6 +564,9 @@ func (m *manager) Status(format string) error {
 			} else {
 				accessible = true
 				m.logger.Debug("Database opened successfully")
+				// Count entries
+				entriesCount = countEntries(db.Content.Root.Groups)
+				m.logger.Debug(fmt.Sprintf("Database has %d entries", entriesCount))
 				// Close database (not needed for gokeepasslib, it's in-memory)
 				_ = db
 			}
@@ -547,14 +593,16 @@ func (m *manager) Status(format string) error {
 
 	// Database section
 	dbData := map[string]interface{}{
-		"path":   dbPath,
-		"exists": dbExists,
+		"path":         dbPath,
+		"exists":       dbExists,
+		"database_name": databaseName,
 	}
 	if dbExists {
 		dbData["size_bytes"] = dbInfo.Size()
 		dbData["size_human"] = formatFileSize(dbInfo.Size())
 		dbData["modified"] = dbInfo.ModTime().Format("2006-01-02 15:04:05")
 		dbData["accessible"] = accessible
+		dbData["entries_count"] = entriesCount
 		if !accessible {
 			dbData["error"] = accessError
 		}
@@ -657,4 +705,14 @@ func (m *manager) processMinimalTemplate() string {
 	}
 
 	return result.String()
+}
+
+// countEntries recursively counts all entries in the given groups
+func countEntries(groups []gokeepasslib.Group) int {
+	count := 0
+	for _, group := range groups {
+		count += len(group.Entries)
+		count += countEntries(group.Groups)
+	}
+	return count
 }

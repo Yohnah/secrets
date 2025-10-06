@@ -111,6 +111,12 @@ func (m *manager) outputTable(data interface{}) error {
 			if accessible, ok := dbData["accessible"].(bool); ok {
 				if accessible {
 					fmt.Println("  Accessible:   ✓ (password verified)")
+					if databaseName, ok := dbData["database_name"].(string); ok {
+						fmt.Printf("  Database Name: %s\n", databaseName)
+					}
+					if entriesCount, ok := dbData["entries_count"].(int); ok {
+						fmt.Printf("  Entries Count: %d\n", entriesCount)
+					}
 				} else {
 					errorMsg := ""
 					if err, ok := dbData["error"].(string); ok {
