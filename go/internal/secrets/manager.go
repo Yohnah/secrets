@@ -239,6 +239,13 @@ func (m *manager) Init(opts InitOptions) error {
 		m.logger.Success("✓ Database access verified!")
 		m.logger.Info(fmt.Sprintf("Database: %s", dbPath))
 		m.logger.Info(fmt.Sprintf("Keyfile: %s", keyfilePath))
+
+		// Step 11.1: Load profiles from secrets.yml (if exists)
+		if err := m.loadProfilesFromSecretsYML(dbPath, keyfilePath, password, targetDir); err != nil {
+			// Don't fail if secrets.yml doesn't exist or has issues
+			m.logger.Info(fmt.Sprintf("Note: Could not load profiles from secrets.yml: %v", err))
+		}
+
 		return nil
 	}
 
@@ -330,7 +337,15 @@ func (m *manager) Init(opts InitOptions) error {
 		m.logger.Info("Skipping config file creation (--ignore-config-file active)")
 	}
 
-	// Step 13: Show success
+	// Step 14: Load profiles from secrets.yml (if exists)
+	if err := m.loadProfilesFromSecretsYML(dbPath, keyfilePath, password, targetDir); err != nil {
+		// Don't fail the entire init if secrets.yml doesn't exist or has issues
+		// Just log a warning
+		m.logger.Info(fmt.Sprintf("Note: Could not load profiles from secrets.yml: %v", err))
+		m.logger.Info("You can create secrets.yml later and run 'secrets init' again to load profiles")
+	}
+
+	// Step 15: Show success
 	m.logger.Success("✓ Initialization complete!")
 	m.logger.Info(fmt.Sprintf("Created: %s", secretsDir))
 	m.logger.Info(fmt.Sprintf("Database: %s", dbPath))
@@ -848,6 +863,76 @@ func (m *manager) processMinimalTemplate() string {
 	}
 
 	return result.String()
+}
+
+// loadProfilesFromSecretsYML loads profiles from secrets.yml into the KeePass database
+func (m *manager) loadProfilesFromSecretsYML(dbPath, keyfilePath, password, targetDir string) error {
+	// Get secrets.yml path from config (respects --secrets-file flag)
+	secretsYMLPath := m.config.GetSecretsFilePath()
+
+	// Check if secrets.yml path is available
+	if secretsYMLPath == "" {
+		// No secrets.yml available, not an error - just skip
+		m.logger.Debug("secrets.yml not found, skipping profile creation")
+		return nil
+	}
+
+	m.logger.Debug(fmt.Sprintf("Found secrets.yml at: %s", secretsYMLPath))
+
+	// Validate and read secrets.yml
+	m.logger.Debug("Validating secrets.yml...")
+	secretsConfig, errs := m.validator.ReadAndValidateSecretsYML(secretsYMLPath)
+	if len(errs) > 0 {
+		// Return first error
+		return fmt.Errorf("validation failed: %w", errs[0])
+	}
+
+	// Check if there are profiles to create
+	if len(secretsConfig.Profiles) == 0 {
+		m.logger.Debug("No profiles found in secrets.yml")
+		return nil
+	}
+
+	m.logger.Info(fmt.Sprintf("Loading %d profile(s) from secrets.yml...", len(secretsConfig.Profiles)))
+
+	// Create each profile
+	profilesCreated := 0
+	profilesSkipped := 0
+
+	for _, profile := range secretsConfig.Profiles {
+		profileName := profile.Metadata.Profile
+
+		// Check if profile already exists
+		exists, err := m.keepass.ProfileExists(dbPath, keyfilePath, password, profileName)
+		if err != nil {
+			return fmt.Errorf("failed to check if profile '%s' exists: %w", profileName, err)
+		}
+
+		if exists {
+			m.logger.Debug(fmt.Sprintf("Profile '%s' already exists (skipped)", profileName))
+			profilesSkipped++
+			continue
+		}
+
+		// Create profile
+		m.logger.Debug(fmt.Sprintf("Creating profile '%s'...", profileName))
+		if err := m.keepass.CreateProfile(dbPath, keyfilePath, password, profileName); err != nil {
+			return fmt.Errorf("failed to create profile '%s': %w", profileName, err)
+		}
+
+		m.logger.Info(fmt.Sprintf("✓ Profile '%s' created", profileName))
+		profilesCreated++
+	}
+
+	// Summary
+	if profilesCreated > 0 {
+		m.logger.Success(fmt.Sprintf("✓ %d profile(s) created successfully", profilesCreated))
+	}
+	if profilesSkipped > 0 {
+		m.logger.Info(fmt.Sprintf("%d profile(s) already existed (skipped)", profilesSkipped))
+	}
+
+	return nil
 }
 
 // countEntries recursively counts all entries in the given groups

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/tobischo/gokeepasslib/v3"
 )
@@ -13,6 +14,8 @@ type Manager interface {
 	CreateDatabase(dbPath, keyfilePath, password, rootGroupName string) error
 	OpenDatabase(dbPath, keyfilePath, password string) (*gokeepasslib.Database, error)
 	GenerateKeyfile(keyfilePath string) error
+	CreateProfile(dbPath, keyfilePath, password, profileName string) error
+	ProfileExists(dbPath, keyfilePath, password, profileName string) (bool, error)
 }
 
 // manager implements the Manager interface
@@ -123,4 +126,109 @@ func (m *manager) OpenDatabase(dbPath, keyfilePath, password string) (*gokeepass
 	}
 
 	return db, nil
+}
+
+// ProfileExists checks if a profile group exists in the database
+func (m *manager) ProfileExists(dbPath, keyfilePath, password, profileName string) (bool, error) {
+	// Open database
+	db, err := m.OpenDatabase(dbPath, keyfilePath, password)
+	if err != nil {
+		return false, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Check if root group has any groups
+	if len(db.Content.Root.Groups) == 0 {
+		return false, nil
+	}
+
+	// Search for profile in root's children
+	rootGroup := &db.Content.Root.Groups[0]
+	for _, group := range rootGroup.Groups {
+		if group.Name == profileName {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// CreateProfile creates a new profile structure in the database:
+// Profile (group) → HEAD (group) → metadata (entry)
+func (m *manager) CreateProfile(dbPath, keyfilePath, password, profileName string) error {
+	// Open database
+	db, err := m.OpenDatabase(dbPath, keyfilePath, password)
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Check if root group exists
+	if len(db.Content.Root.Groups) == 0 {
+		return fmt.Errorf("database has no root group")
+	}
+
+	rootGroup := &db.Content.Root.Groups[0]
+
+	// Check if profile already exists (idempotent operation)
+	for _, group := range rootGroup.Groups {
+		if group.Name == profileName {
+			// Profile already exists, skip creation (idempotent)
+			return nil
+		}
+	}
+
+	// Create profile group
+	profileGroup := gokeepasslib.NewGroup()
+	profileGroup.Name = profileName
+
+	// Create HEAD group
+	headGroup := gokeepasslib.NewGroup()
+	headGroup.Name = "HEAD"
+
+	// Create metadata entry
+	metadataEntry := gokeepasslib.NewEntry()
+	metadataEntry.Values = append(metadataEntry.Values, gokeepasslib.ValueData{
+		Key:   "Title",
+		Value: gokeepasslib.V{Content: "metadata"},
+	})
+
+	// Add custom fields for version and datetime
+	metadataEntry.Values = append(metadataEntry.Values, gokeepasslib.ValueData{
+		Key:   "version",
+		Value: gokeepasslib.V{Content: "1"},
+	})
+
+	// Get current datetime in ISO 8601 format
+	datetime := time.Now().Format(time.RFC3339)
+	metadataEntry.Values = append(metadataEntry.Values, gokeepasslib.ValueData{
+		Key:   "datetime",
+		Value: gokeepasslib.V{Content: datetime},
+	})
+
+	// Add metadata entry to HEAD group
+	headGroup.Entries = append(headGroup.Entries, metadataEntry)
+
+	// Add HEAD group to profile group
+	profileGroup.Groups = append(profileGroup.Groups, headGroup)
+
+	// Add profile group to root group
+	rootGroup.Groups = append(rootGroup.Groups, profileGroup)
+
+	// Lock protected entries before saving
+	if err := db.LockProtectedEntries(); err != nil {
+		return fmt.Errorf("failed to lock protected entries: %w", err)
+	}
+
+	// Save database
+	file, err := os.Create(dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to open database file for writing: %w", err)
+	}
+	defer file.Close()
+
+	encoder := gokeepasslib.NewEncoder(file)
+	if err := encoder.Encode(db); err != nil {
+		return fmt.Errorf("failed to save database: %w", err)
+	}
+
+	return nil
 }
