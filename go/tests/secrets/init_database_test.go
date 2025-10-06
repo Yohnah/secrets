@@ -13,6 +13,7 @@ import (
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/secrets"
+	"github.com/Yohnah/secrets/internal/secrets/initialize"
 	"github.com/Yohnah/secrets/internal/types"
 )
 
@@ -38,7 +39,7 @@ func TestInitCreatesDatabaseAndKeyfile(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
 
-	err := secretsMgr.Init(secrets.InitOptions{})
+	err := secretsMgr.Init(initialize.Options{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -92,7 +93,7 @@ func TestInitVerifiesExistingDatabase(t *testing.T) {
 	promptMgr1 := prompt.NewManager()
 	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, keepass.NewManager(), output.NewManager(), validator.NewManager())
 
-	err := secretsMgr1.Init(secrets.InitOptions{})
+	err := secretsMgr1.Init(initialize.Options{})
 	if err != nil {
 		t.Fatalf("First init failed: %v", err)
 	}
@@ -114,7 +115,7 @@ func TestInitVerifiesExistingDatabase(t *testing.T) {
 	promptMgr2 := prompt.NewManager()
 	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, keepass.NewManager(), output.NewManager(), validator.NewManager())
 
-	err = secretsMgr2.Init(secrets.InitOptions{})
+	err = secretsMgr2.Init(initialize.Options{})
 	if err != nil {
 		t.Fatalf("Second init failed: %v", err)
 	}
@@ -155,7 +156,7 @@ func TestInitWithForceRecreate(t *testing.T) {
 	promptMgr1 := prompt.NewManager()
 	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, keepass.NewManager(), output.NewManager(), validator.NewManager())
 
-	err := secretsMgr1.Init(secrets.InitOptions{})
+	err := secretsMgr1.Init(initialize.Options{})
 	if err != nil {
 		t.Fatalf("First init failed: %v", err)
 	}
@@ -179,7 +180,7 @@ func TestInitWithForceRecreate(t *testing.T) {
 	promptMgr2 := prompt.NewManager()
 	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, keepass.NewManager(), output.NewManager(), validator.NewManager())
 
-	err = secretsMgr2.Init(secrets.InitOptions{ForceRecreate: true})
+	err = secretsMgr2.Init(initialize.Options{ForceRecreate: true})
 	if err != nil {
 		t.Fatalf("Second init with force-recreate failed: %v", err)
 	}
@@ -230,7 +231,7 @@ func TestInitFailsWithInconsistentFiles(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
 
-	err := secretsMgr.Init(secrets.InitOptions{})
+	err := secretsMgr.Init(initialize.Options{})
 	if err == nil {
 		t.Errorf("Init should have failed when only database exists without keyfile")
 	}
@@ -249,7 +250,7 @@ func TestInitFailsWithInconsistentFiles(t *testing.T) {
 	promptMgr2 := prompt.NewManager()
 	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, keepass.NewManager(), output.NewManager(), validator.NewManager())
 
-	err = secretsMgr2.Init(secrets.InitOptions{})
+	err = secretsMgr2.Init(initialize.Options{})
 	if err == nil {
 		t.Errorf("Init should have failed when only keyfile exists without database")
 	}
@@ -277,7 +278,7 @@ func TestInitWithWrongPassword(t *testing.T) {
 	promptMgr1 := prompt.NewManager()
 	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, keepass.NewManager(), output.NewManager(), validator.NewManager())
 
-	err := secretsMgr1.Init(secrets.InitOptions{})
+	err := secretsMgr1.Init(initialize.Options{})
 	if err != nil {
 		t.Fatalf("First init failed: %v", err)
 	}
@@ -295,7 +296,7 @@ func TestInitWithWrongPassword(t *testing.T) {
 	promptMgr2 := prompt.NewManager()
 	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, keepass.NewManager(), output.NewManager(), validator.NewManager())
 
-	err = secretsMgr2.Init(secrets.InitOptions{})
+	err = secretsMgr2.Init(initialize.Options{})
 	if err == nil {
 		t.Errorf("Init should have failed with wrong password")
 	}
@@ -323,7 +324,7 @@ func TestInitWithoutPasswordInNonInteractiveMode(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
 
-	err := secretsMgr.Init(secrets.InitOptions{})
+	err := secretsMgr.Init(initialize.Options{})
 	if err == nil {
 		t.Errorf("Init should have failed without password in non-interactive mode")
 	}

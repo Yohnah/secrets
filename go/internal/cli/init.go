@@ -3,7 +3,7 @@ package cli
 import (
 	"os"
 
-	"github.com/Yohnah/secrets/internal/secrets"
+	"github.com/Yohnah/secrets/internal/secrets/initialize"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +23,7 @@ var initCmd = &cobra.Command{
 
 		// Execute business logic (delegate all decisions to CORE)
 		// Pass init flags to SecretsManager
-		opts := secrets.InitOptions{
+		opts := initialize.Options{
 			ForceRecreate:    flagForceRecreate,
 			NoCreateDatabase: flagNoCreateDatabase,
 			DatabaseName:     flagDatabaseName,

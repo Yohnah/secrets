@@ -11,6 +11,7 @@ import (
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/secrets"
+	"github.com/Yohnah/secrets/internal/secrets/initialize"
 	"github.com/Yohnah/secrets/internal/types"
 	"github.com/Yohnah/secrets/internal/validator"
 )
@@ -37,7 +38,7 @@ func TestStatus_WithValidDatabase(t *testing.T) {
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
 
 	// Initialize first
-	err := secretsMgr.Init(secrets.InitOptions{})
+	err := secretsMgr.Init(initialize.Options{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -99,7 +100,7 @@ func TestStatus_WithIgnoreConfigFile(t *testing.T) {
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
 
 	// Initialize first
-	err := secretsMgr.Init(secrets.InitOptions{})
+	err := secretsMgr.Init(initialize.Options{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -152,7 +153,7 @@ func TestStatus_WithCustomPaths(t *testing.T) {
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
 
 	// Initialize first
-	err := secretsMgr.Init(secrets.InitOptions{})
+	err := secretsMgr.Init(initialize.Options{})
 	if err != nil {
 		t.Fatalf("Init failed with custom paths: %v", err)
 	}
@@ -194,7 +195,7 @@ func TestStatus_WithWrongPassword(t *testing.T) {
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
 
 	// Initialize with correct password
-	err := secretsMgr.Init(secrets.InitOptions{})
+	err := secretsMgr.Init(initialize.Options{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -231,7 +232,7 @@ func TestStatus_AfterInit(t *testing.T) {
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
 
 	// Initialize
-	err := secretsMgr.Init(secrets.InitOptions{})
+	err := secretsMgr.Init(initialize.Options{})
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}

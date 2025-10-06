@@ -11,6 +11,7 @@ import (
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/secrets"
+	"github.com/Yohnah/secrets/internal/secrets/initialize"
 	"github.com/Yohnah/secrets/internal/types"
 	"github.com/Yohnah/secrets/internal/validator"
 )
@@ -290,7 +291,7 @@ outputs: {}`
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 
 	// Execute: Run init
-	err := secretsMgr.Init(secrets.InitOptions{
+	err := secretsMgr.Init(initialize.Options{
 		ForceRecreate:    false,
 		NoCreateDatabase: false,
 		DatabaseName:     "TEST_DB",
@@ -384,7 +385,7 @@ outputs: {}`
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 
 	// Execute: Run init
-	err := secretsMgr.Init(secrets.InitOptions{
+	err := secretsMgr.Init(initialize.Options{
 		ForceRecreate:    false,
 		NoCreateDatabase: false,
 		DatabaseName:     "TEST_DB",
@@ -501,7 +502,7 @@ outputs: {}`
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 
 	// Execute: Run init
-	err := secretsMgr.Init(secrets.InitOptions{
+	err := secretsMgr.Init(initialize.Options{
 		ForceRecreate:    false,
 		NoCreateDatabase: false,
 		DatabaseName:     "TEST_DB",
