@@ -702,7 +702,7 @@ func (m *manager) Status(format string) error {
 			secretsYMLData["status"] = "Not compliance"
 			secretsYMLData["symbol"] = "✗"
 			m.logger.Debug(fmt.Sprintf("secrets.yml validation: Not compliance (%d errors)", len(validationErrors)))
-			allErrors = append(allErrors, validationErrors...)
+			allErrors = append(allErrors, addPrefixToErrors(validationErrors, "[Secrets file]")...)
 		}
 	} else {
 		secretsYMLData["checked"] = false
@@ -730,7 +730,7 @@ func (m *manager) Status(format string) error {
 			dbValidationData["status"] = "Not compliance"
 			dbValidationData["symbol"] = "✗"
 			m.logger.Debug(fmt.Sprintf("Database validation: Not compliance (%d errors)", len(duplicateErrors)))
-			allErrors = append(allErrors, duplicateErrors...)
+			allErrors = append(allErrors, addPrefixToErrors(duplicateErrors, "[Database]")...)
 		}
 	} else {
 		dbValidationData["checked"] = false
@@ -764,6 +764,15 @@ func (m *manager) Status(format string) error {
 	}
 
 	return nil
+}
+
+// addPrefixToErrors adds a prefix to a list of errors
+func addPrefixToErrors(errors []error, prefix string) []error {
+	prefixed := make([]error, len(errors))
+	for i, err := range errors {
+		prefixed[i] = fmt.Errorf("%s %w", prefix, err)
+	}
+	return prefixed
 }
 
 // formatFileSize formats a file size in bytes to a human-readable string
