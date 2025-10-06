@@ -15,12 +15,12 @@ func TestNewManagerContext(t *testing.T) {
 	// Arrange & Act
 	ctx := cli.NewManagerContextForTest()
 
-	// Assert: ManagerContext no debe ser nil
+	// Assert: ManagerContext should not be nil
 	if ctx == nil {
 		t.Fatal("NewManagerContext() returned nil, expected valid *ManagerContext")
 	}
 
-	// Assert: Todos los managers deben estar instanciados
+	// Assert: All managers must be instantiated
 	t.Run("ValidatorManager is instantiated", func(t *testing.T) {
 		if ctx.Validator == nil {
 			t.Error("ManagerContext.Validator is nil, expected valid validator.Manager")

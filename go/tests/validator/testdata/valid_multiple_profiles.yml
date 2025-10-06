@@ -1,0 +1,34 @@
+metadata:
+  profile: "myapp-production"
+  default_environment: "production"
+
+environments:
+  production:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Production/DB"
+      key: "Password"
+    - name: "DB_HOST"
+      type: "text"
+      entry: "/Production/DB"
+      key: "host"
+
+outputs: {}
+
+---
+metadata:
+  profile: "myapp-development"
+  default_environment: "development"
+
+environments:
+  development:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Development/DB"
+      key: "Password"
+    - name: "API_KEY"
+      type: "envvar"
+      entry: "/Development/API"
+      key: "apikey"
+
+outputs: {}

@@ -1,0 +1,16 @@
+metadata:
+  profile: "myapp"
+  default_environment: "production"
+
+environments:
+  production:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Production/DB"
+      key: "Password"
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Production/DB"
+      key: "Username"
+
+outputs: {}

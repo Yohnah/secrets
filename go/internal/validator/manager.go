@@ -13,6 +13,7 @@ import (
 type ValidatorManager interface {
 	ValidateConfigFile(filePath string) error
 	ValidateTemplate(templateContent string) error
+	ReadAndValidateSecretsYML(filePath string) (*SecretsConfig, []error)
 }
 
 // manager implements the ValidatorManager interface

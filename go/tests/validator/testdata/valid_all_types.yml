@@ -1,0 +1,24 @@
+metadata:
+  profile: "test-all-types"
+  default_environment: "production"
+
+environments:
+  production:
+    - name: "ENV_VAR_EXAMPLE"
+      type: "envvar"
+      entry: "/Production/App"
+      key: "Username"
+    - name: "TEXT_EXAMPLE"
+      type: "text"
+      entry: "/Production/App"
+      key: "config"
+    - name: "SSH_AGENT_EXAMPLE"
+      type: "ssh_agent"
+      entry: "/Production/SSH"
+      key: "attachments/id_rsa"
+    - name: "NESTED_ENTRY"
+      type: "envvar"
+      entry: "/Production/Level1/Level2/Entry"
+      key: "Password"
+
+outputs: {}

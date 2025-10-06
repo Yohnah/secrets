@@ -8,6 +8,7 @@ type GlobalFlags struct {
 	Database         string
 	Keyfile          string
 	Config           string
+	SecretsFile      string
 	IgnoreConfigFile bool
 	IgnoreGitProject bool
 }

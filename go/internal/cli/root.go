@@ -12,6 +12,7 @@ var (
 	flagDatabase     string
 	flagKeyfile      string
 	flagConfig       string
+	flagSecretsFile  string
 	flagIgnoreConfig bool
 	flagIgnoreGit    bool
 )
@@ -52,6 +53,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flagDatabase, "database", ".secrets_yohnah/secrets.kdbx", "Path to KeePass database file")
 	rootCmd.PersistentFlags().StringVar(&flagKeyfile, "keyfile", ".secrets_yohnah/secrets.keyfile", "Path to key file for database authentication")
 	rootCmd.PersistentFlags().StringVar(&flagConfig, "config", ".secrets_yohnah/config.yml", "Path to configuration file")
+	rootCmd.PersistentFlags().StringVarP(&flagSecretsFile, "secrets-file", "s", "", "Path to secrets.yml file (default: auto-detect from git root or current directory)")
 	rootCmd.PersistentFlags().BoolVar(&flagIgnoreConfig, "ignore-config-file", false, "Ignore configuration file")
 	rootCmd.PersistentFlags().BoolVar(&flagIgnoreGit, "ignore-git-project", false, "Ignore git project root detection (create in current directory)")
 
@@ -115,6 +117,9 @@ func GetGlobalFlags() *types.GlobalFlags {
 	}
 	if rootCmd.PersistentFlags().Changed("config") {
 		flags.Config = flagConfig
+	}
+	if rootCmd.PersistentFlags().Changed("secrets-file") {
+		flags.SecretsFile = flagSecretsFile
 	}
 
 	return flags

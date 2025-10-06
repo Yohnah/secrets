@@ -308,11 +308,7 @@ func (m *manager) Init(opts InitOptions) error {
 	rootGroupName := opts.DatabaseName
 	if rootGroupName == "" {
 		// Use git repo name or default
-		if gitName, err := m.getGitRepoName(); err == nil {
-			rootGroupName = gitName
-		} else {
-			rootGroupName = "Secrets"
-		}
+		rootGroupName = m.getGitRepoName()
 	}
 	m.logger.Debug(fmt.Sprintf("Using root group name: %s", rootGroupName))
 
@@ -372,17 +368,27 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
+// makeAbsolutePath converts a relative path to absolute path
+func makeAbsolutePath(path string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+	cwd, _ := os.Getwd()
+	return filepath.Join(cwd, path)
+}
+
 // getGitRepoName gets the full repository name from git remote origin URL
-func (m *manager) getGitRepoName() (string, error) {
+// Returns "SECRETS YOHNAH" as fallback if not in git repo or parsing fails
+func (m *manager) getGitRepoName() string {
 	gitRoot, err := m.findGitRoot()
 	if err != nil {
-		return "SECRETS YOHNAH", nil // Fallback if not in git repo
+		return "SECRETS YOHNAH" // Fallback if not in git repo
 	}
 
 	configPath := filepath.Join(gitRoot, ".git", "config")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return "SECRETS YOHNAH", nil // Fallback if cannot read config
+		return "SECRETS YOHNAH" // Fallback if cannot read config
 	}
 
 	lines := strings.Split(string(data), "\n")
@@ -400,7 +406,7 @@ func (m *manager) getGitRepoName() (string, error) {
 				path := strings.TrimSuffix(parsed.Path, ".git")
 				path = strings.TrimPrefix(path, "/")
 				if parsed.Host != "" {
-					return parsed.Host + "/" + path, nil
+					return parsed.Host + "/" + path
 				}
 			}
 			break
@@ -410,7 +416,7 @@ func (m *manager) getGitRepoName() (string, error) {
 		}
 	}
 
-	return "SECRETS YOHNAH", nil // Fallback if parsing fails
+	return "SECRETS YOHNAH" // Fallback if parsing fails
 }
 
 // findGitRoot searches for the git repository root starting from current directory
@@ -495,27 +501,12 @@ func (m *manager) Status(format string) error {
 		return fmt.Errorf("failed to get configuration: %w", err)
 	}
 
-	// Determine database name
-	var databaseName string
-	if gitName, err := m.getGitRepoName(); err == nil {
-		databaseName = gitName
-	} else {
-		databaseName = "SECRETS YOHNAH"
-	}
-
 	// Get database and keyfile paths
-	dbPath := m.config.GetDatabasePath()
-	keyfilePath := m.config.GetKeyfilePath()
+	dbPath := makeAbsolutePath(m.config.GetDatabasePath())
+	keyfilePath := makeAbsolutePath(m.config.GetKeyfilePath())
 
-	// Make paths absolute if they are relative
-	if !filepath.IsAbs(dbPath) {
-		cwd, _ := os.Getwd()
-		dbPath = filepath.Join(cwd, dbPath)
-	}
-	if !filepath.IsAbs(keyfilePath) {
-		cwd, _ := os.Getwd()
-		keyfilePath = filepath.Join(cwd, keyfilePath)
-	}
+	// Database name will be read from DB root group (if accessible)
+	var databaseName string
 
 	// Check if config.yml exists (unless --ignore-config-file is active)
 	var configExists bool
@@ -564,6 +555,12 @@ func (m *manager) Status(format string) error {
 			} else {
 				accessible = true
 				m.logger.Debug("Database opened successfully")
+				// Read database name from root group (first group in root)
+				if len(db.Content.Root.Groups) > 0 {
+					databaseName = db.Content.Root.Groups[0].Name
+				} else {
+					databaseName = "SECRETS YOHNAH" // Fallback if no groups
+				}
 				// Count entries
 				entriesCount = countEntries(db.Content.Root.Groups)
 				m.logger.Debug(fmt.Sprintf("Database has %d entries", entriesCount))
@@ -593,8 +590,8 @@ func (m *manager) Status(format string) error {
 
 	// Database section
 	dbData := map[string]interface{}{
-		"path":         dbPath,
-		"exists":       dbExists,
+		"path":          dbPath,
+		"exists":        dbExists,
 		"database_name": databaseName,
 	}
 	if dbExists {
