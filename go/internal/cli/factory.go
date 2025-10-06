@@ -85,3 +85,9 @@ func NewManagerContext() *ManagerContext {
 		Validator: validatorMgr,
 	}
 }
+
+// NewManagerContextForTest is an exported version of NewManagerContext for testing purposes.
+// This allows tests in external packages to validate the factory functionality.
+func NewManagerContextForTest() *ManagerContext {
+	return NewManagerContext()
+}

@@ -1,17 +1,19 @@
-package cli
+package cli_test
 
 import (
 	"testing"
+
+	"github.com/Yohnah/secrets/internal/cli"
 )
 
-// TestNewManagerContext verifica que el factory crea correctamente todos los managers.
-// Este test valida que:
-// 1. El factory no devuelve nil
-// 2. Todos los managers son instanciados (no nil)
-// 3. Se mantiene el patrón de inicialización de 7 pasos
+// TestNewManagerContext verifies that the factory creates all managers correctly.
+// This test validates that:
+// 1. The factory does not return nil
+// 2. All managers are instantiated (not nil)
+// 3. The 7-step initialization pattern is maintained
 func TestNewManagerContext(t *testing.T) {
 	// Arrange & Act
-	ctx := NewManagerContext()
+	ctx := cli.NewManagerContextForTest()
 
 	// Assert: ManagerContext no debe ser nil
 	if ctx == nil {
@@ -56,20 +58,20 @@ func TestNewManagerContext(t *testing.T) {
 	})
 }
 
-// TestNewManagerContext_MultipleInstances verifica que el factory puede crear
-// múltiples instancias independientes (no singleton).
-// Esto es importante para mantener el patrón de inicialización por comando.
+// TestNewManagerContext_MultipleInstances verifies that the factory can create
+// multiple independent instances (not singleton).
+// This is important to maintain the per-command initialization pattern.
 func TestNewManagerContext_MultipleInstances(t *testing.T) {
 	// Arrange & Act
-	ctx1 := NewManagerContext()
-	ctx2 := NewManagerContext()
+	ctx1 := cli.NewManagerContextForTest()
+	ctx2 := cli.NewManagerContextForTest()
 
 	// Assert: Las instancias deben ser diferentes
 	if ctx1 == ctx2 {
 		t.Error("NewManagerContext() returned same instance, expected independent instances")
 	}
 
-	// Assert: Los managers internos también deben ser diferentes
+	// Assert: Internal managers should also be different
 	if ctx1.Config == ctx2.Config {
 		t.Error("ConfigManager instances are the same, expected independent instances")
 	}
@@ -83,14 +85,14 @@ func TestNewManagerContext_MultipleInstances(t *testing.T) {
 	}
 }
 
-// TestManagerContext_AllFieldsExported verifica que ManagerContext
-// expone todos los managers como campos públicos (exportados).
-// Esto es necesario para que los comandos CLI puedan acceder a ellos.
+// TestManagerContext_AllFieldsExported verifies that ManagerContext
+// exposes all managers as public (exported) fields.
+// This is necessary so that CLI commands can access them.
 func TestManagerContext_AllFieldsExported(t *testing.T) {
 	// Arrange
-	ctx := NewManagerContext()
+	ctx := cli.NewManagerContextForTest()
 
-	// Act & Assert: Verificar acceso a campos públicos
+	// Act & Assert: Verify access to public fields
 	t.Run("Can access Config field", func(t *testing.T) {
 		_ = ctx.Config // Si compila, el campo es exportado
 	})
