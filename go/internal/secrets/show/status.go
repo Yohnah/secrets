@@ -72,13 +72,22 @@ func (s *service) Status() error {
 
 		if password != "" {
 			s.logger.Debug("Attempting to open database...")
-			openedDB, err := s.keepass.OpenDatabase(dbPath, keyfilePath, password)
+			err := s.keepass.Open(dbPath, keyfilePath, password)
 			if err != nil {
 				accessError = fmt.Sprintf("cannot access database: %v", err)
 				accessible = false
 			} else {
 				accessible = true
-				db = openedDB // Save database reference for validation
+				db = s.keepass.GetDatabase() // Get database reference for validation
+				
+				// Close database at the end (don't save changes since we're only reading)
+				defer func() {
+					// Just close without saving (database wasn't modified)
+					if s.keepass.IsOpen() {
+						s.keepass.SaveAndClose()
+					}
+				}()
+				
 				s.logger.Debug("Database opened successfully")
 				// Read database name from root group (first group in root)
 				if len(db.Content.Root.Groups) > 0 {

@@ -13,23 +13,153 @@ import (
 
 // Manager interface defines operations for KeePass database management
 type Manager interface {
+	// Session management
+	Open(dbPath, keyfilePath, password string) error
+	SaveAndClose() error
+	IsOpen() bool
+	GetDatabase() *gokeepasslib.Database
+
+	// Database operations (require open session)
 	CreateDatabase(dbPath, keyfilePath, password, rootGroupName string) error
-	OpenDatabase(dbPath, keyfilePath, password string) (*gokeepasslib.Database, error)
 	GenerateKeyfile(keyfilePath string) error
-	CreateProfile(dbPath, keyfilePath, password, profileName string) error
-	ProfileExists(dbPath, keyfilePath, password, profileName string) (bool, error)
-	CreateGroup(dbPath, keyfilePath, password, profileName, parentGroupName, groupName string) error
-	CreateEntry(dbPath, keyfilePath, password, profileName, envName, entryPath string) error
-	EntryExists(dbPath, keyfilePath, password, profileName, envName, entryPath string) (bool, error)
-	GetEntriesByEnvironment(dbPath, keyfilePath, password, profileName, envName string) ([]string, error)
+	CreateProfile(profileName string) error
+	ProfileExists(profileName string) (bool, error)
+	CreateGroup(profileName, parentGroupName, groupName string) error
+	CreateEntry(profileName, envName, entryPath string) error
+	EntryExists(profileName, envName, entryPath string) (bool, error)
+	GetEntriesByEnvironment(profileName, envName string) ([]string, error)
+
+	// Field operations (require open session)
+	IsStandardField(fieldName string) bool
+	SetStandardField(profileName, envName, entryPath, fieldName, value string) error
+	SetCustomField(profileName, envName, entryPath, fieldName, value string) error
+	CreateAttachment(profileName, envName, entryPath, attachmentName string, data []byte) error
+	FieldExists(profileName, envName, entryPath, fieldName string) (bool, error)
 }
 
 // manager implements the Manager interface
-type manager struct{}
+type manager struct {
+	db          *gokeepasslib.Database
+	dbPath      string
+	keyfilePath string
+	password    string
+}
 
-// NewManager creates a new KeePass manager instance
+// NewManager creates a new instance of the KeePass Manager
 func NewManager() Manager {
-	return &manager{}
+	return &manager{
+		db: nil,
+	}
+}
+
+// Open opens a KeePass database and keeps it in memory
+// Must be called before any database operations
+func (m *manager) Open(dbPath, keyfilePath, password string) error {
+	if m.db != nil {
+		return fmt.Errorf("database already open")
+	}
+
+	// Validate input
+	if dbPath == "" {
+		return fmt.Errorf("database path cannot be empty")
+	}
+	if keyfilePath == "" {
+		return fmt.Errorf("keyfile path cannot be empty")
+	}
+	if password == "" {
+		return fmt.Errorf("password cannot be empty")
+	}
+
+	// Sanitize paths
+	sanitizedDBPath, err := sanitizePath(dbPath)
+	if err != nil {
+		return fmt.Errorf("invalid database path: %w", err)
+	}
+	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
+	if err != nil {
+		return fmt.Errorf("invalid keyfile path: %w", err)
+	}
+
+	// Open database file
+	file, err := os.Open(sanitizedDBPath)
+	if err != nil {
+		return fmt.Errorf("failed to open database file: %w", err)
+	}
+	defer file.Close()
+
+	// Create credentials
+	credentials, err := gokeepasslib.NewPasswordAndKeyCredentials(password, sanitizedKeyfilePath)
+	if err != nil {
+		return fmt.Errorf("failed to create credentials: %w", err)
+	}
+
+	// Decode database
+	db := gokeepasslib.NewDatabase()
+	db.Credentials = credentials
+	err = gokeepasslib.NewDecoder(file).Decode(db)
+	if err != nil {
+		return fmt.Errorf("failed to decode database: %w", err)
+	}
+
+	// Unlock database
+	err = db.UnlockProtectedEntries()
+	if err != nil {
+		return fmt.Errorf("failed to unlock database: %w", err)
+	}
+
+	// Store session
+	m.db = db
+	m.dbPath = sanitizedDBPath
+	m.keyfilePath = sanitizedKeyfilePath
+	m.password = password
+
+	return nil
+}
+
+// SaveAndClose saves changes and closes the database session
+func (m *manager) SaveAndClose() error {
+	if m.db == nil {
+		return fmt.Errorf("no database open")
+	}
+
+	// Lock protected entries
+	err := m.db.LockProtectedEntries()
+	if err != nil {
+		return fmt.Errorf("failed to lock database: %w", err)
+	}
+
+	// Open file for writing
+	file, err := os.Create(m.dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to open database file for writing: %w", err)
+	}
+	defer file.Close()
+
+	// Encode and save
+	keepassEncoder := gokeepasslib.NewEncoder(file)
+	err = keepassEncoder.Encode(m.db)
+	if err != nil {
+		return fmt.Errorf("failed to encode database: %w", err)
+	}
+
+	// Clear session
+	m.db = nil
+	m.dbPath = ""
+	m.keyfilePath = ""
+	m.password = ""
+
+	return nil
+}
+
+// IsOpen returns true if a database session is currently open
+func (m *manager) IsOpen() bool {
+	return m.db != nil
+}
+
+// GetDatabase returns the currently open database
+// Returns nil if no database is open
+func (m *manager) GetDatabase() *gokeepasslib.Database {
+	return m.db
 }
 
 // sanitizePath cleans and validates a file path to prevent path traversal attacks
@@ -213,44 +343,24 @@ func (m *manager) OpenDatabase(dbPath, keyfilePath, password string) (*gokeepass
 }
 
 // ProfileExists checks if a profile group exists in the database
-func (m *manager) ProfileExists(dbPath, keyfilePath, password, profileName string) (bool, error) {
+func (m *manager) ProfileExists(profileName string) (bool, error) {
+	// Check session
+	if m.db == nil {
+		return false, fmt.Errorf("database not open")
+	}
+
 	// Validate input parameters
-	if dbPath == "" {
-		return false, fmt.Errorf("database path cannot be empty")
-	}
-	if keyfilePath == "" {
-		return false, fmt.Errorf("keyfile path cannot be empty")
-	}
-	if password == "" {
-		return false, fmt.Errorf("password cannot be empty")
-	}
 	if profileName == "" {
 		return false, fmt.Errorf("profile name cannot be empty")
 	}
 
-	// Sanitize paths to prevent traversal attacks
-	sanitizedDbPath, err := sanitizePath(dbPath)
-	if err != nil {
-		return false, fmt.Errorf("invalid database path: %w", err)
-	}
-	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
-	if err != nil {
-		return false, fmt.Errorf("invalid keyfile path: %w", err)
-	}
-
-	// Open database
-	db, err := m.OpenDatabase(sanitizedDbPath, sanitizedKeyfilePath, password)
-	if err != nil {
-		return false, fmt.Errorf("failed to open database: %w", err)
-	}
-
 	// Check if root group has any groups
-	if len(db.Content.Root.Groups) == 0 {
+	if len(m.db.Content.Root.Groups) == 0 {
 		return false, nil
 	}
 
 	// Search for profile in root's children
-	rootGroup := &db.Content.Root.Groups[0]
+	rootGroup := &m.db.Content.Root.Groups[0]
 	for _, group := range rootGroup.Groups {
 		if group.Name == profileName {
 			return true, nil
@@ -262,43 +372,23 @@ func (m *manager) ProfileExists(dbPath, keyfilePath, password, profileName strin
 
 // CreateProfile creates a new profile structure in the database:
 // Profile (group) → HEAD (group) → metadata (entry)
-func (m *manager) CreateProfile(dbPath, keyfilePath, password, profileName string) error {
+func (m *manager) CreateProfile(profileName string) error {
+	// Check session
+	if m.db == nil {
+		return fmt.Errorf("database not open")
+	}
+
 	// Validate input parameters
-	if dbPath == "" {
-		return fmt.Errorf("database path cannot be empty")
-	}
-	if keyfilePath == "" {
-		return fmt.Errorf("keyfile path cannot be empty")
-	}
-	if password == "" {
-		return fmt.Errorf("password cannot be empty")
-	}
 	if profileName == "" {
 		return fmt.Errorf("profile name cannot be empty")
 	}
 
-	// Sanitize paths to prevent traversal attacks
-	sanitizedDbPath, err := sanitizePath(dbPath)
-	if err != nil {
-		return fmt.Errorf("invalid database path: %w", err)
-	}
-	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
-	if err != nil {
-		return fmt.Errorf("invalid keyfile path: %w", err)
-	}
-
-	// Open database
-	db, err := m.OpenDatabase(sanitizedDbPath, sanitizedKeyfilePath, password)
-	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-
 	// Check if root group exists
-	if len(db.Content.Root.Groups) == 0 {
+	if len(m.db.Content.Root.Groups) == 0 {
 		return fmt.Errorf("database has no root group")
 	}
 
-	rootGroup := &db.Content.Root.Groups[0]
+	rootGroup := &m.db.Content.Root.Groups[0]
 
 	// Check if profile already exists (idempotent operation)
 	for _, group := range rootGroup.Groups {
@@ -345,40 +435,19 @@ func (m *manager) CreateProfile(dbPath, keyfilePath, password, profileName strin
 	// Add profile group to root group
 	rootGroup.Groups = append(rootGroup.Groups, profileGroup)
 
-	// Lock protected entries before saving
-	if err := db.LockProtectedEntries(); err != nil {
-		return fmt.Errorf("failed to lock protected entries: %w", err)
-	}
-
-	// Save database with restrictive permissions (0600)
-	file, err := os.OpenFile(dbPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return fmt.Errorf("failed to open database file for writing: %w", err)
-	}
-	defer file.Close()
-
-	encoder := gokeepasslib.NewEncoder(file)
-	if err := encoder.Encode(db); err != nil {
-		return fmt.Errorf("failed to save database: %w", err)
-	}
-
 	return nil
 }
 
 // CreateGroup creates a new group under a parent group within a profile
 // Path: Profile > ParentGroup > NewGroup
 // Idempotent: if group already exists, returns nil without error
-func (m *manager) CreateGroup(dbPath, keyfilePath, password, profileName, parentGroupName, groupName string) error {
+func (m *manager) CreateGroup(profileName, parentGroupName, groupName string) error {
+	// Check session
+	if m.db == nil {
+		return fmt.Errorf("database not open")
+	}
+
 	// Validate input parameters
-	if dbPath == "" {
-		return fmt.Errorf("database path cannot be empty")
-	}
-	if keyfilePath == "" {
-		return fmt.Errorf("keyfile path cannot be empty")
-	}
-	if password == "" {
-		return fmt.Errorf("password cannot be empty")
-	}
 	if profileName == "" {
 		return fmt.Errorf("profile name cannot be empty")
 	}
@@ -389,28 +458,12 @@ func (m *manager) CreateGroup(dbPath, keyfilePath, password, profileName, parent
 		return fmt.Errorf("group name cannot be empty")
 	}
 
-	// Sanitize paths to prevent traversal attacks
-	sanitizedDbPath, err := sanitizePath(dbPath)
-	if err != nil {
-		return fmt.Errorf("invalid database path: %w", err)
-	}
-	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
-	if err != nil {
-		return fmt.Errorf("invalid keyfile path: %w", err)
-	}
-
-	// Open database
-	db, err := m.OpenDatabase(sanitizedDbPath, sanitizedKeyfilePath, password)
-	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-
 	// Check if root group exists
-	if len(db.Content.Root.Groups) == 0 {
+	if len(m.db.Content.Root.Groups) == 0 {
 		return fmt.Errorf("database has no root group")
 	}
 
-	rootGroup := &db.Content.Root.Groups[0]
+	rootGroup := &m.db.Content.Root.Groups[0]
 
 	// Find profile group
 	var profileGroup *gokeepasslib.Group
@@ -453,40 +506,19 @@ func (m *manager) CreateGroup(dbPath, keyfilePath, password, profileName, parent
 	// Add group to parent
 	parentGroup.Groups = append(parentGroup.Groups, newGroup)
 
-	// Lock protected entries before saving
-	if err := db.LockProtectedEntries(); err != nil {
-		return fmt.Errorf("failed to lock protected entries: %w", err)
-	}
-
-	// Save database with restrictive permissions (0600)
-	file, err := os.OpenFile(dbPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return fmt.Errorf("failed to open database file for writing: %w", err)
-	}
-	defer file.Close()
-
-	encoder := gokeepasslib.NewEncoder(file)
-	if err := encoder.Encode(db); err != nil {
-		return fmt.Errorf("failed to save database: %w", err)
-	}
-
 	return nil
 }
 
 // CreateEntry creates a new entry in the database under a specific environment
 // Creates intermediate groups automatically if they don't exist
 // Entry is created empty (no custom fields)
-func (m *manager) CreateEntry(dbPath, keyfilePath, password, profileName, envName, entryPath string) error {
+func (m *manager) CreateEntry(profileName, envName, entryPath string) error {
+	// Check session
+	if m.db == nil {
+		return fmt.Errorf("database not open")
+	}
+
 	// Validate input parameters
-	if dbPath == "" {
-		return fmt.Errorf("database path cannot be empty")
-	}
-	if keyfilePath == "" {
-		return fmt.Errorf("keyfile path cannot be empty")
-	}
-	if password == "" {
-		return fmt.Errorf("password cannot be empty")
-	}
 	if profileName == "" {
 		return fmt.Errorf("profile name cannot be empty")
 	}
@@ -497,28 +529,12 @@ func (m *manager) CreateEntry(dbPath, keyfilePath, password, profileName, envNam
 		return fmt.Errorf("entry path cannot be empty")
 	}
 
-	// Sanitize paths to prevent traversal attacks
-	sanitizedDbPath, err := sanitizePath(dbPath)
-	if err != nil {
-		return fmt.Errorf("invalid database path: %w", err)
-	}
-	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
-	if err != nil {
-		return fmt.Errorf("invalid keyfile path: %w", err)
-	}
-
-	// Open database
-	db, err := m.OpenDatabase(sanitizedDbPath, sanitizedKeyfilePath, password)
-	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-
 	// Check if root group exists
-	if len(db.Content.Root.Groups) == 0 {
+	if len(m.db.Content.Root.Groups) == 0 {
 		return fmt.Errorf("database has no root group")
 	}
 
-	rootGroup := &db.Content.Root.Groups[0]
+	rootGroup := &m.db.Content.Root.Groups[0]
 
 	// Find profile group
 	var profileGroup *gokeepasslib.Group
@@ -626,38 +642,17 @@ func (m *manager) CreateEntry(dbPath, keyfilePath, password, profileName, envNam
 	// Add entry to current group
 	currentGroup.Entries = append(currentGroup.Entries, newEntry)
 
-	// Lock protected entries before saving
-	if err := db.LockProtectedEntries(); err != nil {
-		return fmt.Errorf("failed to lock protected entries: %w", err)
-	}
-
-	// Save database with restrictive permissions (0600)
-	file, err := os.OpenFile(dbPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return fmt.Errorf("failed to open database file for writing: %w", err)
-	}
-	defer file.Close()
-
-	encoder := gokeepasslib.NewEncoder(file)
-	if err := encoder.Encode(db); err != nil {
-		return fmt.Errorf("failed to save database: %w", err)
-	}
-
 	return nil
 }
 
 // EntryExists checks if an entry exists at the specified path within an environment
-func (m *manager) EntryExists(dbPath, keyfilePath, password, profileName, envName, entryPath string) (bool, error) {
+func (m *manager) EntryExists(profileName, envName, entryPath string) (bool, error) {
+	// Check session
+	if m.db == nil {
+		return false, fmt.Errorf("database not open")
+	}
+
 	// Validate input parameters
-	if dbPath == "" {
-		return false, fmt.Errorf("database path cannot be empty")
-	}
-	if keyfilePath == "" {
-		return false, fmt.Errorf("keyfile path cannot be empty")
-	}
-	if password == "" {
-		return false, fmt.Errorf("password cannot be empty")
-	}
 	if profileName == "" {
 		return false, fmt.Errorf("profile name cannot be empty")
 	}
@@ -668,28 +663,12 @@ func (m *manager) EntryExists(dbPath, keyfilePath, password, profileName, envNam
 		return false, fmt.Errorf("entry path cannot be empty")
 	}
 
-	// Sanitize paths to prevent traversal attacks
-	sanitizedDbPath, err := sanitizePath(dbPath)
-	if err != nil {
-		return false, fmt.Errorf("invalid database path: %w", err)
-	}
-	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
-	if err != nil {
-		return false, fmt.Errorf("invalid keyfile path: %w", err)
-	}
-
-	// Open database
-	db, err := m.OpenDatabase(sanitizedDbPath, sanitizedKeyfilePath, password)
-	if err != nil {
-		return false, fmt.Errorf("failed to open database: %w", err)
-	}
-
 	// Check if root group exists
-	if len(db.Content.Root.Groups) == 0 {
+	if len(m.db.Content.Root.Groups) == 0 {
 		return false, nil
 	}
 
-	rootGroup := &db.Content.Root.Groups[0]
+	rootGroup := &m.db.Content.Root.Groups[0]
 
 	// Find profile group
 	var profileGroup *gokeepasslib.Group
@@ -797,17 +776,13 @@ func (m *manager) EntryExists(dbPath, keyfilePath, password, profileName, envNam
 
 // GetEntriesByEnvironment retrieves all entry paths within a specific environment
 // Returns paths relative to the environment (without environment prefix)
-func (m *manager) GetEntriesByEnvironment(dbPath, keyfilePath, password, profileName, envName string) ([]string, error) {
+func (m *manager) GetEntriesByEnvironment(profileName, envName string) ([]string, error) {
+	// Check session
+	if m.db == nil {
+		return nil, fmt.Errorf("database not open")
+	}
+
 	// Validate input parameters
-	if dbPath == "" {
-		return nil, fmt.Errorf("database path cannot be empty")
-	}
-	if keyfilePath == "" {
-		return nil, fmt.Errorf("keyfile path cannot be empty")
-	}
-	if password == "" {
-		return nil, fmt.Errorf("password cannot be empty")
-	}
 	if profileName == "" {
 		return nil, fmt.Errorf("profile name cannot be empty")
 	}
@@ -815,28 +790,12 @@ func (m *manager) GetEntriesByEnvironment(dbPath, keyfilePath, password, profile
 		return nil, fmt.Errorf("environment name cannot be empty")
 	}
 
-	// Sanitize paths to prevent traversal attacks
-	sanitizedDbPath, err := sanitizePath(dbPath)
-	if err != nil {
-		return nil, fmt.Errorf("invalid database path: %w", err)
-	}
-	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
-	if err != nil {
-		return nil, fmt.Errorf("invalid keyfile path: %w", err)
-	}
-
-	// Open database
-	db, err := m.OpenDatabase(sanitizedDbPath, sanitizedKeyfilePath, password)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
-	}
-
 	// Check if root group exists
-	if len(db.Content.Root.Groups) == 0 {
+	if len(m.db.Content.Root.Groups) == 0 {
 		return []string{}, nil
 	}
 
-	rootGroup := &db.Content.Root.Groups[0]
+	rootGroup := &m.db.Content.Root.Groups[0]
 
 	// Find profile group
 	var profileGroup *gokeepasslib.Group
@@ -919,4 +878,353 @@ func collectEntries(group *gokeepasslib.Group, currentPath string, entries *[]st
 		}
 		collectEntries(&group.Groups[i], newPath, entries)
 	}
+}
+
+// findGroupByName searches for a group by name within a parent group
+func findGroupByName(parentGroup *gokeepasslib.Group, groupName string) (*gokeepasslib.Group, error) {
+	if parentGroup == nil {
+		return nil, fmt.Errorf("parent group is nil")
+	}
+
+	for i := range parentGroup.Groups {
+		if parentGroup.Groups[i].Name == groupName {
+			return &parentGroup.Groups[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("group '%s' not found", groupName)
+}
+
+// findEntryByPath finds an entry by its path within a group
+// Path format: /entry or /group1/group2/entry
+func findEntryByPath(envGroup *gokeepasslib.Group, entryPath string) (*gokeepasslib.Entry, error) {
+	if envGroup == nil {
+		return nil, fmt.Errorf("environment group is nil")
+	}
+
+	// Remove leading slash
+	if len(entryPath) > 0 && entryPath[0] == '/' {
+		entryPath = entryPath[1:]
+	}
+
+	if entryPath == "" {
+		return nil, fmt.Errorf("entry path is empty")
+	}
+
+	// Split path into components
+	components := strings.Split(entryPath, "/")
+	if len(components) == 0 {
+		return nil, fmt.Errorf("invalid entry path")
+	}
+
+	// Navigate through intermediate groups
+	currentGroup := envGroup
+	for i := 0; i < len(components)-1; i++ {
+		groupName := components[i]
+		if groupName == "" {
+			continue
+		}
+
+		found := false
+		for j := range currentGroup.Groups {
+			if currentGroup.Groups[j].Name == groupName {
+				currentGroup = &currentGroup.Groups[j]
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return nil, fmt.Errorf("group '%s' not found in path", groupName)
+		}
+	}
+
+	// Find entry in the final group
+	entryName := components[len(components)-1]
+	if entryName == "" {
+		return nil, fmt.Errorf("entry name is empty")
+	}
+
+	for i := range currentGroup.Entries {
+		for _, value := range currentGroup.Entries[i].Values {
+			if value.Key == "Title" && value.Value.Content == entryName {
+				return &currentGroup.Entries[i], nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("entry '%s' not found", entryName)
+}
+
+// IsStandardField checks if a field name is a standard KeePass field (case-insensitive)
+// Standard fields: Title, UserName, Password, URL, Notes
+func (m *manager) IsStandardField(fieldName string) bool {
+	standardFields := []string{"Title", "UserName", "Password", "URL", "Notes"}
+	fieldLower := strings.ToLower(fieldName)
+
+	for _, standard := range standardFields {
+		if strings.ToLower(standard) == fieldLower {
+			return true
+		}
+	}
+
+	return false
+}
+
+// SetStandardField sets a standard KeePass field in an entry
+// Field name is case-insensitive and will be normalized to standard casing
+func (m *manager) SetStandardField(profileName, envName, entryPath, fieldName, value string) error {
+	// Check if database is open
+	if !m.IsOpen() {
+		return fmt.Errorf("database is not open")
+	}
+
+	// Validate input parameters
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if envName == "" {
+		return fmt.Errorf("environment name cannot be empty")
+	}
+	if entryPath == "" {
+		return fmt.Errorf("entry path cannot be empty")
+	}
+	if fieldName == "" {
+		return fmt.Errorf("field name cannot be empty")
+	}
+
+	// Verify it's a standard field
+	if !m.IsStandardField(fieldName) {
+		return fmt.Errorf("'%s' is not a standard field", fieldName)
+	}
+
+	// Normalize field name to standard casing
+	standardFields := map[string]string{
+		"title":    "Title",
+		"username": "UserName",
+		"password": "Password",
+		"url":      "URL",
+		"notes":    "Notes",
+	}
+	normalizedFieldName := standardFields[strings.ToLower(fieldName)]
+
+	// Find profile group
+	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
+	if err != nil {
+		return fmt.Errorf("failed to find profile: %w", err)
+	}
+
+	// Find HEAD group
+	headGroup, err := findGroupByName(profileGroup, "HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to find HEAD group: %w", err)
+	}
+
+	// Find environment group
+	envGroup, err := findGroupByName(headGroup, envName)
+	if err != nil {
+		return fmt.Errorf("failed to find environment '%s': %w", envName, err)
+	}
+
+	// Find entry
+	entry, err := findEntryByPath(envGroup, entryPath)
+	if err != nil {
+		return fmt.Errorf("failed to find entry '%s': %w", entryPath, err)
+	}
+
+	// Set or update the standard field
+	fieldFound := false
+	for i := range entry.Values {
+		if entry.Values[i].Key == normalizedFieldName {
+			entry.Values[i].Value.Content = value
+			fieldFound = true
+			break
+		}
+	}
+
+	// If field doesn't exist, create it
+	if !fieldFound {
+		newValue := gokeepasslib.ValueData{
+			Key:   normalizedFieldName,
+			Value: gokeepasslib.V{Content: value},
+		}
+		entry.Values = append(entry.Values, newValue)
+	}
+
+	return nil
+}
+
+// SetCustomField sets a custom field in an entry
+// Field name casing is preserved exactly as provided
+func (m *manager) SetCustomField(profileName, envName, entryPath, fieldName, value string) error {
+	// Check if database is open
+	if !m.IsOpen() {
+		return fmt.Errorf("database is not open")
+	}
+
+	// Validate input parameters
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if envName == "" {
+		return fmt.Errorf("environment name cannot be empty")
+	}
+	if entryPath == "" {
+		return fmt.Errorf("entry path cannot be empty")
+	}
+	if fieldName == "" {
+		return fmt.Errorf("field name cannot be empty")
+	}
+
+	// Verify it's NOT a standard field
+	if m.IsStandardField(fieldName) {
+		return fmt.Errorf("'%s' is a standard field, use SetStandardField instead", fieldName)
+	}
+
+	// Find profile group
+	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
+	if err != nil {
+		return fmt.Errorf("failed to find profile: %w", err)
+	}
+
+	// Find HEAD group
+	headGroup, err := findGroupByName(profileGroup, "HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to find HEAD group: %w", err)
+	}
+
+	// Find environment group
+	envGroup, err := findGroupByName(headGroup, envName)
+	if err != nil {
+		return fmt.Errorf("failed to find environment '%s': %w", envName, err)
+	}
+
+	// Find entry
+	entry, err := findEntryByPath(envGroup, entryPath)
+	if err != nil {
+		return fmt.Errorf("failed to find entry '%s': %w", entryPath, err)
+	}
+
+	// Set or update the custom field (preserve exact casing)
+	fieldFound := false
+	for i := range entry.Values {
+		if entry.Values[i].Key == fieldName {
+			entry.Values[i].Value.Content = value
+			fieldFound = true
+			break
+		}
+	}
+
+	// If field doesn't exist, create it
+	if !fieldFound {
+		newValue := gokeepasslib.ValueData{
+			Key:   fieldName,
+			Value: gokeepasslib.V{Content: value},
+		}
+		entry.Values = append(entry.Values, newValue)
+	}
+
+	return nil
+}
+
+// CreateAttachment creates or updates an attachment in an entry
+// Note: This is a placeholder implementation. Attachments in gokeepasslib
+// require special handling with the BinaryReference system.
+func (m *manager) CreateAttachment(profileName, envName, entryPath, attachmentName string, data []byte) error {
+	// Check if database is open
+	if !m.IsOpen() {
+		return fmt.Errorf("database is not open")
+	}
+
+	// Validate input parameters
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if envName == "" {
+		return fmt.Errorf("environment name cannot be empty")
+	}
+	if entryPath == "" {
+		return fmt.Errorf("entry path cannot be empty")
+	}
+	if attachmentName == "" {
+		return fmt.Errorf("attachment name cannot be empty")
+	}
+
+	// TODO: Implement attachment creation
+	// Attachments in gokeepasslib use a BinaryReference system where:
+	// 1. Binary data is stored in db.Content.Meta.Binaries
+	// 2. Entry references binary by ID via entry.Binaries (BinaryReference)
+	// This requires:
+	// - Adding binary to db.Content.Meta.Binaries
+	// - Creating BinaryReference in entry.Binaries
+	// - Managing binary IDs correctly
+
+	return fmt.Errorf("attachment creation not yet implemented")
+}
+
+// FieldExists checks if a field exists in an entry (standard or custom field)
+// For standard fields, comparison is case-insensitive
+// For custom fields, comparison is case-sensitive
+func (m *manager) FieldExists(profileName, envName, entryPath, fieldName string) (bool, error) {
+	// Check if database is open
+	if !m.IsOpen() {
+		return false, fmt.Errorf("database is not open")
+	}
+
+	// Validate input parameters
+	if profileName == "" {
+		return false, fmt.Errorf("profile name cannot be empty")
+	}
+	if envName == "" {
+		return false, fmt.Errorf("environment name cannot be empty")
+	}
+	if entryPath == "" {
+		return false, fmt.Errorf("entry path cannot be empty")
+	}
+	if fieldName == "" {
+		return false, fmt.Errorf("field name cannot be empty")
+	}
+
+	// Find profile group
+	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
+	if err != nil {
+		return false, fmt.Errorf("failed to find profile: %w", err)
+	}
+
+	// Find HEAD group
+	headGroup, err := findGroupByName(profileGroup, "HEAD")
+	if err != nil {
+		return false, fmt.Errorf("failed to find HEAD group: %w", err)
+	}
+
+	// Find environment group
+	envGroup, err := findGroupByName(headGroup, envName)
+	if err != nil {
+		return false, fmt.Errorf("failed to find environment '%s': %w", envName, err)
+	}
+
+	// Find entry
+	entry, err := findEntryByPath(envGroup, entryPath)
+	if err != nil {
+		return false, fmt.Errorf("failed to find entry '%s': %w", entryPath, err)
+	}
+
+	// Check if field exists
+	isStandard := m.IsStandardField(fieldName)
+
+	for _, value := range entry.Values {
+		if isStandard {
+			// Case-insensitive comparison for standard fields
+			if strings.ToLower(value.Key) == strings.ToLower(fieldName) {
+				return true, nil
+			}
+		} else {
+			// Case-sensitive comparison for custom fields
+			if value.Key == fieldName {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }
