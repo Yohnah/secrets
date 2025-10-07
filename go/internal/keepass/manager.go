@@ -25,7 +25,8 @@ type Manager interface {
 	GenerateKeyfile(keyfilePath string) error
 	CreateProfile(profileName string) error
 	ProfileExists(profileName string) (bool, error)
-	CreateGroup(profileName, parentGroupName, groupName string) error
+	CreateGroup(profileName, parentGroupName, groupName string) (bool, error)
+	GroupExists(profileName, parentGroupName, groupName string) (bool, error)
 	CreateEntry(profileName, envName, entryPath string) error
 	EntryExists(profileName, envName, entryPath string) (bool, error)
 	GetEntriesByEnvironment(profileName, envName string) ([]string, error)
@@ -401,6 +402,67 @@ func (m *manager) ProfileExists(profileName string) (bool, error) {
 	return false, nil
 }
 
+// GroupExists checks if a group exists under a parent group within a profile
+func (m *manager) GroupExists(profileName, parentGroupName, groupName string) (bool, error) {
+	// Check session
+	if m.db == nil {
+		return false, fmt.Errorf("database not open")
+	}
+
+	// Validate input parameters
+	if profileName == "" {
+		return false, fmt.Errorf("profile name cannot be empty")
+	}
+	if parentGroupName == "" {
+		return false, fmt.Errorf("parent group name cannot be empty")
+	}
+	if groupName == "" {
+		return false, fmt.Errorf("group name cannot be empty")
+	}
+
+	// Check if root group exists
+	if len(m.db.Content.Root.Groups) == 0 {
+		return false, nil
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+
+	// Find profile group
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+
+	if profileGroup == nil {
+		return false, nil
+	}
+
+	// Find parent group within profile
+	var parentGroup *gokeepasslib.Group
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == parentGroupName {
+			parentGroup = &profileGroup.Groups[i]
+			break
+		}
+	}
+
+	if parentGroup == nil {
+		return false, nil
+	}
+
+	// Check if group exists under parent
+	for _, group := range parentGroup.Groups {
+		if group.Name == groupName {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // CreateProfile creates a new profile structure in the database:
 // Profile (group) → HEAD (group) → metadata (entry)
 func (m *manager) CreateProfile(profileName string) error {
@@ -471,27 +533,28 @@ func (m *manager) CreateProfile(profileName string) error {
 
 // CreateGroup creates a new group under a parent group within a profile
 // Path: Profile > ParentGroup > NewGroup
-// Idempotent: if group already exists, returns nil without error
-func (m *manager) CreateGroup(profileName, parentGroupName, groupName string) error {
+// Returns (true, nil) if group was created, (false, nil) if already existed
+// Idempotent: if group already exists, returns (false, nil) without error
+func (m *manager) CreateGroup(profileName, parentGroupName, groupName string) (bool, error) {
 	// Check session
 	if m.db == nil {
-		return fmt.Errorf("database not open")
+		return false, fmt.Errorf("database not open")
 	}
 
 	// Validate input parameters
 	if profileName == "" {
-		return fmt.Errorf("profile name cannot be empty")
+		return false, fmt.Errorf("profile name cannot be empty")
 	}
 	if parentGroupName == "" {
-		return fmt.Errorf("parent group name cannot be empty")
+		return false, fmt.Errorf("parent group name cannot be empty")
 	}
 	if groupName == "" {
-		return fmt.Errorf("group name cannot be empty")
+		return false, fmt.Errorf("group name cannot be empty")
 	}
 
 	// Check if root group exists
 	if len(m.db.Content.Root.Groups) == 0 {
-		return fmt.Errorf("database has no root group")
+		return false, fmt.Errorf("database has no root group")
 	}
 
 	rootGroup := &m.db.Content.Root.Groups[0]
@@ -506,7 +569,7 @@ func (m *manager) CreateGroup(profileName, parentGroupName, groupName string) er
 	}
 
 	if profileGroup == nil {
-		return fmt.Errorf("profile '%s' not found", profileName)
+		return false, fmt.Errorf("profile '%s' not found", profileName)
 	}
 
 	// Find parent group within profile
@@ -519,14 +582,14 @@ func (m *manager) CreateGroup(profileName, parentGroupName, groupName string) er
 	}
 
 	if parentGroup == nil {
-		return fmt.Errorf("parent group '%s' not found in profile '%s'", parentGroupName, profileName)
+		return false, fmt.Errorf("parent group '%s' not found in profile '%s'", parentGroupName, profileName)
 	}
 
 	// Check if group already exists (idempotent operation)
 	for _, group := range parentGroup.Groups {
 		if group.Name == groupName {
 			// Group already exists, skip creation (idempotent)
-			return nil
+			return false, nil
 		}
 	}
 
@@ -537,7 +600,7 @@ func (m *manager) CreateGroup(profileName, parentGroupName, groupName string) er
 	// Add group to parent
 	parentGroup.Groups = append(parentGroup.Groups, newGroup)
 
-	return nil
+	return true, nil
 }
 
 // CreateEntry creates a new entry in the database under a specific environment

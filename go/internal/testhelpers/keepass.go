@@ -122,7 +122,7 @@ func CreateTestProfile(t *testing.T, mgr keepass.Manager, profileName, envName s
 		t.Fatalf("Failed to create profile '%s': %v", profileName, err)
 	}
 
-	err = mgr.CreateGroup(profileName, "HEAD", envName)
+	_, err = mgr.CreateGroup(profileName, "HEAD", envName)
 	if err != nil {
 		t.Fatalf("Failed to create environment '%s': %v", envName, err)
 	}

@@ -558,6 +558,7 @@ func (s *service) applySecretsConfig(secretsConfig *validator.SecretsConfig, dbP
 	profilesCreated := 0
 	profilesSkipped := 0
 	profilesUpdated := 0
+	profilesUnchanged := 0
 
 	for _, profile := range secretsConfig.Profiles {
 		profileName := profile.Metadata.Profile
@@ -571,24 +572,39 @@ func (s *service) applySecretsConfig(secretsConfig *validator.SecretsConfig, dbP
 		if exists {
 			s.logger.Debug(fmt.Sprintf("Profile '%s' already exists, checking for updates...", profileName))
 
+			// Track changes
+			totalChanges := 0
+
 			// Apply incremental changes to existing profile
 			// Create new environments if they don't exist
-			if err := s.createEnvironments(profileName, profile); err != nil {
+			envsCreated, err := s.createEnvironments(profileName, profile)
+			if err != nil {
 				return fmt.Errorf("failed to update environments for profile '%s': %w", profileName, err)
 			}
+			totalChanges += envsCreated
 
 			// Create new entries if they don't exist (structure only, no keys/fields yet)
-			if err := s.createEntries(profileName, profile); err != nil {
+			entriesCreated, err := s.createEntries(profileName, profile)
+			if err != nil {
 				return fmt.Errorf("failed to update entries for profile '%s': %w", profileName, err)
 			}
+			totalChanges += entriesCreated
 
 			// Create keys/fields for entries
-			if err := s.createKeys(profileName, profile); err != nil {
+			keysCreated, err := s.createKeys(profileName, profile)
+			if err != nil {
 				return fmt.Errorf("failed to update keys for profile '%s': %w", profileName, err)
 			}
+			totalChanges += keysCreated
 
-			s.logger.Debug(fmt.Sprintf("✓ Profile '%s' updated with any new changes", profileName))
-			profilesUpdated++
+			// Determine if profile was actually updated
+			if totalChanges > 0 {
+				s.logger.Debug(fmt.Sprintf("✓ Profile '%s' updated with new changes", profileName))
+				profilesUpdated++
+			} else {
+				s.logger.Debug(fmt.Sprintf("Profile '%s' has no changes", profileName))
+				profilesUnchanged++
+			}
 		} else {
 			// Create new profile
 			s.logger.Debug(fmt.Sprintf("Creating profile '%s'...", profileName))
@@ -597,17 +613,20 @@ func (s *service) applySecretsConfig(secretsConfig *validator.SecretsConfig, dbP
 			}
 
 			// Create environments for this profile
-			if err := s.createEnvironments(profileName, profile); err != nil {
+			_, err = s.createEnvironments(profileName, profile)
+			if err != nil {
 				return fmt.Errorf("failed to create environments for profile '%s': %w", profileName, err)
 			}
 
 			// Create entries for this profile (structure only, no keys/fields yet)
-			if err := s.createEntries(profileName, profile); err != nil {
+			_, err = s.createEntries(profileName, profile)
+			if err != nil {
 				return fmt.Errorf("failed to create entries for profile '%s': %w", profileName, err)
 			}
 
 			// Create keys/fields for entries
-			if err := s.createKeys(profileName, profile); err != nil {
+			_, err = s.createKeys(profileName, profile)
+			if err != nil {
 				return fmt.Errorf("failed to create keys for profile '%s': %w", profileName, err)
 			}
 
@@ -623,6 +642,9 @@ func (s *service) applySecretsConfig(secretsConfig *validator.SecretsConfig, dbP
 	if profilesUpdated > 0 {
 		s.logger.Info(fmt.Sprintf("✓ %d profile(s) updated with changes from secrets.yml", profilesUpdated))
 	}
+	if profilesUnchanged > 0 {
+		s.logger.Info(fmt.Sprintf("✓ %d profile(s) has already been loaded with no changes from secrets.yml", profilesUnchanged))
+	}
 	if profilesSkipped > 0 {
 		s.logger.Info(fmt.Sprintf("%d profile(s) already existed (skipped)", profilesSkipped))
 	}
@@ -631,11 +653,12 @@ func (s *service) applySecretsConfig(secretsConfig *validator.SecretsConfig, dbP
 }
 
 // createEnvironments creates environment groups under the HEAD group of a profile
-func (s *service) createEnvironments(profileName string, profile validator.Profile) error {
+// Returns the number of environments created
+func (s *service) createEnvironments(profileName string, profile validator.Profile) (int, error) {
 	// Check if profile has environments
 	if len(profile.Environments) == 0 {
 		s.logger.Debug(fmt.Sprintf("Profile '%s' has no environments to create", profileName))
-		return nil
+		return 0, nil
 	}
 
 	s.logger.Debug(fmt.Sprintf("Creating %d environment(s) for profile '%s'...", len(profile.Environments), profileName))
@@ -644,28 +667,32 @@ func (s *service) createEnvironments(profileName string, profile validator.Profi
 	environmentsCreated := 0
 	for envName := range profile.Environments {
 		// Create environment group under HEAD
-		if err := s.keepass.CreateGroup(profileName, "HEAD", envName); err != nil {
-			return fmt.Errorf("failed to create environment '%s': %w", envName, err)
+		created, err := s.keepass.CreateGroup(profileName, "HEAD", envName)
+		if err != nil {
+			return 0, fmt.Errorf("failed to create environment '%s': %w", envName, err)
 		}
 
-		s.logger.Debug(fmt.Sprintf("  ✓ Environment '%s' created", envName))
-		environmentsCreated++
+		if created {
+			s.logger.Debug(fmt.Sprintf("  ✓ Environment '%s' created", envName))
+			environmentsCreated++
+		}
 	}
 
 	if environmentsCreated > 0 {
 		s.logger.Debug(fmt.Sprintf("  ✓ %d environment(s) created", environmentsCreated))
 	}
 
-	return nil
+	return environmentsCreated, nil
 }
 
 // createKeys creates keys (fields) for entries in a profile
 // Groups items by entry and creates all keys with default value
-func (s *service) createKeys(profileName string, profile validator.Profile) error {
+// Returns the number of keys created
+func (s *service) createKeys(profileName string, profile validator.Profile) (int, error) {
 	// Check if profile has environments
 	if len(profile.Environments) == 0 {
 		s.logger.Debug(fmt.Sprintf("Profile '%s' has no environments, skipping key creation", profileName))
-		return nil
+		return 0, nil
 	}
 
 	s.logger.Debug(fmt.Sprintf("Creating keys for profile '%s'...", profileName))
@@ -731,7 +758,7 @@ func (s *service) createKeys(profileName string, profile validator.Profile) erro
 				// Check if field already exists
 				exists, err := s.keepass.FieldExists(profileName, envName, entryPath, keyName)
 				if err != nil {
-					return fmt.Errorf("failed to check if field '%s' exists in entry '%s': %w", keyName, entryPath, err)
+					return 0, fmt.Errorf("failed to check if field '%s' exists in entry '%s': %w", keyName, entryPath, err)
 				}
 
 				if exists {
@@ -745,13 +772,13 @@ func (s *service) createKeys(profileName string, profile validator.Profile) erro
 					// Create standard field
 					s.logger.Debug(fmt.Sprintf("        - Creating standard field '%s'...", keyName))
 					if err := s.keepass.SetStandardField(profileName, envName, entryPath, keyName, defaultValue); err != nil {
-						return fmt.Errorf("failed to create standard field '%s' in entry '%s': %w", keyName, entryPath, err)
+						return 0, fmt.Errorf("failed to create standard field '%s' in entry '%s': %w", keyName, entryPath, err)
 					}
 				} else {
 					// Create custom field
 					s.logger.Debug(fmt.Sprintf("        - Creating custom field '%s'...", keyName))
 					if err := s.keepass.SetCustomField(profileName, envName, entryPath, keyName, defaultValue); err != nil {
-						return fmt.Errorf("failed to create custom field '%s' in entry '%s': %w", keyName, entryPath, err)
+						return 0, fmt.Errorf("failed to create custom field '%s' in entry '%s': %w", keyName, entryPath, err)
 					}
 				}
 
@@ -781,7 +808,7 @@ func (s *service) createKeys(profileName string, profile validator.Profile) erro
 
 			// Validate using ValidatorMgr
 			if err := s.validator.ValidateUniqueFieldsInEntry(expectedKeys, entryPath); err != nil {
-				return fmt.Errorf("validation failed for entry '%s' in environment '%s': %w", entryPath, envName, err)
+				return 0, fmt.Errorf("validation failed for entry '%s' in environment '%s': %w", entryPath, envName, err)
 			}
 			s.logger.Debug(fmt.Sprintf("      ✓ No duplicate fields in entry '%s'", entryPath))
 		}
@@ -795,17 +822,19 @@ func (s *service) createKeys(profileName string, profile validator.Profile) erro
 		s.logger.Debug(fmt.Sprintf("  Total: %d key(s) already existed for profile '%s' (skipped)", totalKeysExisted, profileName))
 	}
 
-	return nil
+	return totalKeysCreated, nil
 }
 
 // createEntries creates entries under each environment for a profile
 // It extracts unique entry paths from all items in the profile, validates for duplicates,
 // and creates only the entry structure (no keys/fields yet)
-func (s *service) createEntries(profileName string, profile validator.Profile) error {
+// createEntries creates entries (structure only, no keys/fields) for a profile
+// Returns the number of entries created
+func (s *service) createEntries(profileName string, profile validator.Profile) (int, error) {
 	// Check if profile has environments
 	if len(profile.Environments) == 0 {
 		s.logger.Debug(fmt.Sprintf("Profile '%s' has no environments, skipping entry creation", profileName))
-		return nil
+		return 0, nil
 	}
 
 	s.logger.Debug(fmt.Sprintf("Creating entries for profile '%s'...", profileName))
@@ -849,7 +878,7 @@ func (s *service) createEntries(profileName string, profile validator.Profile) e
 			// Check if entry already exists
 			exists, err := s.keepass.EntryExists(profileName, envName, entryPath)
 			if err != nil {
-				return fmt.Errorf("failed to check if entry '%s' exists in environment '%s': %w", entryPath, envName, err)
+				return 0, fmt.Errorf("failed to check if entry '%s' exists in environment '%s': %w", entryPath, envName, err)
 			}
 
 			if exists {
@@ -861,7 +890,7 @@ func (s *service) createEntries(profileName string, profile validator.Profile) e
 			// Create entry (empty, no custom fields yet)
 			s.logger.Debug(fmt.Sprintf("    - Creating entry '%s'...", entryPath))
 			if err := s.keepass.CreateEntry(profileName, envName, entryPath); err != nil {
-				return fmt.Errorf("failed to create entry '%s' in environment '%s': %w", entryPath, envName, err)
+				return 0, fmt.Errorf("failed to create entry '%s' in environment '%s': %w", entryPath, envName, err)
 			}
 
 			s.logger.Debug(fmt.Sprintf("      ✓ Entry '%s' created", entryPath))
@@ -885,12 +914,12 @@ func (s *service) createEntries(profileName string, profile validator.Profile) e
 		// Get all entry paths for this environment from the database
 		allEntryPaths, err := s.keepass.GetEntriesByEnvironment(profileName, envName)
 		if err != nil {
-			return fmt.Errorf("failed to get entries for validation in environment '%s': %w", envName, err)
+			return 0, fmt.Errorf("failed to get entries for validation in environment '%s': %w", envName, err)
 		}
 
 		// Validate no duplicates
 		if err := s.validator.ValidateNoDuplicateEntries(envName, allEntryPaths); err != nil {
-			return fmt.Errorf("validation failed for environment '%s': %w", envName, err)
+			return 0, fmt.Errorf("validation failed for environment '%s': %w", envName, err)
 		}
 		s.logger.Debug(fmt.Sprintf("    ✓ No duplicates found in environment '%s'", envName))
 	}
@@ -903,5 +932,5 @@ func (s *service) createEntries(profileName string, profile validator.Profile) e
 		s.logger.Debug(fmt.Sprintf("  Total: %d entry/entries already existed for profile '%s' (skipped)", totalEntriesExisted, profileName))
 	}
 
-	return nil
+	return totalEntriesCreated, nil
 }
