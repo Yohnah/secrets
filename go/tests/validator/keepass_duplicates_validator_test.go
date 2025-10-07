@@ -40,6 +40,11 @@ func (m *mockKeePassManager) GetFieldsByEntry(entryPath string) ([]string, error
 	return []string{}, nil
 }
 
+func (m *mockKeePassManager) GetEntriesByEnvironment(dbPath, keyfilePath, password, profileName, envName string) ([]string, error) {
+	// For testing purposes, return empty list (no entries)
+	return []string{}, nil
+}
+
 // Test: Empty database should return nil (no duplicates)
 func TestValidateKeePassDuplicates_EmptyDatabase(t *testing.T) {
 	validator := validator.NewManager()

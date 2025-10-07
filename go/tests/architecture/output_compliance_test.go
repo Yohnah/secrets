@@ -9,25 +9,15 @@ import (
 )
 
 // TestOutputManagerIsUsedForAllOutput ensures that all output goes through OutputManager
-// This test validates that fmt.Print* is only used in allowed locations
+// This test validates that fmt.Print* is NOT used in business logic and CLI directories
 //
 // Architecture Rule: All structured output MUST go through OutputManager
-// Whitelist (allowed to use fmt.Print* directly):
-//   - OutputManager: Implements output functionality
-//   - PromptManager: Responsible for user interaction/prompts
-//   - LoggerManager: Responsible for progress/log messages
+// Only OutputManager, PromptManager, and LoggerManager can use fmt.Print* directly
+// Business logic (internal/secrets) and CLI handlers (internal/cli) MUST use OutputManager
 //
-// This test scans critical directories (cli, secrets) to prevent violations
-// in business logic and command handlers.
+// This test scans critical directories (cli, secrets) and fails if fmt.Print* is found
 func TestOutputManagerIsUsedForAllOutput(t *testing.T) {
-	// Define allowed packages where fmt.Print* is acceptable
-	allowedPackages := map[string]bool{
-		"prompt": true, // PromptManager: user interaction
-		"output": true, // OutputManager: implements output
-		"logger": true, // LoggerManager: progress/log messages
-	}
-
-	// Directories to scan
+	// Directories to scan - these MUST NOT use fmt.Print* directly
 	scanDirs := []string{
 		"../../internal/cli",
 		"../../internal/secrets",
@@ -67,15 +57,8 @@ func TestOutputManagerIsUsedForAllOutput(t *testing.T) {
 
 			// Check if file uses fmt.Print*
 			if printPattern.Match(content) {
-				// Get package name from directory
-				packageDir := filepath.Dir(path)
-				packageName := filepath.Base(packageDir)
-
-				// Check if this package is allowed
-				if !allowedPackages[packageName] {
-					relPath, _ := filepath.Rel(absDir, path)
-					violations = append(violations, relPath)
-				}
+				relPath, _ := filepath.Rel(absDir, path)
+				violations = append(violations, relPath)
 			}
 
 			return nil
@@ -87,12 +70,11 @@ func TestOutputManagerIsUsedForAllOutput(t *testing.T) {
 	}
 
 	if len(violations) > 0 {
-		t.Errorf("Found %d file(s) with fmt.Print* violations:\n", len(violations))
+		t.Errorf("Found %d file(s) with fmt.Print* violations in business logic/CLI:", len(violations))
 		for _, v := range violations {
 			t.Errorf("  - %s", v)
 		}
-		t.Error("\nArchitecture violation: All output must go through OutputManager")
-		t.Error("Only PromptManager and OutputManager itself can use fmt.Print*")
-		t.Error("Business logic and CLI should use OutputManager.OutputRaw() instead")
+		t.Error("\nArchitecture violation: Business logic and CLI must use OutputManager")
+		t.Error("Only OutputManager, PromptManager, and LoggerManager can use fmt.Print*")
 	}
 }

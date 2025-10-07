@@ -793,3 +793,143 @@ outputs: {}
 
 	t.Logf("✓ Idempotency verified: profile and environments not duplicated")
 }
+
+func TestCreateEntries(t *testing.T) {
+	setupTestPassword(t)
+
+	// Create test directory
+	testDir := t.TempDir()
+
+	// Create secrets.yml with environments that have multiple items pointing to same entry
+	secretsYML := `metadata:
+  profile: "test-create-entries"
+  default_environment: "production"
+environments:
+  production:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Production/DB"
+      key: "Password"
+    - name: "DB_USER"
+      type: "envvar"
+      entry: "/Production/DB"
+      key: "Username"
+    - name: "API_KEY"
+      type: "envvar"
+      entry: "/Production/API"
+      key: "Key"
+  staging:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Staging/DB"
+      key: "Password"
+outputs: {}
+`
+	secretsYMLPath := filepath.Join(testDir, "secrets.yml")
+	if err := os.WriteFile(secretsYMLPath, []byte(secretsYML), 0644); err != nil {
+		t.Fatalf("Failed to write secrets.yml: %v", err)
+	}
+
+	// Initialize git repository
+	if err := os.MkdirAll(filepath.Join(testDir, ".git"), 0755); err != nil {
+		t.Fatalf("Failed to create .git directory: %v", err)
+	}
+
+	// Change to test directory
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(testDir)
+
+	// Create managers
+	globalFlags := &types.GlobalFlags{
+		Verbose:          false,
+		Force:            true,
+		IgnoreConfigFile: true,
+	}
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(globalFlags, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	outputMgr := output.NewManager()
+	keepassMgr := keepass.NewManager()
+
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
+
+	// Execute init - this will call createEntries internally
+	opts := initialize.Options{}
+	err := secretsMgr.Init(opts)
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Verify entries were created
+	dbPath := filepath.Join(testDir, ".secrets_yohnah", "secrets.kdbx")
+	keyfilePath := filepath.Join(testDir, ".secrets_yohnah", "secrets.keyfile")
+	password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
+
+	// Check production environment - should have 2 unique entries (DB and API)
+	entries, err := keepassMgr.GetEntriesByEnvironment(dbPath, keyfilePath, password, "test-create-entries", "production")
+	if err != nil {
+		t.Fatalf("Failed to get entries for production: %v", err)
+	}
+
+	t.Logf("Production entries found: %v", entries)
+
+	expectedProductionEntries := []string{"DB", "API"}
+	if len(entries) != len(expectedProductionEntries) {
+		t.Errorf("Expected %d entries in production, got %d: %v", len(expectedProductionEntries), len(entries), entries)
+	}
+
+	for _, expected := range expectedProductionEntries {
+		found := false
+		for _, entry := range entries {
+			if entry == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected entry %s not found in production", expected)
+		}
+	}
+
+	// Check staging environment - should have 1 entry
+	entries, err = keepassMgr.GetEntriesByEnvironment(dbPath, keyfilePath, password, "test-create-entries", "staging")
+	if err != nil {
+		t.Fatalf("Failed to get entries for staging: %v", err)
+	}
+
+	expectedStagingEntries := []string{"DB"}
+	if len(entries) != len(expectedStagingEntries) {
+		t.Errorf("Expected %d entries in staging, got %d: %v", len(expectedStagingEntries), len(entries), entries)
+	}
+
+	for _, expected := range expectedStagingEntries {
+		found := false
+		for _, entry := range entries {
+			if entry == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected entry %s not found in staging", expected)
+		}
+	}
+
+	// Test idempotency - run init again
+	err = secretsMgr.Init(opts)
+	if err != nil {
+		t.Fatalf("Init idempotency failed: %v", err)
+	}
+
+	// Verify no duplicates after second run
+	entries, err = keepassMgr.GetEntriesByEnvironment(dbPath, keyfilePath, password, "test-create-entries", "production")
+	if err != nil {
+		t.Fatalf("Failed to get entries after idempotency test: %v", err)
+	}
+
+	if len(entries) != len(expectedProductionEntries) {
+		t.Errorf("Idempotency failed: expected %d entries, got %d", len(expectedProductionEntries), len(entries))
+	}
+}
