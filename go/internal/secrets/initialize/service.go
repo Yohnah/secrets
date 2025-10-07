@@ -519,6 +519,7 @@ func (s *service) loadProfilesFromSecretsYML(dbPath, keyfilePath, password, targ
 	// Create each profile
 	profilesCreated := 0
 	profilesSkipped := 0
+	profilesUpdated := 0
 
 	for _, profile := range secretsConfig.Profiles {
 		profileName := profile.Metadata.Profile
@@ -530,29 +531,49 @@ func (s *service) loadProfilesFromSecretsYML(dbPath, keyfilePath, password, targ
 		}
 
 		if exists {
-			s.logger.Debug(fmt.Sprintf("Profile '%s' already exists (skipped)", profileName))
-			profilesSkipped++
-			continue
-		}
+			s.logger.Debug(fmt.Sprintf("Profile '%s' already exists, checking for updates...", profileName))
 
-		// Create profile
-		s.logger.Debug(fmt.Sprintf("Creating profile '%s'...", profileName))
-		if err := s.keepass.CreateProfile(dbPath, keyfilePath, password, profileName); err != nil {
-			return fmt.Errorf("failed to create profile '%s': %w", profileName, err)
-		}
+			// Apply incremental changes to existing profile
+			// Create new environments if they don't exist
+			if err := s.createEnvironments(dbPath, keyfilePath, password, profileName, profile); err != nil {
+				return fmt.Errorf("failed to update environments for profile '%s': %w", profileName, err)
+			}
 
-		// Create environments for this profile
-		if err := s.createEnvironments(dbPath, keyfilePath, password, profileName, profile); err != nil {
-			return fmt.Errorf("failed to create environments for profile '%s': %w", profileName, err)
-		}
+			// Create new entries if they don't exist (structure only, no keys/fields yet)
+			if err := s.createEntries(dbPath, keyfilePath, password, profileName, profile); err != nil {
+				return fmt.Errorf("failed to update entries for profile '%s': %w", profileName, err)
+			}
 
-		s.logger.Info(fmt.Sprintf("✓ Profile '%s' created", profileName))
-		profilesCreated++
+			s.logger.Debug(fmt.Sprintf("✓ Profile '%s' updated with any new changes", profileName))
+			profilesUpdated++
+		} else {
+			// Create new profile
+			s.logger.Debug(fmt.Sprintf("Creating profile '%s'...", profileName))
+			if err := s.keepass.CreateProfile(dbPath, keyfilePath, password, profileName); err != nil {
+				return fmt.Errorf("failed to create profile '%s': %w", profileName, err)
+			}
+
+			// Create environments for this profile
+			if err := s.createEnvironments(dbPath, keyfilePath, password, profileName, profile); err != nil {
+				return fmt.Errorf("failed to create environments for profile '%s': %w", profileName, err)
+			}
+
+			// Create entries for this profile (structure only, no keys/fields yet)
+			if err := s.createEntries(dbPath, keyfilePath, password, profileName, profile); err != nil {
+				return fmt.Errorf("failed to create entries for profile '%s': %w", profileName, err)
+			}
+
+			s.logger.Info(fmt.Sprintf("✓ Profile '%s' created", profileName))
+			profilesCreated++
+		}
 	}
 
 	// Summary
 	if profilesCreated > 0 {
 		s.logger.Success(fmt.Sprintf("✓ %d profile(s) created successfully", profilesCreated))
+	}
+	if profilesUpdated > 0 {
+		s.logger.Info(fmt.Sprintf("✓ %d profile(s) updated with changes from secrets.yml", profilesUpdated))
 	}
 	if profilesSkipped > 0 {
 		s.logger.Info(fmt.Sprintf("%d profile(s) already existed (skipped)", profilesSkipped))
@@ -585,6 +606,109 @@ func (s *service) createEnvironments(dbPath, keyfilePath, password, profileName 
 
 	if environmentsCreated > 0 {
 		s.logger.Debug(fmt.Sprintf("  ✓ %d environment(s) created", environmentsCreated))
+	}
+
+	return nil
+}
+
+// createEntries creates entries under each environment for a profile
+// It extracts unique entry paths from all items in the profile, validates for duplicates,
+// and creates only the entry structure (no keys/fields yet)
+func (s *service) createEntries(dbPath, keyfilePath, password, profileName string, profile validator.Profile) error {
+	// Check if profile has environments
+	if len(profile.Environments) == 0 {
+		s.logger.Debug(fmt.Sprintf("Profile '%s' has no environments, skipping entry creation", profileName))
+		return nil
+	}
+
+	s.logger.Debug(fmt.Sprintf("Creating entries for profile '%s'...", profileName))
+
+	// Process each environment
+	totalEntriesCreated := 0
+	totalEntriesExisted := 0
+
+	for envName, envData := range profile.Environments {
+		s.logger.Debug(fmt.Sprintf("  Processing environment '%s'...", envName))
+
+		// Collect unique entry paths from all items in this environment
+		uniquePaths := make(map[string]bool)
+		for _, item := range envData {
+			// The Entry field contains the full path like "dev/app/database" or "prod/app/cache"
+			// Remove environment prefix from path (case-insensitive)
+			entryPath := item.Entry
+			if strings.HasPrefix(strings.ToLower(entryPath), strings.ToLower(envName)+"/") {
+				entryPath = strings.TrimPrefix(entryPath, envName+"/")
+				// Also try with different case
+				if strings.HasPrefix(strings.ToLower(item.Entry), strings.ToLower(envName)+"/") {
+					entryPath = item.Entry[len(envName)+1:]
+				}
+			}
+
+			uniquePaths[entryPath] = true
+		}
+
+		s.logger.Debug(fmt.Sprintf("    Found %d unique entry path(s)", len(uniquePaths)))
+
+		// Create each unique entry
+		entriesCreated := 0
+		entriesExisted := 0
+
+		for entryPath := range uniquePaths {
+			// Check if entry already exists
+			exists, err := s.keepass.EntryExists(dbPath, keyfilePath, password, profileName, envName, entryPath)
+			if err != nil {
+				return fmt.Errorf("failed to check if entry '%s' exists in environment '%s': %w", entryPath, envName, err)
+			}
+
+			if exists {
+				s.logger.Debug(fmt.Sprintf("    - Entry '%s' already exists (skipped)", entryPath))
+				entriesExisted++
+				continue
+			}
+
+			// Create entry (empty, no custom fields yet)
+			s.logger.Debug(fmt.Sprintf("    - Creating entry '%s'...", entryPath))
+			if err := s.keepass.CreateEntry(dbPath, keyfilePath, password, profileName, envName, entryPath); err != nil {
+				return fmt.Errorf("failed to create entry '%s' in environment '%s': %w", entryPath, envName, err)
+			}
+
+			s.logger.Debug(fmt.Sprintf("      ✓ Entry '%s' created", entryPath))
+			entriesCreated++
+		}
+
+		// Summary for this environment
+		if entriesCreated > 0 {
+			s.logger.Debug(fmt.Sprintf("    ✓ %d entry/entries created in environment '%s'", entriesCreated, envName))
+		}
+		if entriesExisted > 0 {
+			s.logger.Debug(fmt.Sprintf("    %d entry/entries already existed in environment '%s' (skipped)", entriesExisted, envName))
+		}
+
+		totalEntriesCreated += entriesCreated
+		totalEntriesExisted += entriesExisted
+
+		// VALIDATION: Check for duplicate entries in the database
+		s.logger.Debug(fmt.Sprintf("    Validating no duplicate entries in environment '%s'...", envName))
+
+		// Get all entry paths for this environment from the database
+		allEntryPaths, err := s.keepass.GetEntriesByEnvironment(dbPath, keyfilePath, password, profileName, envName)
+		if err != nil {
+			return fmt.Errorf("failed to get entries for validation in environment '%s': %w", envName, err)
+		}
+
+		// Validate no duplicates
+		if err := s.validator.ValidateNoDuplicateEntries(envName, allEntryPaths); err != nil {
+			return fmt.Errorf("validation failed for environment '%s': %w", envName, err)
+		}
+		s.logger.Debug(fmt.Sprintf("    ✓ No duplicates found in environment '%s'", envName))
+	}
+
+	// Overall summary
+	if totalEntriesCreated > 0 {
+		s.logger.Debug(fmt.Sprintf("  ✓ Total: %d entry/entries created for profile '%s'", totalEntriesCreated, profileName))
+	}
+	if totalEntriesExisted > 0 {
+		s.logger.Debug(fmt.Sprintf("  Total: %d entry/entries already existed for profile '%s' (skipped)", totalEntriesExisted, profileName))
 	}
 
 	return nil

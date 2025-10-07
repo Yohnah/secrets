@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/tobischo/gokeepasslib/v3"
@@ -17,6 +18,9 @@ type Manager interface {
 	CreateProfile(dbPath, keyfilePath, password, profileName string) error
 	ProfileExists(dbPath, keyfilePath, password, profileName string) (bool, error)
 	CreateGroup(dbPath, keyfilePath, password, profileName, parentGroupName, groupName string) error
+	CreateEntry(dbPath, keyfilePath, password, profileName, envName, entryPath string) error
+	EntryExists(dbPath, keyfilePath, password, profileName, envName, entryPath string) (bool, error)
+	GetEntriesByEnvironment(dbPath, keyfilePath, password, profileName, envName string) ([]string, error)
 }
 
 // manager implements the Manager interface
@@ -310,4 +314,365 @@ func (m *manager) CreateGroup(dbPath, keyfilePath, password, profileName, parent
 	}
 
 	return nil
+}
+
+// CreateEntry creates a new entry in the database under a specific environment
+// Creates intermediate groups automatically if they don't exist
+// Entry is created empty (no custom fields)
+func (m *manager) CreateEntry(dbPath, keyfilePath, password, profileName, envName, entryPath string) error {
+	// Open database
+	db, err := m.OpenDatabase(dbPath, keyfilePath, password)
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Check if root group exists
+	if len(db.Content.Root.Groups) == 0 {
+		return fmt.Errorf("database has no root group")
+	}
+
+	rootGroup := &db.Content.Root.Groups[0]
+
+	// Find profile group
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+
+	if profileGroup == nil {
+		return fmt.Errorf("profile '%s' not found", profileName)
+	}
+
+	// Find HEAD group within profile
+	var headGroup *gokeepasslib.Group
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == "HEAD" {
+			headGroup = &profileGroup.Groups[i]
+			break
+		}
+	}
+
+	if headGroup == nil {
+		return fmt.Errorf("HEAD group not found in profile '%s'", profileName)
+	}
+
+	// Find environment group within HEAD
+	var envGroup *gokeepasslib.Group
+	for i := range headGroup.Groups {
+		if headGroup.Groups[i].Name == envName {
+			envGroup = &headGroup.Groups[i]
+			break
+		}
+	}
+
+	if envGroup == nil {
+		return fmt.Errorf("environment '%s' not found in profile '%s'", envName, profileName)
+	}
+
+	// Parse entry path
+	// Remove leading slash
+	if len(entryPath) > 0 && entryPath[0] == '/' {
+		entryPath = entryPath[1:]
+	}
+
+	// Remove environment prefix from path if present (case-insensitive)
+	envPrefix := envName + "/"
+	if len(entryPath) >= len(envPrefix) {
+		if strings.EqualFold(entryPath[:len(envPrefix)], envPrefix) {
+			entryPath = entryPath[len(envPrefix):]
+		}
+	}
+
+	// Split path into components
+	if entryPath == "" {
+		return fmt.Errorf("entry path is empty after parsing")
+	}
+
+	components := strings.Split(entryPath, "/")
+	if len(components) == 0 {
+		return fmt.Errorf("invalid entry path")
+	}
+
+	// Navigate/create intermediate groups
+	currentGroup := envGroup
+	for i := 0; i < len(components)-1; i++ {
+		groupName := components[i]
+		if groupName == "" {
+			continue
+		}
+
+		// Find or create group
+		found := false
+		for j := range currentGroup.Groups {
+			if currentGroup.Groups[j].Name == groupName {
+				currentGroup = &currentGroup.Groups[j]
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			// Create intermediate group
+			newGroup := gokeepasslib.NewGroup()
+			newGroup.Name = groupName
+			currentGroup.Groups = append(currentGroup.Groups, newGroup)
+			currentGroup = &currentGroup.Groups[len(currentGroup.Groups)-1]
+		}
+	}
+
+	// Create entry in the final group
+	entryName := components[len(components)-1]
+	if entryName == "" {
+		return fmt.Errorf("entry name is empty")
+	}
+
+	// Create new empty entry
+	newEntry := gokeepasslib.NewEntry()
+	newEntry.Values = append(newEntry.Values, gokeepasslib.ValueData{
+		Key:   "Title",
+		Value: gokeepasslib.V{Content: entryName},
+	})
+
+	// Add entry to current group
+	currentGroup.Entries = append(currentGroup.Entries, newEntry)
+
+	// Lock protected entries before saving
+	if err := db.LockProtectedEntries(); err != nil {
+		return fmt.Errorf("failed to lock protected entries: %w", err)
+	}
+
+	// Save database
+	file, err := os.Create(dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to open database file for writing: %w", err)
+	}
+	defer file.Close()
+
+	encoder := gokeepasslib.NewEncoder(file)
+	if err := encoder.Encode(db); err != nil {
+		return fmt.Errorf("failed to save database: %w", err)
+	}
+
+	return nil
+}
+
+// EntryExists checks if an entry exists at the specified path within an environment
+func (m *manager) EntryExists(dbPath, keyfilePath, password, profileName, envName, entryPath string) (bool, error) {
+	// Open database
+	db, err := m.OpenDatabase(dbPath, keyfilePath, password)
+	if err != nil {
+		return false, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Check if root group exists
+	if len(db.Content.Root.Groups) == 0 {
+		return false, nil
+	}
+
+	rootGroup := &db.Content.Root.Groups[0]
+
+	// Find profile group
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+
+	if profileGroup == nil {
+		return false, nil
+	}
+
+	// Find HEAD group within profile
+	var headGroup *gokeepasslib.Group
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == "HEAD" {
+			headGroup = &profileGroup.Groups[i]
+			break
+		}
+	}
+
+	if headGroup == nil {
+		return false, nil
+	}
+
+	// Find environment group within HEAD
+	var envGroup *gokeepasslib.Group
+	for i := range headGroup.Groups {
+		if headGroup.Groups[i].Name == envName {
+			envGroup = &headGroup.Groups[i]
+			break
+		}
+	}
+
+	if envGroup == nil {
+		return false, nil
+	}
+
+	// Parse entry path - remove leading slash if present
+	if len(entryPath) > 0 && entryPath[0] == '/' {
+		entryPath = entryPath[1:]
+	}
+
+	// Remove environment prefix from path if present (case-insensitive)
+	envPrefix := envName + "/"
+	if len(entryPath) >= len(envPrefix) {
+		if strings.EqualFold(entryPath[:len(envPrefix)], envPrefix) {
+			entryPath = entryPath[len(envPrefix):]
+		}
+	}
+
+	// Split path into components
+	if entryPath == "" {
+		return false, nil
+	}
+
+	components := strings.Split(entryPath, "/")
+	if len(components) == 0 {
+		return false, nil
+	}
+
+	// Navigate through intermediate groups
+	currentGroup := envGroup
+	for i := 0; i < len(components)-1; i++ {
+		groupName := components[i]
+		if groupName == "" {
+			continue
+		}
+
+		// Find group
+		found := false
+		for j := range currentGroup.Groups {
+			if currentGroup.Groups[j].Name == groupName {
+				currentGroup = &currentGroup.Groups[j]
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			// Group doesn't exist, so entry doesn't exist
+			return false, nil
+		}
+	}
+
+	// Check if entry exists in the final group
+	entryName := components[len(components)-1]
+	if entryName == "" {
+		return false, nil
+	}
+
+	// Search for entry by Title
+	for _, entry := range currentGroup.Entries {
+		for _, value := range entry.Values {
+			if value.Key == "Title" && value.Value.Content == entryName {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
+// GetEntriesByEnvironment retrieves all entry paths within a specific environment
+// Returns paths relative to the environment (without environment prefix)
+func (m *manager) GetEntriesByEnvironment(dbPath, keyfilePath, password, profileName, envName string) ([]string, error) {
+	// Open database
+	db, err := m.OpenDatabase(dbPath, keyfilePath, password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Check if root group exists
+	if len(db.Content.Root.Groups) == 0 {
+		return []string{}, nil
+	}
+
+	rootGroup := &db.Content.Root.Groups[0]
+
+	// Find profile group
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+
+	if profileGroup == nil {
+		return []string{}, nil
+	}
+
+	// Find HEAD group within profile
+	var headGroup *gokeepasslib.Group
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == "HEAD" {
+			headGroup = &profileGroup.Groups[i]
+			break
+		}
+	}
+
+	if headGroup == nil {
+		return []string{}, nil
+	}
+
+	// Find environment group within HEAD
+	var envGroup *gokeepasslib.Group
+	for i := range headGroup.Groups {
+		if headGroup.Groups[i].Name == envName {
+			envGroup = &headGroup.Groups[i]
+			break
+		}
+	}
+
+	if envGroup == nil {
+		return []string{}, nil
+	}
+
+	// Recursively collect all entry paths
+	var entries []string
+	collectEntries(envGroup, "", &entries)
+
+	return entries, nil
+}
+
+// collectEntries recursively collects all entry paths in a group
+func collectEntries(group *gokeepasslib.Group, currentPath string, entries *[]string) {
+	// Collect entries in current group
+	for _, entry := range group.Entries {
+		// Get entry title
+		var title string
+		for _, value := range entry.Values {
+			if value.Key == "Title" {
+				title = value.Value.Content
+				break
+			}
+		}
+
+		if title != "" {
+			var entryPath string
+			if currentPath == "" {
+				entryPath = title
+			} else {
+				entryPath = currentPath + "/" + title
+			}
+			*entries = append(*entries, entryPath)
+		}
+	}
+
+	// Recursively process subgroups
+	for i := range group.Groups {
+		subGroupName := group.Groups[i].Name
+		var newPath string
+		if currentPath == "" {
+			newPath = subGroupName
+		} else {
+			newPath = currentPath + "/" + subGroupName
+		}
+		collectEntries(&group.Groups[i], newPath, entries)
+	}
 }

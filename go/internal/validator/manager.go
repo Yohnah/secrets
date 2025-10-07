@@ -15,6 +15,7 @@ type ValidatorManager interface {
 	ValidateTemplate(templateContent string) error
 	ReadAndValidateSecretsYML(filePath string) (*SecretsConfig, []error)
 	ValidateKeePassDuplicates(db KeePassManager) []error
+	ValidateNoDuplicateEntries(envName string, entryPaths []string) error
 }
 
 // manager implements the ValidatorManager interface
@@ -141,6 +142,30 @@ func validatePathFormat(path string) error {
 	// Accept both absolute and relative paths
 	// filepath.IsAbs is platform-aware
 	_ = filepath.IsAbs(cleanPath) // Just validate it's processable
+
+	return nil
+}
+
+// ValidateNoDuplicateEntries validates that there are no duplicate entry paths
+// within the specified environment and profile. This is crucial to detect BBDD
+// corruption where multiple items in secrets.yml map to the same entry path.
+func (m *manager) ValidateNoDuplicateEntries(envName string, entryPaths []string) error {
+	// Check for duplicates using a map
+	seen := make(map[string]bool)
+	var duplicates []string
+
+	for _, path := range entryPaths {
+		if seen[path] {
+			duplicates = append(duplicates, path)
+		} else {
+			seen[path] = true
+		}
+	}
+
+	// If duplicates found, return detailed error
+	if len(duplicates) > 0 {
+		return fmt.Errorf("BBDD corruption detected: duplicate entry paths found in environment '%s': %v", envName, duplicates)
+	}
 
 	return nil
 }
