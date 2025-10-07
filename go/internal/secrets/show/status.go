@@ -79,7 +79,7 @@ func (s *service) Status() error {
 			} else {
 				accessible = true
 				db = s.keepass.GetDatabase() // Get database reference for validation
-				
+
 				// Close database at the end (don't save changes since we're only reading)
 				defer func() {
 					// Just close without saving (database wasn't modified)
@@ -87,7 +87,7 @@ func (s *service) Status() error {
 						s.keepass.SaveAndClose()
 					}
 				}()
-				
+
 				s.logger.Debug("Database opened successfully")
 				// Read database name from root group (first group in root)
 				if len(db.Content.Root.Groups) > 0 {

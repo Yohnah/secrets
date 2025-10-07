@@ -16,6 +16,7 @@ type Manager interface {
 	// Session management
 	Open(dbPath, keyfilePath, password string) error
 	SaveAndClose() error
+	CloseWithoutSave() error
 	IsOpen() bool
 	GetDatabase() *gokeepasslib.Database
 
@@ -125,12 +126,22 @@ func (m *manager) SaveAndClose() error {
 	// Lock protected entries
 	err := m.db.LockProtectedEntries()
 	if err != nil {
+		// Clear session even on error
+		m.db = nil
+		m.dbPath = ""
+		m.keyfilePath = ""
+		m.password = ""
 		return fmt.Errorf("failed to lock database: %w", err)
 	}
 
 	// Open file for writing
 	file, err := os.Create(m.dbPath)
 	if err != nil {
+		// Clear session even on error
+		m.db = nil
+		m.dbPath = ""
+		m.keyfilePath = ""
+		m.password = ""
 		return fmt.Errorf("failed to open database file for writing: %w", err)
 	}
 	defer file.Close()
@@ -139,10 +150,30 @@ func (m *manager) SaveAndClose() error {
 	keepassEncoder := gokeepasslib.NewEncoder(file)
 	err = keepassEncoder.Encode(m.db)
 	if err != nil {
+		// Clear session even on error
+		m.db = nil
+		m.dbPath = ""
+		m.keyfilePath = ""
+		m.password = ""
 		return fmt.Errorf("failed to encode database: %w", err)
 	}
 
 	// Clear session
+	m.db = nil
+	m.dbPath = ""
+	m.keyfilePath = ""
+	m.password = ""
+
+	return nil
+}
+
+// CloseWithoutSave closes the database session without saving changes
+func (m *manager) CloseWithoutSave() error {
+	if m.db == nil {
+		return fmt.Errorf("no database open")
+	}
+
+	// Clear session without saving
 	m.db = nil
 	m.dbPath = ""
 	m.keyfilePath = ""

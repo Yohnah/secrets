@@ -208,6 +208,11 @@ func (s *service) Init() error {
 	if dbExists && keyExists {
 		s.logger.Info("Database and keyfile already exist. Verifying access...")
 
+		// Ensure no previous session is open
+		if s.keepass.IsOpen() {
+			s.keepass.CloseWithoutSave()
+		}
+
 		// Get password (1 time for verification)
 		password, err := s.getPassword(cfg, false)
 		if err != nil {
@@ -218,8 +223,8 @@ func (s *service) Init() error {
 		if err := s.keepass.Open(dbPath, keyfilePath, password); err != nil {
 			return fmt.Errorf("failed to open existing database: %w\n\nPlease verify your password and keyfile are correct", err)
 		}
-		// Close immediately after verification
-		if err := s.keepass.SaveAndClose(); err != nil {
+		// Close immediately after verification without saving
+		if err := s.keepass.CloseWithoutSave(); err != nil {
 			s.logger.Error(fmt.Sprintf("Failed to close database: %v", err))
 		}
 
@@ -510,6 +515,9 @@ func (s *service) loadProfilesFromSecretsYML(dbPath, keyfilePath, password, targ
 	s.logger.Info(fmt.Sprintf("Loading %d profile(s) from secrets.yml...", len(secretsConfig.Profiles)))
 
 	// Open database session ONCE for all operations
+	if s.keepass.IsOpen() {
+		s.keepass.CloseWithoutSave()
+	}
 	if err := s.keepass.Open(dbPath, keyfilePath, password); err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}

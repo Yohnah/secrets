@@ -36,14 +36,21 @@ func TestCreateEntry(t *testing.T) {
 		t.Fatalf("Failed to create database: %v", err)
 	}
 
+	// Open database session
+	err = kpMgr.Open(dbPath, keyfilePath, password)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer kpMgr.SaveAndClose()
+
 	profileName := "testprofile"
-	err = kpMgr.CreateProfile(dbPath, keyfilePath, password, profileName)
+	err = kpMgr.CreateProfile(profileName)
 	if err != nil {
 		t.Fatalf("Failed to create profile: %v", err)
 	}
 
 	envName := "testenv"
-	err = kpMgr.CreateGroup(dbPath, keyfilePath, password, profileName, "HEAD", envName)
+	err = kpMgr.CreateGroup(profileName, "HEAD", envName)
 	if err != nil {
 		t.Fatalf("Failed to create environment group: %v", err)
 	}
@@ -82,7 +89,7 @@ func TestCreateEntry(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := kpMgr.CreateEntry(dbPath, keyfilePath, password, profileName, envName, tt.entryPath)
+			err := kpMgr.CreateEntry(profileName, envName, tt.entryPath)
 			if tt.expectError && err == nil {
 				t.Errorf("Expected error but got none")
 			}
@@ -92,7 +99,7 @@ func TestCreateEntry(t *testing.T) {
 
 			// Verify entry was created
 			if !tt.expectError {
-				exists, err := kpMgr.EntryExists(dbPath, keyfilePath, password, profileName, envName, tt.entryPath)
+				exists, err := kpMgr.EntryExists(profileName, envName, tt.entryPath)
 				if err != nil {
 					t.Errorf("Failed to check entry existence: %v", err)
 				}
@@ -132,21 +139,28 @@ func TestEntryExists(t *testing.T) {
 		t.Fatalf("Failed to create database: %v", err)
 	}
 
+	// Open database session
+	err = kpMgr.Open(dbPath, keyfilePath, password)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer kpMgr.SaveAndClose()
+
 	profileName := "testprofile"
-	err = kpMgr.CreateProfile(dbPath, keyfilePath, password, profileName)
+	err = kpMgr.CreateProfile(profileName)
 	if err != nil {
 		t.Fatalf("Failed to create profile: %v", err)
 	}
 
 	envName := "testenv"
-	err = kpMgr.CreateGroup(dbPath, keyfilePath, password, profileName, "HEAD", envName)
+	err = kpMgr.CreateGroup(profileName, "HEAD", envName)
 	if err != nil {
 		t.Fatalf("Failed to create environment group: %v", err)
 	}
 
 	// Create a test entry
 	entryPath := "/testentry"
-	err = kpMgr.CreateEntry(dbPath, keyfilePath, password, profileName, envName, entryPath)
+	err = kpMgr.CreateEntry(profileName, envName, entryPath)
 	if err != nil {
 		t.Fatalf("Failed to create test entry: %v", err)
 	}
@@ -180,7 +194,7 @@ func TestEntryExists(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exists, err := kpMgr.EntryExists(dbPath, keyfilePath, password, profileName, envName, tt.entryPath)
+			exists, err := kpMgr.EntryExists(profileName, envName, tt.entryPath)
 			if err != nil {
 				t.Errorf("EntryExists failed: %v", err)
 			}
@@ -219,14 +233,21 @@ func TestGetEntriesByEnvironment(t *testing.T) {
 		t.Fatalf("Failed to create database: %v", err)
 	}
 
+	// Open database session
+	err = kpMgr.Open(dbPath, keyfilePath, password)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer kpMgr.SaveAndClose()
+
 	profileName := "testprofile"
-	err = kpMgr.CreateProfile(dbPath, keyfilePath, password, profileName)
+	err = kpMgr.CreateProfile(profileName)
 	if err != nil {
 		t.Fatalf("Failed to create profile: %v", err)
 	}
 
 	envName := "testenv"
-	err = kpMgr.CreateGroup(dbPath, keyfilePath, password, profileName, "HEAD", envName)
+	err = kpMgr.CreateGroup(profileName, "HEAD", envName)
 	if err != nil {
 		t.Fatalf("Failed to create environment group: %v", err)
 	}
@@ -240,14 +261,14 @@ func TestGetEntriesByEnvironment(t *testing.T) {
 	}
 
 	for _, entry := range entries {
-		err := kpMgr.CreateEntry(dbPath, keyfilePath, password, profileName, envName, entry)
+		err := kpMgr.CreateEntry(profileName, envName, entry)
 		if err != nil {
 			t.Fatalf("Failed to create entry %s: %v", entry, err)
 		}
 	}
 
 	// Test GetEntriesByEnvironment
-	result, err := kpMgr.GetEntriesByEnvironment(dbPath, keyfilePath, password, profileName, envName)
+	result, err := kpMgr.GetEntriesByEnvironment(profileName, envName)
 	if err != nil {
 		t.Fatalf("GetEntriesByEnvironment failed: %v", err)
 	}

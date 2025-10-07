@@ -40,18 +40,22 @@ func TestCreateProfile(t *testing.T) {
 		t.Fatalf("Failed to create database: %v", err)
 	}
 
+	// Open database session
+	err = keepassManager.Open(dbPath, keyfilePath, password)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer keepassManager.SaveAndClose()
+
 	// Test: Create profile
 	profileName := "test-profile"
-	err = keepassManager.CreateProfile(dbPath, keyfilePath, password, profileName)
+	err = keepassManager.CreateProfile(profileName)
 	if err != nil {
 		t.Fatalf("Failed to create profile: %v", err)
 	}
 
 	// Verify: Profile was created
-	db, err := keepassManager.OpenDatabase(dbPath, keyfilePath, password)
-	if err != nil {
-		t.Fatalf("Failed to open database: %v", err)
-	}
+	db := keepassManager.GetDatabase()
 
 	// Check root group exists
 	if len(db.Content.Root.Groups) == 0 {
@@ -151,24 +155,28 @@ func TestCreateProfileIdempotent(t *testing.T) {
 		t.Fatalf("Failed to create database: %v", err)
 	}
 
+	// Open database session
+	err = keepassManager.Open(dbPath, keyfilePath, password)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer keepassManager.SaveAndClose()
+
 	// Create profile first time
 	profileName := "idempotent-profile"
-	err = keepassManager.CreateProfile(dbPath, keyfilePath, password, profileName)
+	err = keepassManager.CreateProfile(profileName)
 	if err != nil {
 		t.Fatalf("First CreateProfile failed: %v", err)
 	}
 
 	// Create profile second time (should be idempotent - no error)
-	err = keepassManager.CreateProfile(dbPath, keyfilePath, password, profileName)
+	err = keepassManager.CreateProfile(profileName)
 	if err != nil {
 		t.Fatalf("Second CreateProfile failed: %v", err)
 	}
 
 	// Verify: Only ONE profile exists
-	db, err := keepassManager.OpenDatabase(dbPath, keyfilePath, password)
-	if err != nil {
-		t.Fatalf("Failed to open database: %v", err)
-	}
+	db := keepassManager.GetDatabase()
 
 	rootGroup := &db.Content.Root.Groups[0]
 
@@ -206,8 +214,15 @@ func TestProfileExists(t *testing.T) {
 		t.Fatalf("Failed to create database: %v", err)
 	}
 
+	// Open database session
+	err = keepassManager.Open(dbPath, keyfilePath, password)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer keepassManager.SaveAndClose()
+
 	// Test: Profile should NOT exist initially
-	exists, err := keepassManager.ProfileExists(dbPath, keyfilePath, password, "non-existent")
+	exists, err := keepassManager.ProfileExists("non-existent")
 	if err != nil {
 		t.Fatalf("ProfileExists failed: %v", err)
 	}
@@ -217,13 +232,13 @@ func TestProfileExists(t *testing.T) {
 
 	// Create profile
 	profileName := "existing-profile"
-	err = keepassManager.CreateProfile(dbPath, keyfilePath, password, profileName)
+	err = keepassManager.CreateProfile(profileName)
 	if err != nil {
 		t.Fatalf("Failed to create profile: %v", err)
 	}
 
 	// Test: Profile SHOULD exist now
-	exists, err = keepassManager.ProfileExists(dbPath, keyfilePath, password, profileName)
+	exists, err = keepassManager.ProfileExists(profileName)
 	if err != nil {
 		t.Fatalf("ProfileExists failed: %v", err)
 	}
@@ -297,10 +312,13 @@ outputs: {}`
 	}
 
 	// Verify: Profile was created
-	db, err := keepassMgr.OpenDatabase(dbPath, keyfilePath, "testpassword123")
+	err = keepassMgr.Open(dbPath, keyfilePath, "testpassword123")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
+	defer keepassMgr.SaveAndClose()
+
+	db := keepassMgr.GetDatabase()
 
 	rootGroup := &db.Content.Root.Groups[0]
 
@@ -387,10 +405,13 @@ outputs: {}`
 	}
 
 	// Verify: Profile was created from custom location
-	db, err := keepassMgr.OpenDatabase(dbPath, keyfilePath, "testpassword123")
+	err = keepassMgr.Open(dbPath, keyfilePath, "testpassword123")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
+	defer keepassMgr.SaveAndClose()
+
+	db := keepassMgr.GetDatabase()
 
 	rootGroup := &db.Content.Root.Groups[0]
 
@@ -500,10 +521,13 @@ outputs: {}`
 	}
 
 	// Verify: Profile from current directory was loaded
-	db, err := keepassMgr.OpenDatabase(dbPath, keyfilePath, "testpassword123")
+	err = keepassMgr.Open(dbPath, keyfilePath, "testpassword123")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
+	defer keepassMgr.SaveAndClose()
+
+	db := keepassMgr.GetDatabase()
 
 	rootGroup := &db.Content.Root.Groups[0]
 
@@ -601,10 +625,13 @@ outputs: {}
 	keyfilePath := filepath.Join(testDir, ".secrets_yohnah", "secrets.keyfile")
 	password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
 
-	db, err := keepassMgr.OpenDatabase(dbPath, keyfilePath, password)
+	err = keepassMgr.Open(dbPath, keyfilePath, password)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
+	defer keepassMgr.SaveAndClose()
+
+	db := keepassMgr.GetDatabase()
 
 	// Navigate to profile
 	rootGroup := &db.Content.Root.Groups[0]
@@ -758,10 +785,13 @@ outputs: {}
 	keyfilePath := filepath.Join(testDir, ".secrets_yohnah", "secrets.keyfile")
 	password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
 
-	db, err := keepassMgr.OpenDatabase(dbPath, keyfilePath, password)
+	err = keepassMgr.Open(dbPath, keyfilePath, password)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
+	defer keepassMgr.SaveAndClose()
+
+	db := keepassMgr.GetDatabase()
 
 	// Count profiles (should be exactly 1)
 	rootGroup := &db.Content.Root.Groups[0]
@@ -851,8 +881,14 @@ outputs: {}
 	keyfilePath := filepath.Join(testDir, ".secrets_yohnah", "secrets.keyfile")
 	password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
 
+	err = keepassMgr.Open(dbPath, keyfilePath, password)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer keepassMgr.SaveAndClose()
+
 	// Check production environment - should have 2 unique entries (DB and API)
-	entries, err := keepassMgr.GetEntriesByEnvironment(dbPath, keyfilePath, password, "test-create-entries", "production")
+	entries, err := keepassMgr.GetEntriesByEnvironment("test-create-entries", "production")
 	if err != nil {
 		t.Fatalf("Failed to get entries for production: %v", err)
 	}
@@ -878,7 +914,7 @@ outputs: {}
 	}
 
 	// Check staging environment - should have 1 entry
-	entries, err = keepassMgr.GetEntriesByEnvironment(dbPath, keyfilePath, password, "test-create-entries", "staging")
+	entries, err = keepassMgr.GetEntriesByEnvironment("test-create-entries", "staging")
 	if err != nil {
 		t.Fatalf("Failed to get entries for staging: %v", err)
 	}
@@ -907,8 +943,15 @@ outputs: {}
 		t.Fatalf("Init idempotency failed: %v", err)
 	}
 
+	// Open database to verify
+	err = keepassMgr.Open(dbPath, keyfilePath, password)
+	if err != nil {
+		t.Fatalf("Failed to open database after idempotency test: %v", err)
+	}
+	defer keepassMgr.SaveAndClose()
+
 	// Verify no duplicates after second run
-	entries, err = keepassMgr.GetEntriesByEnvironment(dbPath, keyfilePath, password, "test-create-entries", "production")
+	entries, err = keepassMgr.GetEntriesByEnvironment("test-create-entries", "production")
 	if err != nil {
 		t.Fatalf("Failed to get entries after idempotency test: %v", err)
 	}
