@@ -39,7 +39,7 @@ func TestShowTemplate_FullTemplate(t *testing.T) {
 		Verbose:          false,
 	}
 	validatorMgr := validator.NewManager()
-	configMgr := config.NewManager(globalFlags, validatorMgr)
+	configMgr := config.NewManager(globalFlags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	outputMock := &mockOutputManager{}
@@ -47,7 +47,7 @@ func TestShowTemplate_FullTemplate(t *testing.T) {
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), outputMock, validator.NewManager())
 
 	// Test full template
-	err := secretsMgr.ShowTemplate(false)
+	err := secretsMgr.ShowTemplate()
 	if err != nil {
 		t.Fatalf("ShowTemplate(false) error: %v", err)
 	}
@@ -86,8 +86,13 @@ func TestShowTemplate_MinimalTemplate(t *testing.T) {
 		IgnoreConfigFile: true,
 		Verbose:          false,
 	}
+
+	commandFlags := &types.CommandFlags{
+		Minimal: true,
+	}
+
 	validatorMgr := validator.NewManager()
-	configMgr := config.NewManager(globalFlags, validatorMgr)
+	configMgr := config.NewManager(globalFlags, commandFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	outputMock := &mockOutputManager{}
@@ -95,7 +100,7 @@ func TestShowTemplate_MinimalTemplate(t *testing.T) {
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), outputMock, validator.NewManager())
 
 	// Test minimal template
-	err := secretsMgr.ShowTemplate(true)
+	err := secretsMgr.ShowTemplate()
 	if err != nil {
 		t.Fatalf("ShowTemplate(true) error: %v", err)
 	}
@@ -133,8 +138,10 @@ func TestShowTemplate_MinimalTemplate(t *testing.T) {
 
 	// Minimal should be shorter than full
 	outputMock2 := &mockOutputManager{}
-	secretsMgr2 := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), outputMock2, validator.NewManager())
-	_ = secretsMgr2.ShowTemplate(false)
+	commandFlags2 := &types.CommandFlags{Minimal: false}
+	configMgr2 := config.NewManager(globalFlags, commandFlags2, validatorMgr)
+	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr, promptMgr, keepass.NewManager(), outputMock2, validator.NewManager())
+	_ = secretsMgr2.ShowTemplate()
 	fullTemplate := outputMock2.output
 
 	if len(template) >= len(fullTemplate) {
@@ -152,7 +159,7 @@ func TestShowTemplate_UsesOutputManager(t *testing.T) {
 		Verbose:          false,
 	}
 	validatorMgr := validator.NewManager()
-	configMgr := config.NewManager(globalFlags, validatorMgr)
+	configMgr := config.NewManager(globalFlags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 
@@ -161,7 +168,7 @@ func TestShowTemplate_UsesOutputManager(t *testing.T) {
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), outputMgr, validator.NewManager())
 
 	// This should not panic or error - output goes to stdout
-	err := secretsMgr.ShowTemplate(false)
+	err := secretsMgr.ShowTemplate()
 	if err != nil {
 		t.Fatalf("ShowTemplate() with real OutputManager failed: %v", err)
 	}

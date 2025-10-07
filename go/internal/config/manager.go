@@ -39,12 +39,18 @@ type Config struct {
 	OutputFormat     string
 	IgnoreConfig     bool
 	NoCreateDatabase bool
+	// Init command specific
+	ForceRecreate bool
+	DatabaseName  string
+	// Show template specific
+	Minimal bool
 }
 
 type manager struct {
-	globalFlags *types.GlobalFlags
-	config      *Config
-	validator   validator.ValidatorManager
+	globalFlags  *types.GlobalFlags
+	commandFlags *types.CommandFlags
+	config       *Config
+	validator    validator.ValidatorManager
 }
 
 // FileConfig represents the structure of config.yml
@@ -55,10 +61,11 @@ type FileConfig struct {
 }
 
 // NewManager creates a new ConfigManager instance
-func NewManager(flags *types.GlobalFlags, validator validator.ValidatorManager) Manager {
+func NewManager(globalFlags *types.GlobalFlags, commandFlags *types.CommandFlags, validator validator.ValidatorManager) Manager {
 	manager := &manager{
-		globalFlags: flags,
-		validator:   validator,
+		globalFlags:  globalFlags,
+		commandFlags: commandFlags,
+		validator:    validator,
 	}
 
 	// Validate template at startup
@@ -88,6 +95,9 @@ func (m *manager) GetConfig() (*Config, error) {
 	config.IgnoreConfig = false
 	config.Password = ""
 	config.NoCreateDatabase = false
+	config.ForceRecreate = false
+	config.DatabaseName = ""
+	config.Minimal = false
 
 	// Step 2: Read ENV VARS
 	if envPassword := os.Getenv("SECRETS_YOHNAH_PASSWORD"); envPassword != "" {
@@ -148,6 +158,27 @@ func (m *manager) GetConfig() (*Config, error) {
 	config.Verbose = m.globalFlags.Verbose
 	config.NoInteractive = m.globalFlags.Force
 	config.IgnoreConfig = m.globalFlags.IgnoreConfigFile
+
+	// Step 5: Apply COMMAND-SPECIFIC FLAGS (translated from raw flags to semantic config)
+	// ConfigMgr translates flags to configuration semantics here
+	if m.commandFlags != nil {
+		// Init command flags
+		config.ForceRecreate = m.commandFlags.ForceRecreate
+		if m.commandFlags.NoCreateDatabase {
+			config.NoCreateDatabase = m.commandFlags.NoCreateDatabase
+		}
+		if m.commandFlags.DatabaseName != "" {
+			config.DatabaseName = m.commandFlags.DatabaseName
+		}
+
+		// Show template flags
+		config.Minimal = m.commandFlags.Minimal
+
+		// Show status flags
+		if m.commandFlags.OutputFormat != "" {
+			config.OutputFormat = m.commandFlags.OutputFormat
+		}
+	}
 
 	// Cache the config
 	m.config = config

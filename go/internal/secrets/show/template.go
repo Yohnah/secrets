@@ -2,6 +2,7 @@ package show
 
 import (
 	_ "embed"
+	"fmt"
 	"strings"
 )
 
@@ -9,7 +10,16 @@ import (
 var secretsTemplate string
 
 // Template outputs the embedded secrets.yml template
-func (s *service) Template(minimal bool) error {
+func (s *service) Template() error {
+	// Get configuration (ConfigMgr has already processed precedence)
+	cfg, err := s.config.GetConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get configuration: %w", err)
+	}
+
+	// Get minimal flag from processed config
+	minimal := cfg.Minimal
+
 	var content string
 	if minimal {
 		content = s.processMinimalTemplate()

@@ -12,3 +12,18 @@ type GlobalFlags struct {
 	IgnoreConfigFile bool
 	IgnoreGitProject bool
 }
+
+// CommandFlags holds all command-specific flag values
+// CliMgr captures these and feeds them to ConfigMgr as raw data
+type CommandFlags struct {
+	// Init command flags
+	ForceRecreate    bool
+	NoCreateDatabase bool
+	DatabaseName     string
+
+	// Show template command flags
+	Minimal bool
+
+	// Show status command flags
+	OutputFormat string
+}

@@ -13,14 +13,17 @@ import (
 const defaultDatabaseName = "SECRETS YOHNAH"
 
 // Status displays the current status of the secrets database
-func (s *service) Status(format string) error {
+func (s *service) Status() error {
 	s.logger.Debug("Checking database status...")
 
-	// Get configuration
+	// Get configuration (ConfigMgr has already processed precedence)
 	cfg, err := s.config.GetConfig()
 	if err != nil {
 		return fmt.Errorf("failed to get configuration: %w", err)
 	}
+
+	// Get output format from processed config
+	format := cfg.OutputFormat
 
 	// Get database and keyfile paths
 	dbPath := common.MakeAbsolutePath(s.config.GetDatabasePath())

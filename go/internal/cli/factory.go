@@ -7,6 +7,7 @@ import (
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/secrets"
+	"github.com/Yohnah/secrets/internal/types"
 	"github.com/Yohnah/secrets/internal/validator"
 )
 
@@ -27,16 +28,17 @@ type ManagerContext struct {
 }
 
 // NewManagerContext creates all managers with standard setup.
-// This follows the 8-step initialization pattern used across all CLI commands:
+// This follows the proper architectural flow where CliMgr captures ALL user input
+// (global flags + command-specific flags) and feeds them to ConfigMgr as raw data.
+// ConfigMgr then processes precedence and translates flags to semantic configuration.
 //
-//  1. Get global flags from Cobra
-//  2. Instantiate ValidatorManager
-//  3. Instantiate ConfigManager (with ValidatorManager injected)
-//  4. Instantiate LoggerManager (with verbose flag)
-//  5. Instantiate PromptManager
-//  6. Instantiate OutputManager
-//  7. Instantiate KeePassManager
-//  8. Instantiate SecretsManager (CORE - with all dependencies)
+// Architecture Flow:
+//  1. CliMgr captures global flags (from Cobra root command)
+//  2. CliMgr captures command-specific flags (from Cobra subcommands)
+//  3. CliMgr feeds ALL raw data to ConfigMgr via this factory
+//  4. ConfigMgr processes precedence: FLAGS > CONFIG.YML > ENV VARS > DEFAULTS
+//  5. ConfigMgr translates flags to semantic config (e.g., -f -> NoInteractive: true)
+//  6. SecretsManager pulls processed config when needed
 //
 // This function ensures consistency across all CLI commands and centralizes
 // the dependency injection pattern. All managers communicate through interfaces,
@@ -44,13 +46,13 @@ type ManagerContext struct {
 //
 // Example usage:
 //
-// managers := NewManagerContext()
+// managers := NewManagerContext(commandFlags)
 //
 //	if err := managers.Secrets.Init(); err != nil {
 //	   managers.Logger.Error(err.Error())
 //	   os.Exit(1)
 //	}
-func NewManagerContext() *ManagerContext {
+func NewManagerContext(commandFlags *types.CommandFlags) *ManagerContext {
 	// Step 1: Get global flags (captured by Cobra)
 	globalFlags := GetGlobalFlags()
 
@@ -58,7 +60,8 @@ func NewManagerContext() *ManagerContext {
 	validatorMgr := validator.NewManager()
 
 	// Step 3: Instantiate ConfigManager (with ValidatorManager injected)
-	configMgr := config.NewManager(globalFlags, validatorMgr)
+	// CliMgr feeds ALL raw data (global + command flags) to ConfigMgr
+	configMgr := config.NewManager(globalFlags, commandFlags, validatorMgr)
 
 	// Step 4: Instantiate LoggerManager
 	loggerMgr := logger.NewManager(globalFlags.Verbose)
@@ -89,5 +92,5 @@ func NewManagerContext() *ManagerContext {
 // NewManagerContextForTest is an exported version of NewManagerContext for testing purposes.
 // This allows tests in external packages to validate the factory functionality.
 func NewManagerContextForTest() *ManagerContext {
-	return NewManagerContext()
+	return NewManagerContext(nil)
 }

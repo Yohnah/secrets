@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 
+	"github.com/Yohnah/secrets/internal/types"
 	"github.com/spf13/cobra"
 )
 
@@ -61,11 +62,17 @@ func init() {
 }
 
 func runShowTemplate(cmd *cobra.Command, args []string) error {
-	// Create manager context with standard setup
-	managers := NewManagerContext()
+	// CliMgr captures ALL command-specific flags and feeds them to ConfigMgr
+	commandFlags := &types.CommandFlags{
+		Minimal: flagMinimal,
+	}
+
+	// Create manager context with captured flags
+	managers := NewManagerContext(commandFlags)
 
 	// Execute business logic (delegate all decisions to CORE)
-	if err := managers.Secrets.ShowTemplate(flagMinimal); err != nil {
+	// SecretsManager will pull processed config from ConfigMgr
+	if err := managers.Secrets.ShowTemplate(); err != nil {
 		managers.Logger.Error(err.Error())
 		os.Exit(1)
 	}
@@ -74,12 +81,17 @@ func runShowTemplate(cmd *cobra.Command, args []string) error {
 }
 
 func runShowStatus(cmd *cobra.Command, args []string) error {
-	// Create manager context with standard setup
-	managers := NewManagerContext()
+	// CliMgr captures ALL command-specific flags and feeds them to ConfigMgr
+	commandFlags := &types.CommandFlags{
+		OutputFormat: flagOutputFormat,
+	}
 
-	// Pass output format to SecretsManager
-	// SecretsManager structures data and delegates formatting to OutputManager
-	if err := managers.Secrets.Status(flagOutputFormat); err != nil {
+	// Create manager context with captured flags
+	managers := NewManagerContext(commandFlags)
+
+	// Execute business logic (delegate all decisions to CORE)
+	// SecretsManager will pull processed config from ConfigMgr
+	if err := managers.Secrets.Status(); err != nil {
 		managers.Logger.Error(err.Error())
 		os.Exit(1)
 	}

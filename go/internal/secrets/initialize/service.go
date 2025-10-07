@@ -18,16 +18,9 @@ import (
 // Default database name when git repository name cannot be determined
 const defaultDatabaseName = "SECRETS YOHNAH"
 
-// Options holds options for the Init command
-type Options struct {
-	ForceRecreate    bool
-	NoCreateDatabase bool
-	DatabaseName     string
-}
-
 // Service defines the interface for initialization operations
 type Service interface {
-	Init(opts Options) error
+	Init() error
 }
 
 type service struct {
@@ -49,25 +42,22 @@ func NewService(cfg config.Manager, log logger.Manager, prm prompt.Manager, kp k
 	}
 }
 
-// Init implements the full initialization logic with options
-func (s *service) Init(opts Options) error {
+// Init implements the full initialization logic
+// Pulls configuration from ConfigManager (which already processed precedence)
+func (s *service) Init() error {
 	// Step 1: PULL configuration from ConfigManager
+	// ConfigManager has already processed: FLAGS > CONFIG.YML > ENV VARS > DEFAULTS
 	cfg, err := s.config.GetConfig()
 	if err != nil {
 		return fmt.Errorf("failed to get configuration: %w", err)
 	}
 
-	// Step 2: DECISION - Apply precedence for NoCreateDatabase
-	// Precedence: FLAG > CONFIG.YML > DEFAULT (false)
-	noCreateDatabase := opts.NoCreateDatabase || cfg.NoCreateDatabase
+	// Step 2: DECISION - Check NoCreateDatabase from processed config
+	noCreateDatabase := cfg.NoCreateDatabase
 
 	s.logger.Debug("Starting initialization process...")
 	if noCreateDatabase {
-		if opts.NoCreateDatabase {
-			s.logger.Debug("NoCreateDatabase: true (from --no-create-database flag)")
-		} else {
-			s.logger.Debug("NoCreateDatabase: true (from config.yml)")
-		}
+		s.logger.Debug("NoCreateDatabase: true (from processed configuration)")
 	}
 
 	// Step 3: DECISION - Ask for confirmation if not in force mode
@@ -179,7 +169,7 @@ func (s *service) Init(opts Options) error {
 		keyfilePath = filepath.Join(targetDir, keyfilePath)
 	}
 
-	if opts.ForceRecreate {
+	if cfg.ForceRecreate {
 		s.logger.Info("Force recreate mode: deleting existing database and keyfile...")
 
 		// Delete database if exists
@@ -309,7 +299,7 @@ func (s *service) Init(opts Options) error {
 	s.logger.Debug("Creating KeePass database in KDBX4 format...")
 
 	// Determine root group name
-	rootGroupName := opts.DatabaseName
+	rootGroupName := cfg.DatabaseName
 	if rootGroupName == "" {
 		// Use git repo name or default
 		rootGroupName = s.getGitRepoName()

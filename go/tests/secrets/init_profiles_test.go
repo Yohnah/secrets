@@ -11,7 +11,6 @@ import (
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/secrets"
-	"github.com/Yohnah/secrets/internal/secrets/initialize"
 	"github.com/Yohnah/secrets/internal/types"
 	"github.com/Yohnah/secrets/internal/validator"
 )
@@ -283,7 +282,7 @@ outputs: {}`
 	}
 
 	validatorMgr := validator.NewManager()
-	configMgr := config.NewManager(globalFlags, validatorMgr)
+	configMgr := config.NewManager(globalFlags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	outputMgr := output.NewManager()
@@ -291,11 +290,7 @@ outputs: {}`
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 
 	// Execute: Run init
-	err := secretsMgr.Init(initialize.Options{
-		ForceRecreate:    false,
-		NoCreateDatabase: false,
-		DatabaseName:     "TEST_DB",
-	})
+	err := secretsMgr.Init()
 
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
@@ -377,7 +372,7 @@ outputs: {}`
 	}
 
 	validatorMgr := validator.NewManager()
-	configMgr := config.NewManager(globalFlags, validatorMgr)
+	configMgr := config.NewManager(globalFlags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	outputMgr := output.NewManager()
@@ -385,11 +380,7 @@ outputs: {}`
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 
 	// Execute: Run init
-	err := secretsMgr.Init(initialize.Options{
-		ForceRecreate:    false,
-		NoCreateDatabase: false,
-		DatabaseName:     "TEST_DB",
-	})
+	err := secretsMgr.Init()
 
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
@@ -494,7 +485,7 @@ outputs: {}`
 	}
 
 	validatorMgr := validator.NewManager()
-	configMgr := config.NewManager(globalFlags, validatorMgr)
+	configMgr := config.NewManager(globalFlags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	outputMgr := output.NewManager()
@@ -502,11 +493,7 @@ outputs: {}`
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 
 	// Execute: Run init
-	err := secretsMgr.Init(initialize.Options{
-		ForceRecreate:    false,
-		NoCreateDatabase: false,
-		DatabaseName:     "TEST_DB",
-	})
+	err := secretsMgr.Init()
 
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
@@ -595,7 +582,7 @@ outputs: {}
 		IgnoreConfigFile: true,
 	}
 	validatorMgr := validator.NewManager()
-	configMgr := config.NewManager(globalFlags, validatorMgr)
+	configMgr := config.NewManager(globalFlags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	outputMgr := output.NewManager()
@@ -604,8 +591,7 @@ outputs: {}
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 
 	// Execute init
-	opts := initialize.Options{}
-	err := secretsMgr.Init(opts)
+	err := secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -745,7 +731,7 @@ outputs: {}
 		IgnoreConfigFile: true,
 	}
 	validatorMgr := validator.NewManager()
-	configMgr := config.NewManager(globalFlags, validatorMgr)
+	configMgr := config.NewManager(globalFlags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	outputMgr := output.NewManager()
@@ -754,16 +740,15 @@ outputs: {}
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 
 	// Execute init twice
-	opts := initialize.Options{}
 
 	// First init
-	err := secretsMgr.Init(opts)
+	err := secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("First init failed: %v", err)
 	}
 
 	// Second init (should be idempotent)
-	err = secretsMgr.Init(opts)
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Second init failed (idempotency issue): %v", err)
 	}
@@ -847,7 +832,7 @@ outputs: {}
 		IgnoreConfigFile: true,
 	}
 	validatorMgr := validator.NewManager()
-	configMgr := config.NewManager(globalFlags, validatorMgr)
+	configMgr := config.NewManager(globalFlags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	outputMgr := output.NewManager()
@@ -856,8 +841,7 @@ outputs: {}
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 
 	// Execute init - this will call createEntries internally
-	opts := initialize.Options{}
-	err := secretsMgr.Init(opts)
+	err := secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -918,7 +902,7 @@ outputs: {}
 	}
 
 	// Test idempotency - run init again
-	err = secretsMgr.Init(opts)
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init idempotency failed: %v", err)
 	}

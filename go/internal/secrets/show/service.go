@@ -11,8 +11,8 @@ import (
 
 // Service defines the interface for show operations
 type Service interface {
-	Status(format string) error
-	Template(minimal bool) error
+	Status() error
+	Template() error
 }
 
 type service struct {

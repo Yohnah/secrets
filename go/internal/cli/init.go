@@ -3,7 +3,7 @@ package cli
 import (
 	"os"
 
-	"github.com/Yohnah/secrets/internal/secrets/initialize"
+	"github.com/Yohnah/secrets/internal/types"
 	"github.com/spf13/cobra"
 )
 
@@ -18,18 +18,19 @@ var initCmd = &cobra.Command{
 	Short: "Initialize a new KeePass database",
 	Long:  `Initialize a new KeePass database with the required structure for secrets management.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Create manager context with standard setup
-		managers := NewManagerContext()
-
-		// Execute business logic (delegate all decisions to CORE)
-		// Pass init flags to SecretsManager
-		opts := initialize.Options{
+		// CliMgr captures ALL command-specific flags and feeds them to ConfigMgr
+		commandFlags := &types.CommandFlags{
 			ForceRecreate:    flagForceRecreate,
 			NoCreateDatabase: flagNoCreateDatabase,
 			DatabaseName:     flagDatabaseName,
 		}
 
-		if err := managers.Secrets.Init(opts); err != nil {
+		// Create manager context with captured flags
+		managers := NewManagerContext(commandFlags)
+
+		// Execute business logic (delegate all decisions to CORE)
+		// SecretsManager will pull processed config from ConfigMgr
+		if err := managers.Secrets.Init(); err != nil {
 			managers.Logger.Error(err.Error())
 			os.Exit(1)
 		}

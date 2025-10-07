@@ -14,9 +14,9 @@ import (
 // Manager defines the interface for secrets business logic
 // This is the facade that coordinates between subdominios
 type Manager interface {
-	Init(opts initialize.Options) error
-	Status(format string) error
-	ShowTemplate(minimal bool) error
+	Init() error
+	Status() error
+	ShowTemplate() error
 }
 
 type manager struct {
@@ -34,16 +34,19 @@ func NewManager(cfg config.Manager, log logger.Manager, prm prompt.Manager, kp k
 }
 
 // Init delegates to the initialization service
-func (m *manager) Init(opts initialize.Options) error {
-	return m.initService.Init(opts)
+// The service will pull configuration from ConfigMgr
+func (m *manager) Init() error {
+	return m.initService.Init()
 }
 
 // Status delegates to the show service
-func (m *manager) Status(format string) error {
-	return m.showService.Status(format)
+// The service will pull configuration from ConfigMgr
+func (m *manager) Status() error {
+	return m.showService.Status()
 }
 
 // ShowTemplate delegates to the show service
-func (m *manager) ShowTemplate(minimal bool) error {
-	return m.showService.Template(minimal)
+// The service will pull configuration from ConfigMgr
+func (m *manager) ShowTemplate() error {
+	return m.showService.Template()
 }
