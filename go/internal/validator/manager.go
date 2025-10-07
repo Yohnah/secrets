@@ -154,13 +154,13 @@ func validatePathFormat(path string) error {
 // ValidateUniqueProfileInRoot checks if there are duplicate profiles with the given name in ROOT
 // Returns error immediately if duplicates found (fail-fast)
 func (m *manager) ValidateUniqueProfileInRoot(profiles []string, profileName string) error {
-	// Normalize profile name for comparison
-	normalizedTarget := normalizeString(profileName)
+	// Normalize profile name for comparison (case-insensitive)
+	normalizedTarget := strings.ToLower(normalizeString(profileName))
 
 	// Count occurrences
 	count := 0
 	for _, p := range profiles {
-		if normalizeString(p) == normalizedTarget {
+		if strings.ToLower(normalizeString(p)) == normalizedTarget {
 			count++
 		}
 	}
@@ -175,13 +175,13 @@ func (m *manager) ValidateUniqueProfileInRoot(profiles []string, profileName str
 // ValidateUniqueEntryInPath checks if there are duplicate entries with the given name at the path
 // Returns error immediately if duplicates found (fail-fast)
 func (m *manager) ValidateUniqueEntryInPath(entries []string, entryName string, fullPath string) error {
-	// Normalize entry name for comparison
-	normalizedTarget := normalizeString(entryName)
+	// Normalize entry name for comparison (case-insensitive)
+	normalizedTarget := strings.ToLower(normalizeString(entryName))
 
 	// Count occurrences
 	count := 0
 	for _, e := range entries {
-		if normalizeString(e) == normalizedTarget {
+		if strings.ToLower(normalizeString(e)) == normalizedTarget {
 			count++
 		}
 	}
@@ -213,19 +213,19 @@ func (m *manager) ValidateUniqueFieldsInEntry(fields []string, entryPath string)
 	customSeen := make(map[string]string)   // normalized -> original
 
 	for _, field := range fields {
-		fieldLower := strings.ToLower(field)
+		// Normalize first (trim spaces), then lowercase for standard field check
+		normalized := normalizeString(field)
+		fieldLower := strings.ToLower(normalized)
 
-		// Check if it's a standard field (case-insensitive)
+		// Check if it's a standard field (case-insensitive after normalization)
 		if standardFields[fieldLower] {
-			normalized := normalizeString(fieldLower)
-			if original, exists := standardSeen[normalized]; exists {
+			if original, exists := standardSeen[fieldLower]; exists {
 				return fmt.Errorf("database corruption: found duplicate standard field '%s' (case-insensitive, also found as '%s') in entry at '%s'. Each field must be unique. Please fix manually using a KeePass client",
 					field, original, entryPath)
 			}
-			standardSeen[normalized] = field
+			standardSeen[fieldLower] = field
 		} else {
-			// Custom field (case-sensitive)
-			normalized := normalizeString(field)
+			// Custom field (case-sensitive, but still normalized for spaces)
 			if _, exists := customSeen[normalized]; exists {
 				return fmt.Errorf("database corruption: found duplicate custom field '%s' (case-sensitive) in entry at '%s'. Each field must be unique. Please fix manually using a KeePass client",
 					field, entryPath)

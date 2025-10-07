@@ -129,6 +129,7 @@ func (s *service) Status(format string) error {
 	var secretsYMLExists bool
 	var secretsYMLInfo os.FileInfo
 	var secretsProfileCount int
+	var profileNames []string
 
 	if secretsYMLPath != "" {
 		// Make path absolute for display
@@ -140,10 +141,14 @@ func (s *service) Status(format string) error {
 			secretsYMLExists = true
 			secretsYMLInfo = info
 
-			// Read and parse to count profiles
+			// Read and parse ONCE to get all needed information
 			config, _ := s.validator.ReadAndValidateSecretsYML(secretsYMLPath)
 			if config != nil {
 				secretsProfileCount = len(config.Profiles)
+				// Extract profile names for later use
+				for _, profile := range config.Profiles {
+					profileNames = append(profileNames, profile.Metadata.Profile)
+				}
 			}
 		}
 	}
@@ -198,22 +203,9 @@ func (s *service) Status(format string) error {
 
 		// Count profiles from secrets.yml that exist in database
 		profilesInDatabase := 0
-		if db != nil && len(db.Content.Root.Groups) > 0 && secretsYMLExists {
-			// Extract profile names from secrets.yml
-			var profileNames []string
-			if secretsYMLPath != "" {
-				config, _ := s.validator.ReadAndValidateSecretsYML(secretsYMLPath)
-				if config != nil {
-					for _, profile := range config.Profiles {
-						profileNames = append(profileNames, profile.Metadata.Profile)
-					}
-				}
-			}
-
-			if len(profileNames) > 0 {
-				profilesInDatabase = countProfilesFromYAMLInDatabase(db.Content.Root.Groups[0].Groups, profileNames)
-				s.logger.Debug(fmt.Sprintf("Database has %d profiles from secrets.yml", profilesInDatabase))
-			}
+		if db != nil && len(db.Content.Root.Groups) > 0 && len(profileNames) > 0 {
+			profilesInDatabase = countProfilesFromYAMLInDatabase(db.Content.Root.Groups[0].Groups, profileNames)
+			s.logger.Debug(fmt.Sprintf("Database has %d profiles from secrets.yml", profilesInDatabase))
 		}
 		dbData["profiles_in_database"] = profilesInDatabase
 
