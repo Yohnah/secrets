@@ -541,6 +541,11 @@ func (s *service) loadProfilesFromSecretsYML(dbPath, keyfilePath, password, targ
 			return fmt.Errorf("failed to create profile '%s': %w", profileName, err)
 		}
 
+		// Create environments for this profile
+		if err := s.createEnvironments(dbPath, keyfilePath, password, profileName, profile); err != nil {
+			return fmt.Errorf("failed to create environments for profile '%s': %w", profileName, err)
+		}
+
 		s.logger.Info(fmt.Sprintf("✓ Profile '%s' created", profileName))
 		profilesCreated++
 	}
@@ -551,6 +556,35 @@ func (s *service) loadProfilesFromSecretsYML(dbPath, keyfilePath, password, targ
 	}
 	if profilesSkipped > 0 {
 		s.logger.Info(fmt.Sprintf("%d profile(s) already existed (skipped)", profilesSkipped))
+	}
+
+	return nil
+}
+
+// createEnvironments creates environment groups under the HEAD group of a profile
+func (s *service) createEnvironments(dbPath, keyfilePath, password, profileName string, profile validator.Profile) error {
+	// Check if profile has environments
+	if len(profile.Environments) == 0 {
+		s.logger.Debug(fmt.Sprintf("Profile '%s' has no environments to create", profileName))
+		return nil
+	}
+
+	s.logger.Debug(fmt.Sprintf("Creating %d environment(s) for profile '%s'...", len(profile.Environments), profileName))
+
+	// Create each environment
+	environmentsCreated := 0
+	for envName := range profile.Environments {
+		// Create environment group under HEAD
+		if err := s.keepass.CreateGroup(dbPath, keyfilePath, password, profileName, "HEAD", envName); err != nil {
+			return fmt.Errorf("failed to create environment '%s': %w", envName, err)
+		}
+
+		s.logger.Debug(fmt.Sprintf("  ✓ Environment '%s' created", envName))
+		environmentsCreated++
+	}
+
+	if environmentsCreated > 0 {
+		s.logger.Debug(fmt.Sprintf("  ✓ %d environment(s) created", environmentsCreated))
 	}
 
 	return nil

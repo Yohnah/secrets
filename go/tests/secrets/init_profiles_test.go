@@ -543,3 +543,253 @@ outputs: {}`
 
 	t.Logf("✓ Profile loaded from current directory: %s", secretsYMLPath)
 }
+
+// TestInitWithEnvironments tests that environments are created within profiles
+func TestInitWithEnvironments(t *testing.T) {
+	setupTestPassword(t)
+
+	// Create test directory
+	testDir := t.TempDir()
+
+	// Create secrets.yml with environments
+	secretsYML := `metadata:
+  profile: "test-profile-with-envs"
+  default_environment: "production"
+environments:
+  production:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Production/DB"
+      key: "Password"
+  staging:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Staging/DB"
+      key: "Password"
+  development:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Development/DB"
+      key: "Password"
+outputs: {}
+`
+	secretsYMLPath := filepath.Join(testDir, "secrets.yml")
+	if err := os.WriteFile(secretsYMLPath, []byte(secretsYML), 0644); err != nil {
+		t.Fatalf("Failed to write secrets.yml: %v", err)
+	}
+
+	// Initialize git repository
+	if err := os.MkdirAll(filepath.Join(testDir, ".git"), 0755); err != nil {
+		t.Fatalf("Failed to create .git directory: %v", err)
+	}
+
+	// Change to test directory
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(testDir)
+
+	// Create managers
+	globalFlags := &types.GlobalFlags{
+		Verbose:          false,
+		Force:            true,
+		IgnoreConfigFile: true,
+	}
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(globalFlags, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	outputMgr := output.NewManager()
+	keepassMgr := keepass.NewManager()
+
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
+
+	// Execute init
+	opts := initialize.Options{}
+	err := secretsMgr.Init(opts)
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Verify database structure
+	dbPath := filepath.Join(testDir, ".secrets_yohnah", "secrets.kdbx")
+	keyfilePath := filepath.Join(testDir, ".secrets_yohnah", "secrets.keyfile")
+	password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
+
+	db, err := keepassMgr.OpenDatabase(dbPath, keyfilePath, password)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+
+	// Navigate to profile
+	rootGroup := &db.Content.Root.Groups[0]
+	var profileGroup *struct {
+		Name   string
+		Groups []struct {
+			Name   string
+			Groups []struct{ Name string }
+		}
+	}
+
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == "test-profile-with-envs" {
+			profileGroup = &struct {
+				Name   string
+				Groups []struct {
+					Name   string
+					Groups []struct{ Name string }
+				}
+			}{
+				Name: rootGroup.Groups[i].Name,
+				Groups: make([]struct {
+					Name   string
+					Groups []struct{ Name string }
+				}, len(rootGroup.Groups[i].Groups)),
+			}
+
+			for j := range rootGroup.Groups[i].Groups {
+				profileGroup.Groups[j].Name = rootGroup.Groups[i].Groups[j].Name
+				profileGroup.Groups[j].Groups = make([]struct{ Name string }, len(rootGroup.Groups[i].Groups[j].Groups))
+				for k := range rootGroup.Groups[i].Groups[j].Groups {
+					profileGroup.Groups[j].Groups[k].Name = rootGroup.Groups[i].Groups[j].Groups[k].Name
+				}
+			}
+			break
+		}
+	}
+
+	if profileGroup == nil {
+		t.Fatal("Profile 'test-profile-with-envs' not found")
+	}
+
+	// Find HEAD group
+	var headGroup *struct {
+		Name   string
+		Groups []struct{ Name string }
+	}
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == "HEAD" {
+			headGroup = &profileGroup.Groups[i]
+			break
+		}
+	}
+
+	if headGroup == nil {
+		t.Fatal("HEAD group not found in profile")
+	}
+
+	// Verify environments exist
+	expectedEnvs := []string{"production", "staging", "development"}
+	foundEnvs := make(map[string]bool)
+
+	for _, group := range headGroup.Groups {
+		foundEnvs[group.Name] = true
+	}
+
+	for _, expectedEnv := range expectedEnvs {
+		if !foundEnvs[expectedEnv] {
+			t.Errorf("Environment '%s' not found in HEAD group", expectedEnv)
+		}
+	}
+
+	// Verify no extra environments
+	if len(foundEnvs) != len(expectedEnvs) {
+		t.Errorf("Expected %d environments, found %d", len(expectedEnvs), len(foundEnvs))
+	}
+
+	t.Logf("✓ All %d environments created successfully", len(expectedEnvs))
+}
+
+// TestInitWithMultipleEnvironments tests idempotency of environment creation
+func TestInitEnvironmentsIdempotent(t *testing.T) {
+	setupTestPassword(t)
+
+	// Create test directory
+	testDir := t.TempDir()
+
+	// Create secrets.yml with environments
+	secretsYML := `metadata:
+  profile: "idempotent-profile"
+  default_environment: "production"
+environments:
+  production:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Production/DB"
+      key: "Password"
+  staging:
+    - name: "API_KEY"
+      type: "envvar"
+      entry: "/Staging/API"
+      key: "token"
+outputs: {}
+`
+	secretsYMLPath := filepath.Join(testDir, "secrets.yml")
+	if err := os.WriteFile(secretsYMLPath, []byte(secretsYML), 0644); err != nil {
+		t.Fatalf("Failed to write secrets.yml: %v", err)
+	}
+
+	// Initialize git repository
+	if err := os.MkdirAll(filepath.Join(testDir, ".git"), 0755); err != nil {
+		t.Fatalf("Failed to create .git directory: %v", err)
+	}
+
+	// Change to test directory
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(testDir)
+
+	// Create managers
+	globalFlags := &types.GlobalFlags{
+		Verbose:          false,
+		Force:            true,
+		IgnoreConfigFile: true,
+	}
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(globalFlags, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	outputMgr := output.NewManager()
+	keepassMgr := keepass.NewManager()
+
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
+
+	// Execute init twice
+	opts := initialize.Options{}
+
+	// First init
+	err := secretsMgr.Init(opts)
+	if err != nil {
+		t.Fatalf("First init failed: %v", err)
+	}
+
+	// Second init (should be idempotent)
+	err = secretsMgr.Init(opts)
+	if err != nil {
+		t.Fatalf("Second init failed (idempotency issue): %v", err)
+	}
+
+	// Verify database structure is still correct
+	dbPath := filepath.Join(testDir, ".secrets_yohnah", "secrets.kdbx")
+	keyfilePath := filepath.Join(testDir, ".secrets_yohnah", "secrets.keyfile")
+	password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
+
+	db, err := keepassMgr.OpenDatabase(dbPath, keyfilePath, password)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+
+	// Count profiles (should be exactly 1)
+	rootGroup := &db.Content.Root.Groups[0]
+	profileCount := 0
+	for _, group := range rootGroup.Groups {
+		if group.Name == "idempotent-profile" {
+			profileCount++
+		}
+	}
+
+	if profileCount != 1 {
+		t.Errorf("Expected 1 profile, found %d (idempotency failed)", profileCount)
+	}
+
+	t.Logf("✓ Idempotency verified: profile and environments not duplicated")
+}

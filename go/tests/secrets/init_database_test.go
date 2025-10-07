@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
 	"github.com/Yohnah/secrets/internal/validator"
 
 	"github.com/Yohnah/secrets/internal/config"
@@ -32,7 +33,6 @@ func TestInitCreatesDatabaseAndKeyfile(t *testing.T) {
 	}
 
 	validatorMgr := validator.NewManager()
-
 
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
@@ -150,7 +150,6 @@ func TestInitWithForceRecreate(t *testing.T) {
 
 	validatorMgr := validator.NewManager()
 
-
 	configMgr1 := config.NewManager(flags1, validatorMgr)
 	loggerMgr1 := logger.NewManager(false)
 	promptMgr1 := prompt.NewManager()
@@ -225,7 +224,6 @@ func TestInitFailsWithInconsistentFiles(t *testing.T) {
 
 	validatorMgr := validator.NewManager()
 
-
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
@@ -242,8 +240,6 @@ func TestInitFailsWithInconsistentFiles(t *testing.T) {
 	// Test 2: Only keyfile exists (no database)
 	keyfilePath := filepath.Join(secretsDir, "secrets.keyfile")
 	os.WriteFile(keyfilePath, []byte("dummy keyfile content"), 0600)
-
-
 
 	configMgr2 := config.NewManager(flags, validatorMgr)
 	loggerMgr2 := logger.NewManager(false)
@@ -317,7 +313,6 @@ func TestInitWithoutPasswordInNonInteractiveMode(t *testing.T) {
 	}
 
 	validatorMgr := validator.NewManager()
-
 
 	configMgr := config.NewManager(flags, validatorMgr)
 	loggerMgr := logger.NewManager(false)

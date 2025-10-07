@@ -16,6 +16,7 @@ type Manager interface {
 	GenerateKeyfile(keyfilePath string) error
 	CreateProfile(dbPath, keyfilePath, password, profileName string) error
 	ProfileExists(dbPath, keyfilePath, password, profileName string) (bool, error)
+	CreateGroup(dbPath, keyfilePath, password, profileName, parentGroupName, groupName string) error
 }
 
 // manager implements the Manager interface
@@ -212,6 +213,84 @@ func (m *manager) CreateProfile(dbPath, keyfilePath, password, profileName strin
 
 	// Add profile group to root group
 	rootGroup.Groups = append(rootGroup.Groups, profileGroup)
+
+	// Lock protected entries before saving
+	if err := db.LockProtectedEntries(); err != nil {
+		return fmt.Errorf("failed to lock protected entries: %w", err)
+	}
+
+	// Save database
+	file, err := os.Create(dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to open database file for writing: %w", err)
+	}
+	defer file.Close()
+
+	encoder := gokeepasslib.NewEncoder(file)
+	if err := encoder.Encode(db); err != nil {
+		return fmt.Errorf("failed to save database: %w", err)
+	}
+
+	return nil
+}
+
+// CreateGroup creates a new group under a parent group within a profile
+// Path: Profile > ParentGroup > NewGroup
+// Idempotent: if group already exists, returns nil without error
+func (m *manager) CreateGroup(dbPath, keyfilePath, password, profileName, parentGroupName, groupName string) error {
+	// Open database
+	db, err := m.OpenDatabase(dbPath, keyfilePath, password)
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Check if root group exists
+	if len(db.Content.Root.Groups) == 0 {
+		return fmt.Errorf("database has no root group")
+	}
+
+	rootGroup := &db.Content.Root.Groups[0]
+
+	// Find profile group
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+
+	if profileGroup == nil {
+		return fmt.Errorf("profile '%s' not found", profileName)
+	}
+
+	// Find parent group within profile
+	var parentGroup *gokeepasslib.Group
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == parentGroupName {
+			parentGroup = &profileGroup.Groups[i]
+			break
+		}
+	}
+
+	if parentGroup == nil {
+		return fmt.Errorf("parent group '%s' not found in profile '%s'", parentGroupName, profileName)
+	}
+
+	// Check if group already exists (idempotent operation)
+	for _, group := range parentGroup.Groups {
+		if group.Name == groupName {
+			// Group already exists, skip creation (idempotent)
+			return nil
+		}
+	}
+
+	// Create new group
+	newGroup := gokeepasslib.NewGroup()
+	newGroup.Name = groupName
+
+	// Add group to parent
+	parentGroup.Groups = append(parentGroup.Groups, newGroup)
 
 	// Lock protected entries before saving
 	if err := db.LockProtectedEntries(); err != nil {

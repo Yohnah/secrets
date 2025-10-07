@@ -51,7 +51,6 @@ func (s *service) Status(format string) error {
 	// Try to open database to verify accessibility
 	var accessible bool
 	var accessError string
-	var entriesCount int
 	var db *gokeepasslib.Database // Keep reference for validation later
 	if dbExists && keyfileExists {
 		password := cfg.Password
@@ -85,9 +84,6 @@ func (s *service) Status(format string) error {
 				} else {
 					databaseName = defaultDatabaseName // Fallback if no groups
 				}
-				// Count entries
-				entriesCount = countEntries(db.Content.Root.Groups)
-				s.logger.Debug(fmt.Sprintf("Database has %d entries", entriesCount))
 			}
 		}
 	} else {
@@ -139,7 +135,8 @@ func (s *service) Status(format string) error {
 				{"key": "modified", "label": "Modified", "format": "simple", "condition": "exists"},
 				{"key": "accessible", "label": "Accessible", "format": "accessible_status", "condition": "exists"},
 				{"key": "database_name", "label": "Database Name", "format": "simple", "condition": "accessible"},
-				{"key": "entries_count", "label": "Entries Count", "format": "simple", "condition": "accessible"},
+				{"key": "profiles_in_secrets_file", "label": "Profiles in secrets.yml", "format": "simple", "condition": "accessible"},
+				{"key": "profiles_in_database", "label": "Profiles in database", "format": "simple", "condition": "accessible"},
 			},
 			"not_found_message": "Run 'secrets init' to create the database.",
 		},
@@ -152,7 +149,32 @@ func (s *service) Status(format string) error {
 		dbData["size_human"] = formatFileSize(dbInfo.Size())
 		dbData["modified"] = dbInfo.ModTime().Format("2006-01-02 15:04:05")
 		dbData["accessible"] = accessible
-		dbData["entries_count"] = entriesCount
+
+		// Count profiles in secrets.yml (if exists)
+		secretsYMLPath := s.config.GetSecretsFilePath()
+		profilesInSecretsFile := 0
+		var profileNames []string
+		if secretsYMLPath != "" {
+			config, _ := s.validator.ReadAndValidateSecretsYML(secretsYMLPath)
+			if config != nil {
+				profilesInSecretsFile = len(config.Profiles)
+				// Extract profile names for comparison with DB
+				for _, profile := range config.Profiles {
+					profileNames = append(profileNames, profile.Metadata.Profile)
+				}
+			}
+			s.logger.Debug(fmt.Sprintf("secrets.yml has %d profiles", profilesInSecretsFile))
+		}
+		dbData["profiles_in_secrets_file"] = profilesInSecretsFile
+
+		// Count profiles from secrets.yml that exist in database
+		profilesInDatabase := 0
+		if db != nil && len(db.Content.Root.Groups) > 0 && len(profileNames) > 0 {
+			profilesInDatabase = countProfilesFromYAMLInDatabase(db.Content.Root.Groups[0].Groups, profileNames)
+			s.logger.Debug(fmt.Sprintf("Database has %d profiles from secrets.yml", profilesInDatabase))
+		}
+		dbData["profiles_in_database"] = profilesInDatabase
+
 		dbData["accessible_message"] = "password verified"
 		if !accessible {
 			dbData["accessible_message"] = accessError
@@ -308,12 +330,77 @@ func formatFileSize(bytes int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-// countEntries recursively counts all entries in the given groups
-func countEntries(groups []gokeepasslib.Group) int {
+// countValidProfiles counts groups that are valid profiles (have HEAD -> metadata structure)
+// A valid profile must have:
+// - A subgroup named "HEAD"
+// - Inside HEAD, an entry named "metadata"
+func countValidProfiles(groups []gokeepasslib.Group) int {
 	count := 0
 	for _, group := range groups {
-		count += len(group.Entries)
-		count += countEntries(group.Groups)
+		// Check if this group has a HEAD subgroup
+		hasHEAD := false
+		for _, subgroup := range group.Groups {
+			if subgroup.Name == "HEAD" {
+				// Check if HEAD has a metadata entry
+				for _, entry := range subgroup.Entries {
+					// Get entry title
+					title := ""
+					for _, value := range entry.Values {
+						if value.Key == "Title" {
+							title = value.Value.Content
+							break
+						}
+					}
+					if title == "metadata" {
+						hasHEAD = true
+						break
+					}
+				}
+				break
+			}
+		}
+		if hasHEAD {
+			count++
+		}
+	}
+	return count
+}
+
+// countProfilesFromYAMLInDatabase counts how many profiles from secrets.yml exist in the database
+// Only profiles defined in secrets.yml are counted, even if the database has other groups
+func countProfilesFromYAMLInDatabase(groups []gokeepasslib.Group, profileNames []string) int {
+	count := 0
+	for _, profileName := range profileNames {
+		// Search for this profile name in database groups
+		for _, group := range groups {
+			if group.Name == profileName {
+				// Verify it has valid profile structure (HEAD -> metadata)
+				hasValidStructure := false
+				for _, subgroup := range group.Groups {
+					if subgroup.Name == "HEAD" {
+						// Check if HEAD has a metadata entry
+						for _, entry := range subgroup.Entries {
+							title := ""
+							for _, value := range entry.Values {
+								if value.Key == "Title" {
+									title = value.Value.Content
+									break
+								}
+							}
+							if title == "metadata" {
+								hasValidStructure = true
+								break
+							}
+						}
+						break
+					}
+				}
+				if hasValidStructure {
+					count++
+				}
+				break // Found the profile, no need to check other groups
+			}
+		}
 	}
 	return count
 }
