@@ -20,7 +20,7 @@ var (
 // rootCmd represents the base command
 var rootCmd = &cobra.Command{
 	Use:   "secrets",
-	Short: "KeePass secrets manager with snapshots support",
+	Short: "KeePass secrets manager",
 	Long: `Secrets is a CLI tool for managing secrets stored in a KeePass database.
 
 Examples:
@@ -30,14 +30,8 @@ Examples:
   # Initialize a new database
   secrets init
 
-  # Create a new snapshot
-  secrets snapshots new v1.0.0
-
-  # List all snapshots
-  secrets snapshots list
-
-  # Use custom database and keyfile
-  secrets --database=/path/db.kdbx --keyfile=/path/key.file snapshots list`,
+  # Show template
+  secrets show template`,
 	Version: "0.1.0",
 }
 

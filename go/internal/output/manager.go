@@ -116,6 +116,14 @@ func (m *manager) outputTable(data interface{}) error {
 	// Extract top-level display metadata (never printed)
 	displayMeta := m.getDisplayMetadata(statusData)
 
+	// Check for special format handlers
+	if format, ok := displayMeta["format"].(string); ok {
+		switch format {
+		case "snapshots_list":
+			return m.renderSnapshotsList(statusData, displayMeta)
+		}
+	}
+
 	// Print title if present
 	if title, ok := displayMeta["title"].(string); ok {
 		fmt.Println()
@@ -344,4 +352,145 @@ func (m *manager) repeatString(s string, count int) string {
 		result += s
 	}
 	return result
+}
+
+// renderSnapshotsList renders snapshots in a compact list format with visual indicators
+// Format (Propuesta 3: Compacta con Indicadores Visuales):
+//
+// Snapshots
+// =========
+//
+// Profile: name (X snapshot/s)
+//
+//	✓ HEAD      5h (mutable)
+//	  v1        2d
+//	  v2        5d
+func (m *manager) renderSnapshotsList(data map[string]interface{}, displayMeta map[string]interface{}) error {
+	// Print title if present
+	if title, ok := displayMeta["title"].(string); ok {
+		fmt.Println()
+		fmt.Println(title)
+		fmt.Println(m.repeatString("=", len(title)))
+		fmt.Println()
+	}
+
+	// Get profiles data
+	profilesRaw := data["profiles"]
+	if profilesRaw == nil {
+		fmt.Println("No snapshots found")
+		return nil
+	}
+
+	// Try to convert to []interface{}
+	profilesData, ok := profilesRaw.([]interface{})
+	if !ok {
+		// Try to convert to []map[string]interface{}
+		if profilesSlice, ok2 := profilesRaw.([]map[string]interface{}); ok2 {
+			// Convert to []interface{}
+			profilesData = make([]interface{}, len(profilesSlice))
+			for i, p := range profilesSlice {
+				profilesData[i] = p
+			}
+		} else {
+			// Unknown type, fallback to JSON
+			return m.outputJSON(data)
+		}
+	}
+
+	if len(profilesData) == 0 {
+		fmt.Println("No snapshots found")
+		return nil
+	}
+
+	// Render each profile
+	for _, profileItem := range profilesData {
+		profileMap, ok := profileItem.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Extract profile info
+		profileName, _ := profileMap["name"].(string)
+		total := 0
+		if t, ok := profileMap["total"].(int); ok {
+			total = t
+		}
+
+		// Profile header
+		pluralSuffix := ""
+		if total != 1 {
+			pluralSuffix = "s"
+		}
+		fmt.Printf("Profile: %s (%d snapshot%s)\n", profileName, total, pluralSuffix)
+
+		// Get snapshots array
+		snapshotsRaw := profileMap["snapshots"]
+		if snapshotsRaw == nil {
+			fmt.Println("  No snapshots")
+			fmt.Println()
+			continue
+		}
+
+		// Try to convert to []interface{}
+		snapshotsData, ok := snapshotsRaw.([]interface{})
+		if !ok {
+			// Try to convert to []map[string]interface{}
+			if snapshotsSlice, ok2 := snapshotsRaw.([]map[string]interface{}); ok2 {
+				// Convert to []interface{}
+				snapshotsData = make([]interface{}, len(snapshotsSlice))
+				for i, s := range snapshotsSlice {
+					snapshotsData[i] = s
+				}
+			} else {
+				// Unknown type, skip
+				fmt.Println("  No snapshots")
+				fmt.Println()
+				continue
+			}
+		}
+
+		if len(snapshotsData) == 0 {
+			fmt.Println("  No snapshots")
+			fmt.Println()
+			continue
+		}
+
+		// Render each snapshot
+		for _, snapshotItem := range snapshotsData {
+			snapshotMap, ok := snapshotItem.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			version, _ := snapshotMap["version"].(string)
+			age, _ := snapshotMap["age"].(string)
+			isActive := false
+			if ia, ok := snapshotMap["is_active"].(bool); ok {
+				isActive = ia
+			}
+			isMutable := false
+			if im, ok := snapshotMap["is_mutable"].(bool); ok {
+				isMutable = im
+			}
+
+			// Indicator (✓ for active/HEAD, space otherwise)
+			indicator := " "
+			if isActive {
+				indicator = "✓"
+			}
+
+			// Mutable marker
+			mutableStr := ""
+			if isMutable {
+				mutableStr = " (mutable)"
+			}
+
+			// Print snapshot line
+			fmt.Printf("  %s %-8s  %s%s\n", indicator, version, age, mutableStr)
+		}
+
+		fmt.Println()
+	}
+
+	return nil
 }

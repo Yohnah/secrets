@@ -8,6 +8,7 @@ import (
 	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/secrets/initialize"
 	"github.com/Yohnah/secrets/internal/secrets/show"
+	"github.com/Yohnah/secrets/internal/secrets/snapshots"
 	"github.com/Yohnah/secrets/internal/validator"
 )
 
@@ -17,19 +18,22 @@ type Manager interface {
 	Init() error
 	Status() error
 	ShowTemplate() error
+	SnapshotsList(profileName string) error
 }
 
 type manager struct {
-	initService initialize.Service
-	showService show.Service
+	initService      initialize.Service
+	showService      show.Service
+	snapshotsService snapshots.Service
 }
 
 // NewManager creates a new SecretsManager instance (Facade Pattern)
 // The manager delegates operations to specialized services (subdominios)
 func NewManager(cfg config.Manager, log logger.Manager, prm prompt.Manager, kp keepass.Manager, out output.Manager, val validator.ValidatorManager) Manager {
 	return &manager{
-		initService: initialize.NewService(cfg, log, prm, kp, val),
-		showService: show.NewService(cfg, log, prm, kp, out, val),
+		initService:      initialize.NewService(cfg, log, prm, kp, val),
+		showService:      show.NewService(cfg, log, prm, kp, out, val),
+		snapshotsService: snapshots.NewService(cfg, log, prm, kp, out, val),
 	}
 }
 
@@ -49,4 +53,9 @@ func (m *manager) Status() error {
 // The service will pull configuration from ConfigMgr
 func (m *manager) ShowTemplate() error {
 	return m.showService.Template()
+}
+
+// SnapshotsList delegates to the snapshots service
+func (m *manager) SnapshotsList(profileName string) error {
+	return m.snapshotsService.List(profileName)
 }
