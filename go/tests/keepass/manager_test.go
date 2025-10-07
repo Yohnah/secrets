@@ -277,3 +277,104 @@ func TestGetEntriesByEnvironment(t *testing.T) {
 		t.Errorf("Expected %d entries, got %d", len(expectedEntries), len(result))
 	}
 }
+
+func TestPathTraversalPrevention(t *testing.T) {
+	// Create temporary directory for test files
+	tempDir, err := os.MkdirTemp("", "keepass_path_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Setup test files
+	dbPath := filepath.Join(tempDir, "test.kdbx")
+	keyfilePath := filepath.Join(tempDir, "test.key")
+	password := "testpassword"
+
+	// Create KeePass manager
+	kpMgr := keepass.NewManager()
+
+	// Generate keyfile first
+	err = kpMgr.GenerateKeyfile(keyfilePath)
+	if err != nil {
+		t.Fatalf("Failed to generate keyfile: %v", err)
+	}
+
+	// Create database
+	err = kpMgr.CreateDatabase(dbPath, keyfilePath, password, "TestDB")
+	if err != nil {
+		t.Fatalf("Failed to create database: %v", err)
+	}
+
+	// Test path traversal attempts - these should all fail
+	traversalPaths := []string{
+		"../../../etc/passwd",
+		"..\\..\\..\\windows\\system32",
+		"test/../../../root",
+		"valid/../invalid",
+	}
+
+	for _, badPath := range traversalPaths {
+		t.Run("Traversal_"+badPath, func(t *testing.T) {
+			// Try to create database with traversal path
+			err := kpMgr.CreateDatabase(badPath, keyfilePath, password, "TestDB")
+			if err == nil {
+				t.Errorf("Expected error for path traversal attempt: %s", badPath)
+			}
+		})
+	}
+}
+
+func TestParameterValidation(t *testing.T) {
+	// Create temporary directory for test files
+	tempDir, err := os.MkdirTemp("", "keepass_validation_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Setup test files
+	dbPath := filepath.Join(tempDir, "test.kdbx")
+	keyfilePath := filepath.Join(tempDir, "test.key")
+	password := "testpassword"
+
+	// Create KeePass manager
+	kpMgr := keepass.NewManager()
+
+	// Test empty parameters for GenerateKeyfile
+	t.Run("GenerateKeyfile_EmptyPath", func(t *testing.T) {
+		err := kpMgr.GenerateKeyfile("")
+		if err == nil {
+			t.Error("Expected error for empty keyfile path")
+		}
+	})
+
+	// Test empty parameters for CreateDatabase
+	t.Run("CreateDatabase_EmptyDbPath", func(t *testing.T) {
+		err := kpMgr.CreateDatabase("", keyfilePath, password, "TestDB")
+		if err == nil {
+			t.Error("Expected error for empty database path")
+		}
+	})
+
+	t.Run("CreateDatabase_EmptyKeyfilePath", func(t *testing.T) {
+		err := kpMgr.CreateDatabase(dbPath, "", password, "TestDB")
+		if err == nil {
+			t.Error("Expected error for empty keyfile path")
+		}
+	})
+
+	t.Run("CreateDatabase_EmptyPassword", func(t *testing.T) {
+		err := kpMgr.CreateDatabase(dbPath, keyfilePath, "", "TestDB")
+		if err == nil {
+			t.Error("Expected error for empty password")
+		}
+	})
+
+	t.Run("CreateDatabase_EmptyRootGroup", func(t *testing.T) {
+		err := kpMgr.CreateDatabase(dbPath, keyfilePath, password, "")
+		if err == nil {
+			t.Error("Expected error for empty root group name")
+		}
+	})
+}

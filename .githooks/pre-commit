@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Pre-commit hook for secrets project
+# Runs tests and basic checks before allowing commits
+
+set -e
+
+echo "Running pre-commit checks..."
+
+# Change to the go directory
+cd go
+
+echo "Running tests..."
+go test ./...
+
+echo "Running govulncheck..."
+if command -v govulncheck &> /dev/null; then
+    govulncheck ./...
+else
+    echo "Warning: govulncheck not found, skipping vulnerability check"
+fi
+
+echo "Running go vet..."
+go vet ./...
+
+echo "All checks passed!"
+exit 0

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -31,18 +32,51 @@ func NewManager() Manager {
 	return &manager{}
 }
 
+// sanitizePath cleans and validates a file path to prevent path traversal attacks
+func sanitizePath(path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("path cannot be empty")
+	}
+
+	// Check for path traversal attempts BEFORE cleaning
+	if strings.Contains(path, "..") {
+		return "", fmt.Errorf("path contains invalid '..' components")
+	}
+
+	// Clean the path to resolve any . or .. components
+	cleanPath := filepath.Clean(path)
+
+	// Additional check: ensure the path doesn't start with .. after cleaning
+	if strings.HasPrefix(cleanPath, "..") {
+		return "", fmt.Errorf("path traversal detected")
+	}
+
+	return cleanPath, nil
+}
+
 // GenerateKeyfile generates a cryptographically secure keyfile
 // Uses 64 bytes (512 bits) for military-grade security
 func (m *manager) GenerateKeyfile(keyfilePath string) error {
+	// Validate input parameters
+	if keyfilePath == "" {
+		return fmt.Errorf("keyfile path cannot be empty")
+	}
+
+	// Sanitize path to prevent traversal attacks
+	sanitizedPath, err := sanitizePath(keyfilePath)
+	if err != nil {
+		return fmt.Errorf("invalid keyfile path: %w", err)
+	}
+
 	// Generate 64 random bytes using crypto/rand (CSPRNG)
 	keyData := make([]byte, 64)
-	_, err := rand.Read(keyData)
+	_, err = rand.Read(keyData)
 	if err != nil {
 		return fmt.Errorf("failed to generate random key data: %w", err)
 	}
 
 	// Write keyfile to disk
-	err = os.WriteFile(keyfilePath, keyData, 0600)
+	err = os.WriteFile(sanitizedPath, keyData, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to write keyfile: %w", err)
 	}
@@ -53,13 +87,37 @@ func (m *manager) GenerateKeyfile(keyfilePath string) error {
 // CreateDatabase creates a new KeePass database in KDBX4 format
 // Protected with both password and keyfile
 func (m *manager) CreateDatabase(dbPath, keyfilePath, password, rootGroupName string) error {
+	// Validate input parameters
+	if dbPath == "" {
+		return fmt.Errorf("database path cannot be empty")
+	}
+	if keyfilePath == "" {
+		return fmt.Errorf("keyfile path cannot be empty")
+	}
+	if password == "" {
+		return fmt.Errorf("password cannot be empty")
+	}
+	if rootGroupName == "" {
+		return fmt.Errorf("root group name cannot be empty")
+	}
+
+	// Sanitize paths to prevent traversal attacks
+	sanitizedDbPath, err := sanitizePath(dbPath)
+	if err != nil {
+		return fmt.Errorf("invalid database path: %w", err)
+	}
+	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
+	if err != nil {
+		return fmt.Errorf("invalid keyfile path: %w", err)
+	}
+
 	// Create new database in KDBX4 format
 	db := gokeepasslib.NewDatabase(
 		gokeepasslib.WithDatabaseKDBXVersion4(),
 	)
 
 	// Create credentials with password and keyfile
-	credentials, err := gokeepasslib.NewPasswordAndKeyCredentials(password, keyfilePath)
+	credentials, err := gokeepasslib.NewPasswordAndKeyCredentials(password, sanitizedKeyfilePath)
 	if err != nil {
 		return fmt.Errorf("failed to create credentials: %w", err)
 	}
@@ -80,8 +138,8 @@ func (m *manager) CreateDatabase(dbPath, keyfilePath, password, rootGroupName st
 		return fmt.Errorf("failed to lock protected entries: %w", err)
 	}
 
-	// Save database to file
-	file, err := os.Create(dbPath)
+	// Save database to file with restrictive permissions (0600)
+	file, err := os.OpenFile(sanitizedDbPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to create database file: %w", err)
 	}
@@ -100,14 +158,35 @@ func (m *manager) CreateDatabase(dbPath, keyfilePath, password, rootGroupName st
 // OpenDatabase opens an existing KeePass database
 // Returns unlocked database or error if credentials are invalid
 func (m *manager) OpenDatabase(dbPath, keyfilePath, password string) (*gokeepasslib.Database, error) {
+	// Validate input parameters
+	if dbPath == "" {
+		return nil, fmt.Errorf("database path cannot be empty")
+	}
+	if keyfilePath == "" {
+		return nil, fmt.Errorf("keyfile path cannot be empty")
+	}
+	if password == "" {
+		return nil, fmt.Errorf("password cannot be empty")
+	}
+
+	// Sanitize paths to prevent traversal attacks
+	sanitizedDbPath, err := sanitizePath(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid database path: %w", err)
+	}
+	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid keyfile path: %w", err)
+	}
+
 	// Create credentials FIRST - needed for decoding encrypted database
-	credentials, err := gokeepasslib.NewPasswordAndKeyCredentials(password, keyfilePath)
+	credentials, err := gokeepasslib.NewPasswordAndKeyCredentials(password, sanitizedKeyfilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create credentials: %w", err)
 	}
 
 	// Read database file
-	file, err := os.Open(dbPath)
+	file, err := os.Open(sanitizedDbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database file: %w", err)
 	}
@@ -135,8 +214,32 @@ func (m *manager) OpenDatabase(dbPath, keyfilePath, password string) (*gokeepass
 
 // ProfileExists checks if a profile group exists in the database
 func (m *manager) ProfileExists(dbPath, keyfilePath, password, profileName string) (bool, error) {
+	// Validate input parameters
+	if dbPath == "" {
+		return false, fmt.Errorf("database path cannot be empty")
+	}
+	if keyfilePath == "" {
+		return false, fmt.Errorf("keyfile path cannot be empty")
+	}
+	if password == "" {
+		return false, fmt.Errorf("password cannot be empty")
+	}
+	if profileName == "" {
+		return false, fmt.Errorf("profile name cannot be empty")
+	}
+
+	// Sanitize paths to prevent traversal attacks
+	sanitizedDbPath, err := sanitizePath(dbPath)
+	if err != nil {
+		return false, fmt.Errorf("invalid database path: %w", err)
+	}
+	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
+	if err != nil {
+		return false, fmt.Errorf("invalid keyfile path: %w", err)
+	}
+
 	// Open database
-	db, err := m.OpenDatabase(dbPath, keyfilePath, password)
+	db, err := m.OpenDatabase(sanitizedDbPath, sanitizedKeyfilePath, password)
 	if err != nil {
 		return false, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -160,8 +263,32 @@ func (m *manager) ProfileExists(dbPath, keyfilePath, password, profileName strin
 // CreateProfile creates a new profile structure in the database:
 // Profile (group) → HEAD (group) → metadata (entry)
 func (m *manager) CreateProfile(dbPath, keyfilePath, password, profileName string) error {
+	// Validate input parameters
+	if dbPath == "" {
+		return fmt.Errorf("database path cannot be empty")
+	}
+	if keyfilePath == "" {
+		return fmt.Errorf("keyfile path cannot be empty")
+	}
+	if password == "" {
+		return fmt.Errorf("password cannot be empty")
+	}
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+
+	// Sanitize paths to prevent traversal attacks
+	sanitizedDbPath, err := sanitizePath(dbPath)
+	if err != nil {
+		return fmt.Errorf("invalid database path: %w", err)
+	}
+	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
+	if err != nil {
+		return fmt.Errorf("invalid keyfile path: %w", err)
+	}
+
 	// Open database
-	db, err := m.OpenDatabase(dbPath, keyfilePath, password)
+	db, err := m.OpenDatabase(sanitizedDbPath, sanitizedKeyfilePath, password)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
@@ -223,8 +350,8 @@ func (m *manager) CreateProfile(dbPath, keyfilePath, password, profileName strin
 		return fmt.Errorf("failed to lock protected entries: %w", err)
 	}
 
-	// Save database
-	file, err := os.Create(dbPath)
+	// Save database with restrictive permissions (0600)
+	file, err := os.OpenFile(dbPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open database file for writing: %w", err)
 	}
@@ -242,8 +369,38 @@ func (m *manager) CreateProfile(dbPath, keyfilePath, password, profileName strin
 // Path: Profile > ParentGroup > NewGroup
 // Idempotent: if group already exists, returns nil without error
 func (m *manager) CreateGroup(dbPath, keyfilePath, password, profileName, parentGroupName, groupName string) error {
+	// Validate input parameters
+	if dbPath == "" {
+		return fmt.Errorf("database path cannot be empty")
+	}
+	if keyfilePath == "" {
+		return fmt.Errorf("keyfile path cannot be empty")
+	}
+	if password == "" {
+		return fmt.Errorf("password cannot be empty")
+	}
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if parentGroupName == "" {
+		return fmt.Errorf("parent group name cannot be empty")
+	}
+	if groupName == "" {
+		return fmt.Errorf("group name cannot be empty")
+	}
+
+	// Sanitize paths to prevent traversal attacks
+	sanitizedDbPath, err := sanitizePath(dbPath)
+	if err != nil {
+		return fmt.Errorf("invalid database path: %w", err)
+	}
+	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
+	if err != nil {
+		return fmt.Errorf("invalid keyfile path: %w", err)
+	}
+
 	// Open database
-	db, err := m.OpenDatabase(dbPath, keyfilePath, password)
+	db, err := m.OpenDatabase(sanitizedDbPath, sanitizedKeyfilePath, password)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
@@ -301,8 +458,8 @@ func (m *manager) CreateGroup(dbPath, keyfilePath, password, profileName, parent
 		return fmt.Errorf("failed to lock protected entries: %w", err)
 	}
 
-	// Save database
-	file, err := os.Create(dbPath)
+	// Save database with restrictive permissions (0600)
+	file, err := os.OpenFile(dbPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open database file for writing: %w", err)
 	}
@@ -320,8 +477,38 @@ func (m *manager) CreateGroup(dbPath, keyfilePath, password, profileName, parent
 // Creates intermediate groups automatically if they don't exist
 // Entry is created empty (no custom fields)
 func (m *manager) CreateEntry(dbPath, keyfilePath, password, profileName, envName, entryPath string) error {
+	// Validate input parameters
+	if dbPath == "" {
+		return fmt.Errorf("database path cannot be empty")
+	}
+	if keyfilePath == "" {
+		return fmt.Errorf("keyfile path cannot be empty")
+	}
+	if password == "" {
+		return fmt.Errorf("password cannot be empty")
+	}
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if envName == "" {
+		return fmt.Errorf("environment name cannot be empty")
+	}
+	if entryPath == "" {
+		return fmt.Errorf("entry path cannot be empty")
+	}
+
+	// Sanitize paths to prevent traversal attacks
+	sanitizedDbPath, err := sanitizePath(dbPath)
+	if err != nil {
+		return fmt.Errorf("invalid database path: %w", err)
+	}
+	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
+	if err != nil {
+		return fmt.Errorf("invalid keyfile path: %w", err)
+	}
+
 	// Open database
-	db, err := m.OpenDatabase(dbPath, keyfilePath, password)
+	db, err := m.OpenDatabase(sanitizedDbPath, sanitizedKeyfilePath, password)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
@@ -444,8 +631,8 @@ func (m *manager) CreateEntry(dbPath, keyfilePath, password, profileName, envNam
 		return fmt.Errorf("failed to lock protected entries: %w", err)
 	}
 
-	// Save database
-	file, err := os.Create(dbPath)
+	// Save database with restrictive permissions (0600)
+	file, err := os.OpenFile(dbPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open database file for writing: %w", err)
 	}
@@ -461,8 +648,38 @@ func (m *manager) CreateEntry(dbPath, keyfilePath, password, profileName, envNam
 
 // EntryExists checks if an entry exists at the specified path within an environment
 func (m *manager) EntryExists(dbPath, keyfilePath, password, profileName, envName, entryPath string) (bool, error) {
+	// Validate input parameters
+	if dbPath == "" {
+		return false, fmt.Errorf("database path cannot be empty")
+	}
+	if keyfilePath == "" {
+		return false, fmt.Errorf("keyfile path cannot be empty")
+	}
+	if password == "" {
+		return false, fmt.Errorf("password cannot be empty")
+	}
+	if profileName == "" {
+		return false, fmt.Errorf("profile name cannot be empty")
+	}
+	if envName == "" {
+		return false, fmt.Errorf("environment name cannot be empty")
+	}
+	if entryPath == "" {
+		return false, fmt.Errorf("entry path cannot be empty")
+	}
+
+	// Sanitize paths to prevent traversal attacks
+	sanitizedDbPath, err := sanitizePath(dbPath)
+	if err != nil {
+		return false, fmt.Errorf("invalid database path: %w", err)
+	}
+	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
+	if err != nil {
+		return false, fmt.Errorf("invalid keyfile path: %w", err)
+	}
+
 	// Open database
-	db, err := m.OpenDatabase(dbPath, keyfilePath, password)
+	db, err := m.OpenDatabase(sanitizedDbPath, sanitizedKeyfilePath, password)
 	if err != nil {
 		return false, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -581,8 +798,35 @@ func (m *manager) EntryExists(dbPath, keyfilePath, password, profileName, envNam
 // GetEntriesByEnvironment retrieves all entry paths within a specific environment
 // Returns paths relative to the environment (without environment prefix)
 func (m *manager) GetEntriesByEnvironment(dbPath, keyfilePath, password, profileName, envName string) ([]string, error) {
+	// Validate input parameters
+	if dbPath == "" {
+		return nil, fmt.Errorf("database path cannot be empty")
+	}
+	if keyfilePath == "" {
+		return nil, fmt.Errorf("keyfile path cannot be empty")
+	}
+	if password == "" {
+		return nil, fmt.Errorf("password cannot be empty")
+	}
+	if profileName == "" {
+		return nil, fmt.Errorf("profile name cannot be empty")
+	}
+	if envName == "" {
+		return nil, fmt.Errorf("environment name cannot be empty")
+	}
+
+	// Sanitize paths to prevent traversal attacks
+	sanitizedDbPath, err := sanitizePath(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid database path: %w", err)
+	}
+	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid keyfile path: %w", err)
+	}
+
 	// Open database
-	db, err := m.OpenDatabase(dbPath, keyfilePath, password)
+	db, err := m.OpenDatabase(sanitizedDbPath, sanitizedKeyfilePath, password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
