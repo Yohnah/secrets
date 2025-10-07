@@ -16,6 +16,11 @@ type ValidatorManager interface {
 	ReadAndValidateSecretsYML(filePath string) (*SecretsConfig, []error)
 	ValidateKeePassDuplicates(db KeePassManager) []error
 	ValidateNoDuplicateEntries(envName string, entryPaths []string) error
+
+	// Fail-fast validation methods for KeePass operations
+	ValidateUniqueProfileInRoot(profiles []string, profileName string) error
+	ValidateUniqueEntryInPath(entries []string, entryName string, fullPath string) error
+	ValidateUniqueFieldsInEntry(fields []string, entryPath string) error
 }
 
 // manager implements the ValidatorManager interface
@@ -144,6 +149,97 @@ func validatePathFormat(path string) error {
 	_ = filepath.IsAbs(cleanPath) // Just validate it's processable
 
 	return nil
+}
+
+// ValidateUniqueProfileInRoot checks if there are duplicate profiles with the given name in ROOT
+// Returns error immediately if duplicates found (fail-fast)
+func (m *manager) ValidateUniqueProfileInRoot(profiles []string, profileName string) error {
+	// Normalize profile name for comparison
+	normalizedTarget := normalizeString(profileName)
+
+	// Count occurrences
+	count := 0
+	for _, p := range profiles {
+		if normalizeString(p) == normalizedTarget {
+			count++
+		}
+	}
+
+	if count > 1 {
+		return fmt.Errorf("database corruption: found %d profiles named '%s' in ROOT. Each profile must be unique. Please fix manually using a KeePass client", count, profileName)
+	}
+
+	return nil
+}
+
+// ValidateUniqueEntryInPath checks if there are duplicate entries with the given name at the path
+// Returns error immediately if duplicates found (fail-fast)
+func (m *manager) ValidateUniqueEntryInPath(entries []string, entryName string, fullPath string) error {
+	// Normalize entry name for comparison
+	normalizedTarget := normalizeString(entryName)
+
+	// Count occurrences
+	count := 0
+	for _, e := range entries {
+		if normalizeString(e) == normalizedTarget {
+			count++
+		}
+	}
+
+	// If more than one occurrence, it's a duplicate
+	if count > 1 {
+		return fmt.Errorf("database corruption: found %d entries named '%s' at path '%s'. Each entry path must be unique. Please fix manually using a KeePass client",
+			count, entryName, fullPath)
+	}
+
+	return nil
+}
+
+// ValidateUniqueFieldsInEntry checks if there are duplicate fields in the entry
+// Considers case-insensitivity for standard KeePass fields (Title, UserName, Password, URL, Notes)
+// Returns error immediately if duplicates found (fail-fast)
+func (m *manager) ValidateUniqueFieldsInEntry(fields []string, entryPath string) error {
+	// Standard KeePass fields (case-insensitive)
+	standardFields := map[string]bool{
+		"title":    true,
+		"username": true,
+		"password": true,
+		"url":      true,
+		"notes":    true,
+	}
+
+	// Track seen fields
+	standardSeen := make(map[string]string) // normalized -> original
+	customSeen := make(map[string]string)   // normalized -> original
+
+	for _, field := range fields {
+		fieldLower := strings.ToLower(field)
+
+		// Check if it's a standard field (case-insensitive)
+		if standardFields[fieldLower] {
+			normalized := normalizeString(fieldLower)
+			if original, exists := standardSeen[normalized]; exists {
+				return fmt.Errorf("database corruption: found duplicate standard field '%s' (case-insensitive, also found as '%s') in entry at '%s'. Each field must be unique. Please fix manually using a KeePass client",
+					field, original, entryPath)
+			}
+			standardSeen[normalized] = field
+		} else {
+			// Custom field (case-sensitive)
+			normalized := normalizeString(field)
+			if _, exists := customSeen[normalized]; exists {
+				return fmt.Errorf("database corruption: found duplicate custom field '%s' (case-sensitive) in entry at '%s'. Each field must be unique. Please fix manually using a KeePass client",
+					field, entryPath)
+			}
+			customSeen[normalized] = field
+		}
+	}
+
+	return nil
+}
+
+// normalizeString normalizes a string for comparison (trim spaces)
+func normalizeString(s string) string {
+	return strings.TrimSpace(s)
 }
 
 // ValidateNoDuplicateEntries validates that there are no duplicate entry paths

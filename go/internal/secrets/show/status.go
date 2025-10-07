@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Yohnah/secrets/internal/keepass"
 	"github.com/Yohnah/secrets/internal/secrets/common"
 	"github.com/tobischo/gokeepasslib/v3"
 )
@@ -125,6 +124,50 @@ func (s *service) Status(format string) error {
 		statusData["configuration"] = configData
 	}
 
+	// Secrets file section
+	secretsYMLPath := s.config.GetSecretsFilePath()
+	var secretsYMLExists bool
+	var secretsYMLInfo os.FileInfo
+	var secretsProfileCount int
+
+	if secretsYMLPath != "" {
+		// Make path absolute for display
+		secretsYMLPath = common.MakeAbsolutePath(secretsYMLPath)
+
+		// Check if file exists
+		info, err := os.Stat(secretsYMLPath)
+		if err == nil {
+			secretsYMLExists = true
+			secretsYMLInfo = info
+
+			// Read and parse to count profiles
+			config, _ := s.validator.ReadAndValidateSecretsYML(secretsYMLPath)
+			if config != nil {
+				secretsProfileCount = len(config.Profiles)
+			}
+		}
+	}
+
+	secretsFileData := map[string]interface{}{
+		"_display": map[string]interface{}{
+			"label": "Secrets File",
+			"fields": []map[string]interface{}{
+				{"key": "location", "label": "Location", "format": "path_with_status"},
+				{"key": "size_human", "label": "Size", "format": "simple", "condition": "exists"},
+				{"key": "profiles", "label": "Profiles", "format": "simple", "condition": "exists"},
+			},
+			"not_found_message": "Run 'secrets show template > secrets.yml' to create a template.",
+		},
+		"location": secretsYMLPath,
+		"exists":   secretsYMLExists,
+	}
+	if secretsYMLExists {
+		secretsFileData["size_bytes"] = secretsYMLInfo.Size()
+		secretsFileData["size_human"] = formatFileSize(secretsYMLInfo.Size())
+		secretsFileData["profiles"] = secretsProfileCount
+	}
+	statusData["secrets_file"] = secretsFileData
+
 	// Database section
 	dbData := map[string]interface{}{
 		"_display": map[string]interface{}{
@@ -150,28 +193,27 @@ func (s *service) Status(format string) error {
 		dbData["modified"] = dbInfo.ModTime().Format("2006-01-02 15:04:05")
 		dbData["accessible"] = accessible
 
-		// Count profiles in secrets.yml (if exists)
-		secretsYMLPath := s.config.GetSecretsFilePath()
-		profilesInSecretsFile := 0
-		var profileNames []string
-		if secretsYMLPath != "" {
-			config, _ := s.validator.ReadAndValidateSecretsYML(secretsYMLPath)
-			if config != nil {
-				profilesInSecretsFile = len(config.Profiles)
-				// Extract profile names for comparison with DB
-				for _, profile := range config.Profiles {
-					profileNames = append(profileNames, profile.Metadata.Profile)
-				}
-			}
-			s.logger.Debug(fmt.Sprintf("secrets.yml has %d profiles", profilesInSecretsFile))
-		}
-		dbData["profiles_in_secrets_file"] = profilesInSecretsFile
+		// Use profile count from secrets.yml section
+		dbData["profiles_in_secrets_file"] = secretsProfileCount
 
 		// Count profiles from secrets.yml that exist in database
 		profilesInDatabase := 0
-		if db != nil && len(db.Content.Root.Groups) > 0 && len(profileNames) > 0 {
-			profilesInDatabase = countProfilesFromYAMLInDatabase(db.Content.Root.Groups[0].Groups, profileNames)
-			s.logger.Debug(fmt.Sprintf("Database has %d profiles from secrets.yml", profilesInDatabase))
+		if db != nil && len(db.Content.Root.Groups) > 0 && secretsYMLExists {
+			// Extract profile names from secrets.yml
+			var profileNames []string
+			if secretsYMLPath != "" {
+				config, _ := s.validator.ReadAndValidateSecretsYML(secretsYMLPath)
+				if config != nil {
+					for _, profile := range config.Profiles {
+						profileNames = append(profileNames, profile.Metadata.Profile)
+					}
+				}
+			}
+
+			if len(profileNames) > 0 {
+				profilesInDatabase = countProfilesFromYAMLInDatabase(db.Content.Root.Groups[0].Groups, profileNames)
+				s.logger.Debug(fmt.Sprintf("Database has %d profiles from secrets.yml", profilesInDatabase))
+			}
 		}
 		dbData["profiles_in_database"] = profilesInDatabase
 
@@ -200,100 +242,6 @@ func (s *service) Status(format string) error {
 	}
 	statusData["keyfile"] = keyfileData
 
-	// VALIDATION SECTION: Check secrets.yml and database compliance
-	s.logger.Debug("Running validation checks...")
-
-	var allErrors []error
-	validationData := make(map[string]interface{})
-
-	// Validation display metadata
-	validationData["_display"] = map[string]interface{}{
-		"label": "Validation",
-		"fields": []map[string]interface{}{
-			{"key": "secrets_file", "label": "Secrets file", "format": "compliance_with_file"},
-			{"key": "database_validation", "label": "Database", "format": "compliance_simple"},
-		},
-		"subsections": []map[string]interface{}{
-			{
-				"key":             "reports",
-				"title":           "Validation Reports",
-				"title_separator": "=",
-				"format":          "numbered_list",
-			},
-		},
-	}
-
-	// Validate secrets.yml (if available)
-	secretsYMLPath := s.config.GetSecretsFilePath()
-	secretsYMLData := make(map[string]interface{})
-
-	if secretsYMLPath != "" {
-		// Convert to absolute path for consistency with other file paths
-		absSecretsYMLPath := common.MakeAbsolutePath(secretsYMLPath)
-		s.logger.Debug(fmt.Sprintf("Validating secrets.yml: %s", absSecretsYMLPath))
-		secretsYMLData["file"] = absSecretsYMLPath
-		secretsYMLData["checked"] = true
-
-		_, validationErrors := s.validator.ReadAndValidateSecretsYML(secretsYMLPath)
-		if len(validationErrors) == 0 {
-			secretsYMLData["status"] = "Compliance"
-			secretsYMLData["symbol"] = "✓"
-			s.logger.Debug("secrets.yml validation: Compliance")
-		} else {
-			secretsYMLData["status"] = "Not compliance"
-			secretsYMLData["symbol"] = "✗"
-			s.logger.Debug(fmt.Sprintf("secrets.yml validation: Not compliance (%d errors)", len(validationErrors)))
-			allErrors = append(allErrors, addPrefixToErrors(validationErrors, "[Secrets file]")...)
-		}
-	} else {
-		secretsYMLData["checked"] = false
-		secretsYMLData["status"] = "Not checked (file not found)"
-		s.logger.Debug("secrets.yml validation: Skipped (file not found)")
-	}
-	validationData["secrets_file"] = secretsYMLData
-
-	// Validate database duplicates (if accessible)
-	dbValidationData := make(map[string]interface{})
-
-	if accessible && db != nil {
-		s.logger.Debug("Validating database for duplicates...")
-		dbValidationData["checked"] = true
-
-		// Create adapter to pass database to validator
-		dbAdapter := keepass.NewDatabaseAdapter(db)
-		duplicateErrors := s.validator.ValidateKeePassDuplicates(dbAdapter)
-
-		if len(duplicateErrors) == 0 {
-			dbValidationData["status"] = "Compliance"
-			dbValidationData["symbol"] = "✓"
-			s.logger.Debug("Database validation: Compliance")
-		} else {
-			dbValidationData["status"] = "Not compliance"
-			dbValidationData["symbol"] = "✗"
-			s.logger.Debug(fmt.Sprintf("Database validation: Not compliance (%d errors)", len(duplicateErrors)))
-			allErrors = append(allErrors, addPrefixToErrors(duplicateErrors, "[Database]")...)
-		}
-	} else {
-		dbValidationData["checked"] = false
-		dbValidationData["status"] = "Not checked (database not accessible)"
-		if !accessible {
-			s.logger.Debug("Database validation: Skipped (database not accessible)")
-		}
-	}
-	validationData["database_validation"] = dbValidationData
-
-	// Add reports section only if there are errors
-	if len(allErrors) > 0 {
-		reports := []string{}
-		for _, err := range allErrors {
-			reports = append(reports, err.Error())
-		}
-		validationData["reports"] = reports
-		s.logger.Debug(fmt.Sprintf("Validation reports: %d total errors", len(allErrors)))
-	}
-
-	statusData["validation"] = validationData
-
 	// Pass structured data + format to OutputManager
 	if err := s.output.Output(statusData, format); err != nil {
 		return fmt.Errorf("failed to output status: %w", err)
@@ -305,15 +253,6 @@ func (s *service) Status(format string) error {
 	}
 
 	return nil
-}
-
-// addPrefixToErrors adds a prefix to a list of errors
-func addPrefixToErrors(errors []error, prefix string) []error {
-	prefixed := make([]error, len(errors))
-	for i, err := range errors {
-		prefixed[i] = fmt.Errorf("%s %w", prefix, err)
-	}
-	return prefixed
 }
 
 // formatFileSize formats a file size in bytes to a human-readable string
