@@ -485,7 +485,28 @@ func (s *service) addToGitignore(gitRoot string) error {
 }
 
 // loadProfilesFromSecretsYML loads profiles from secrets.yml into the KeePass database
+// This function orchestrates the validation and creation steps
 func (s *service) loadProfilesFromSecretsYML(dbPath, keyfilePath, password, targetDir string) error {
+	// Step 1: Validate secrets.yml and get configuration
+	secretsConfig, err := s.validateAndReadSecretsYML()
+	if err != nil {
+		return err
+	}
+
+	// If no config returned, nothing to do (not an error)
+	if secretsConfig == nil {
+		return nil
+	}
+
+	// Step 2: Apply the validated configuration to the database
+	return s.applySecretsConfig(secretsConfig, dbPath, keyfilePath, password)
+}
+
+// validateAndReadSecretsYML validates secrets.yml and returns the configuration
+// Returns (nil, nil) if secrets.yml doesn't exist (not an error)
+// Returns (config, nil) if validation succeeds
+// Returns (nil, error) if validation fails
+func (s *service) validateAndReadSecretsYML() (*validator.SecretsConfig, error) {
 	// Get secrets.yml path from config (respects --secrets-file flag)
 	secretsYMLPath := s.config.GetSecretsFilePath()
 
@@ -493,7 +514,7 @@ func (s *service) loadProfilesFromSecretsYML(dbPath, keyfilePath, password, targ
 	if secretsYMLPath == "" {
 		// No secrets.yml available, not an error - just skip
 		s.logger.Debug("secrets.yml not found, skipping profile creation")
-		return nil
+		return nil, nil
 	}
 
 	s.logger.Debug(fmt.Sprintf("Found secrets.yml at: %s", secretsYMLPath))
@@ -503,15 +524,21 @@ func (s *service) loadProfilesFromSecretsYML(dbPath, keyfilePath, password, targ
 	secretsConfig, errs := s.validator.ReadAndValidateSecretsYML(secretsYMLPath)
 	if len(errs) > 0 {
 		// Return first error
-		return fmt.Errorf("validation failed: %w", errs[0])
+		return nil, fmt.Errorf("validation failed: %w", errs[0])
 	}
 
 	// Check if there are profiles to create
 	if len(secretsConfig.Profiles) == 0 {
 		s.logger.Debug("No profiles found in secrets.yml")
-		return nil
+		return nil, nil
 	}
 
+	return secretsConfig, nil
+}
+
+// applySecretsConfig applies a validated secrets configuration to the KeePass database
+// Assumes the configuration has already been validated
+func (s *service) applySecretsConfig(secretsConfig *validator.SecretsConfig, dbPath, keyfilePath, password string) error {
 	s.logger.Info(fmt.Sprintf("Loading %d profile(s) from secrets.yml...", len(secretsConfig.Profiles)))
 
 	// Open database session ONCE for all operations

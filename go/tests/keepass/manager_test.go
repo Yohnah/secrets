@@ -1,59 +1,20 @@
 package keepass_test
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/Yohnah/secrets/internal/keepass"
+	"github.com/Yohnah/secrets/internal/testhelpers"
 )
 
 func TestCreateEntry(t *testing.T) {
-	// Create temporary directory for test files
-	tempDir, err := os.MkdirTemp("", "keepass_test_*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Setup test database with session
+	testDB, cleanup := testhelpers.SetupTestDatabaseWithSession(t, "TestDB")
+	defer cleanup()
 
-	// Setup test files
-	dbPath := filepath.Join(tempDir, "test.kdbx")
-	keyfilePath := filepath.Join(tempDir, "test.key")
-	password := "testpassword"
-
-	// Create KeePass manager
-	kpMgr := keepass.NewManager()
-
-	// Generate keyfile first
-	err = kpMgr.GenerateKeyfile(keyfilePath)
-	if err != nil {
-		t.Fatalf("Failed to generate keyfile: %v", err)
-	}
-
-	// Create database with profile and environment structure
-	err = kpMgr.CreateDatabase(dbPath, keyfilePath, password, "TestDB")
-	if err != nil {
-		t.Fatalf("Failed to create database: %v", err)
-	}
-
-	// Open database session
-	err = kpMgr.Open(dbPath, keyfilePath, password)
-	if err != nil {
-		t.Fatalf("Failed to open database: %v", err)
-	}
-	defer kpMgr.SaveAndClose()
-
+	// Create profile and environment
 	profileName := "testprofile"
-	err = kpMgr.CreateProfile(profileName)
-	if err != nil {
-		t.Fatalf("Failed to create profile: %v", err)
-	}
-
 	envName := "testenv"
-	err = kpMgr.CreateGroup(profileName, "HEAD", envName)
-	if err != nil {
-		t.Fatalf("Failed to create environment group: %v", err)
-	}
+	testhelpers.CreateTestProfile(t, testDB.Manager, profileName, envName)
 
 	tests := []struct {
 		name        string
@@ -89,7 +50,7 @@ func TestCreateEntry(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := kpMgr.CreateEntry(profileName, envName, tt.entryPath)
+			err := testDB.Manager.CreateEntry(profileName, envName, tt.entryPath)
 			if tt.expectError && err == nil {
 				t.Errorf("Expected error but got none")
 			}
@@ -99,7 +60,7 @@ func TestCreateEntry(t *testing.T) {
 
 			// Verify entry was created
 			if !tt.expectError {
-				exists, err := kpMgr.EntryExists(profileName, envName, tt.entryPath)
+				exists, err := testDB.Manager.EntryExists(profileName, envName, tt.entryPath)
 				if err != nil {
 					t.Errorf("Failed to check entry existence: %v", err)
 				}
@@ -112,55 +73,18 @@ func TestCreateEntry(t *testing.T) {
 }
 
 func TestEntryExists(t *testing.T) {
-	// Create temporary directory for test files
-	tempDir, err := os.MkdirTemp("", "keepass_test_*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Setup test database with session
+	testDB, cleanup := testhelpers.SetupTestDatabaseWithSession(t, "TestDB")
+	defer cleanup()
 
-	// Setup test files
-	dbPath := filepath.Join(tempDir, "test.kdbx")
-	keyfilePath := filepath.Join(tempDir, "test.key")
-	password := "testpassword"
-
-	// Create KeePass manager
-	kpMgr := keepass.NewManager()
-
-	// Generate keyfile first
-	err = kpMgr.GenerateKeyfile(keyfilePath)
-	if err != nil {
-		t.Fatalf("Failed to generate keyfile: %v", err)
-	}
-
-	// Create database with profile and environment structure
-	err = kpMgr.CreateDatabase(dbPath, keyfilePath, password, "TestDB")
-	if err != nil {
-		t.Fatalf("Failed to create database: %v", err)
-	}
-
-	// Open database session
-	err = kpMgr.Open(dbPath, keyfilePath, password)
-	if err != nil {
-		t.Fatalf("Failed to open database: %v", err)
-	}
-	defer kpMgr.SaveAndClose()
-
+	// Create profile and environment
 	profileName := "testprofile"
-	err = kpMgr.CreateProfile(profileName)
-	if err != nil {
-		t.Fatalf("Failed to create profile: %v", err)
-	}
-
 	envName := "testenv"
-	err = kpMgr.CreateGroup(profileName, "HEAD", envName)
-	if err != nil {
-		t.Fatalf("Failed to create environment group: %v", err)
-	}
+	testhelpers.CreateTestProfile(t, testDB.Manager, profileName, envName)
 
 	// Create a test entry
 	entryPath := "/testentry"
-	err = kpMgr.CreateEntry(profileName, envName, entryPath)
+	err := testDB.Manager.CreateEntry(profileName, envName, entryPath)
 	if err != nil {
 		t.Fatalf("Failed to create test entry: %v", err)
 	}
@@ -194,7 +118,7 @@ func TestEntryExists(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exists, err := kpMgr.EntryExists(profileName, envName, tt.entryPath)
+			exists, err := testDB.Manager.EntryExists(profileName, envName, tt.entryPath)
 			if err != nil {
 				t.Errorf("EntryExists failed: %v", err)
 			}
@@ -206,51 +130,14 @@ func TestEntryExists(t *testing.T) {
 }
 
 func TestGetEntriesByEnvironment(t *testing.T) {
-	// Create temporary directory for test files
-	tempDir, err := os.MkdirTemp("", "keepass_test_*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Setup test database with session
+	testDB, cleanup := testhelpers.SetupTestDatabaseWithSession(t, "TestDB")
+	defer cleanup()
 
-	// Setup test files
-	dbPath := filepath.Join(tempDir, "test.kdbx")
-	keyfilePath := filepath.Join(tempDir, "test.key")
-	password := "testpassword"
-
-	// Create KeePass manager
-	kpMgr := keepass.NewManager()
-
-	// Generate keyfile first
-	err = kpMgr.GenerateKeyfile(keyfilePath)
-	if err != nil {
-		t.Fatalf("Failed to generate keyfile: %v", err)
-	}
-
-	// Create database with profile and environment structure
-	err = kpMgr.CreateDatabase(dbPath, keyfilePath, password, "TestDB")
-	if err != nil {
-		t.Fatalf("Failed to create database: %v", err)
-	}
-
-	// Open database session
-	err = kpMgr.Open(dbPath, keyfilePath, password)
-	if err != nil {
-		t.Fatalf("Failed to open database: %v", err)
-	}
-	defer kpMgr.SaveAndClose()
-
+	// Create profile and environment
 	profileName := "testprofile"
-	err = kpMgr.CreateProfile(profileName)
-	if err != nil {
-		t.Fatalf("Failed to create profile: %v", err)
-	}
-
 	envName := "testenv"
-	err = kpMgr.CreateGroup(profileName, "HEAD", envName)
-	if err != nil {
-		t.Fatalf("Failed to create environment group: %v", err)
-	}
+	testhelpers.CreateTestProfile(t, testDB.Manager, profileName, envName)
 
 	// Create test entries
 	entries := []string{
@@ -261,14 +148,14 @@ func TestGetEntriesByEnvironment(t *testing.T) {
 	}
 
 	for _, entry := range entries {
-		err := kpMgr.CreateEntry(profileName, envName, entry)
+		err := testDB.Manager.CreateEntry(profileName, envName, entry)
 		if err != nil {
 			t.Fatalf("Failed to create entry %s: %v", entry, err)
 		}
 	}
 
 	// Test GetEntriesByEnvironment
-	result, err := kpMgr.GetEntriesByEnvironment(profileName, envName)
+	result, err := testDB.Manager.GetEntriesByEnvironment(profileName, envName)
 	if err != nil {
 		t.Fatalf("GetEntriesByEnvironment failed: %v", err)
 	}
@@ -300,32 +187,9 @@ func TestGetEntriesByEnvironment(t *testing.T) {
 }
 
 func TestPathTraversalPrevention(t *testing.T) {
-	// Create temporary directory for test files
-	tempDir, err := os.MkdirTemp("", "keepass_path_test_*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Setup test files
-	dbPath := filepath.Join(tempDir, "test.kdbx")
-	keyfilePath := filepath.Join(tempDir, "test.key")
-	password := "testpassword"
-
-	// Create KeePass manager
-	kpMgr := keepass.NewManager()
-
-	// Generate keyfile first
-	err = kpMgr.GenerateKeyfile(keyfilePath)
-	if err != nil {
-		t.Fatalf("Failed to generate keyfile: %v", err)
-	}
-
-	// Create database
-	err = kpMgr.CreateDatabase(dbPath, keyfilePath, password, "TestDB")
-	if err != nil {
-		t.Fatalf("Failed to create database: %v", err)
-	}
+	// Setup test database
+	testDB, cleanup := testhelpers.SetupTestDatabase(t, "TestDB")
+	defer cleanup()
 
 	// Test path traversal attempts - these should all fail
 	traversalPaths := []string{
@@ -338,7 +202,7 @@ func TestPathTraversalPrevention(t *testing.T) {
 	for _, badPath := range traversalPaths {
 		t.Run("Traversal_"+badPath, func(t *testing.T) {
 			// Try to create database with traversal path
-			err := kpMgr.CreateDatabase(badPath, keyfilePath, password, "TestDB")
+			err := testDB.Manager.CreateDatabase(badPath, testDB.KeyfilePath, testDB.Password, "TestDB")
 			if err == nil {
 				t.Errorf("Expected error for path traversal attempt: %s", badPath)
 			}
@@ -347,24 +211,13 @@ func TestPathTraversalPrevention(t *testing.T) {
 }
 
 func TestParameterValidation(t *testing.T) {
-	// Create temporary directory for test files
-	tempDir, err := os.MkdirTemp("", "keepass_validation_test_*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Setup test files
-	dbPath := filepath.Join(tempDir, "test.kdbx")
-	keyfilePath := filepath.Join(tempDir, "test.key")
-	password := "testpassword"
-
-	// Create KeePass manager
-	kpMgr := keepass.NewManager()
+	// Setup test database
+	testDB, cleanup := testhelpers.SetupTestDatabase(t, "TestDB")
+	defer cleanup()
 
 	// Test empty parameters for GenerateKeyfile
 	t.Run("GenerateKeyfile_EmptyPath", func(t *testing.T) {
-		err := kpMgr.GenerateKeyfile("")
+		err := testDB.Manager.GenerateKeyfile("")
 		if err == nil {
 			t.Error("Expected error for empty keyfile path")
 		}
@@ -372,28 +225,28 @@ func TestParameterValidation(t *testing.T) {
 
 	// Test empty parameters for CreateDatabase
 	t.Run("CreateDatabase_EmptyDbPath", func(t *testing.T) {
-		err := kpMgr.CreateDatabase("", keyfilePath, password, "TestDB")
+		err := testDB.Manager.CreateDatabase("", testDB.KeyfilePath, testDB.Password, "TestDB")
 		if err == nil {
 			t.Error("Expected error for empty database path")
 		}
 	})
 
 	t.Run("CreateDatabase_EmptyKeyfilePath", func(t *testing.T) {
-		err := kpMgr.CreateDatabase(dbPath, "", password, "TestDB")
+		err := testDB.Manager.CreateDatabase(testDB.DBPath, "", testDB.Password, "TestDB")
 		if err == nil {
 			t.Error("Expected error for empty keyfile path")
 		}
 	})
 
 	t.Run("CreateDatabase_EmptyPassword", func(t *testing.T) {
-		err := kpMgr.CreateDatabase(dbPath, keyfilePath, "", "TestDB")
+		err := testDB.Manager.CreateDatabase(testDB.DBPath, testDB.KeyfilePath, "", "TestDB")
 		if err == nil {
 			t.Error("Expected error for empty password")
 		}
 	})
 
 	t.Run("CreateDatabase_EmptyRootGroup", func(t *testing.T) {
-		err := kpMgr.CreateDatabase(dbPath, keyfilePath, password, "")
+		err := testDB.Manager.CreateDatabase(testDB.DBPath, testDB.KeyfilePath, testDB.Password, "")
 		if err == nil {
 			t.Error("Expected error for empty root group name")
 		}
