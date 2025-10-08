@@ -1,13 +1,13 @@
 package main
 
 import (
-"os"
+	"os"
 
-"github.com/Yohnah/secrets/internal/cli"
+	"github.com/Yohnah/secrets/internal/cli"
 )
 
 func main() {
-if err := cli.Execute(); err != nil {
-os.Exit(1)
-}
+	if err := cli.Execute(); err != nil {
+		os.Exit(1)
+	}
 }

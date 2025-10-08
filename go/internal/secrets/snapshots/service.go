@@ -64,7 +64,7 @@ type ProfileSnapshots struct {
 func (s *service) List(profileName string) error {
 	// Step 1: Read secrets.yml and validate
 	secretsFilePath := s.config.GetSecretsFilePath()
-	
+
 	secretsConfig, errs := s.validator.ReadAndValidateSecretsYML(secretsFilePath)
 	if len(errs) > 0 {
 		return fmt.Errorf("invalid secrets.yml: %v", errs[0])
