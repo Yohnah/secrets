@@ -12,6 +12,7 @@ import (
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
+	"github.com/Yohnah/secrets/internal/secrets/common"
 	"github.com/Yohnah/secrets/internal/validator"
 )
 
@@ -63,10 +64,7 @@ type ProfileSnapshots struct {
 func (s *service) List(profileName string) error {
 	// Step 1: Read secrets.yml and validate
 	secretsFilePath := s.config.GetSecretsFilePath()
-	if secretsFilePath == "" {
-		return fmt.Errorf("secrets.yml file not found. Use --secrets-file flag or set SECRETS_YOHNAH_SECRETS_FILE environment variable")
-	}
-
+	
 	secretsConfig, errs := s.validator.ReadAndValidateSecretsYML(secretsFilePath)
 	if len(errs) > 0 {
 		return fmt.Errorf("invalid secrets.yml: %v", errs[0])
@@ -79,15 +77,9 @@ func (s *service) List(profileName string) error {
 			profilesToList = append(profilesToList, profile.Metadata.Profile)
 		}
 	} else {
-		found := false
-		for _, profile := range secretsConfig.Profiles {
-			if profile.Metadata.Profile == profileName {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return fmt.Errorf("profile '%s' not found in secrets.yml", profileName)
+		// Validate that profile exists in secrets.yml
+		if err := common.ValidateProfileInSecretsYML(secretsFilePath, profileName, s.validator); err != nil {
+			return err
 		}
 		profilesToList = append(profilesToList, profileName)
 	}
@@ -97,22 +89,24 @@ func (s *service) List(profileName string) error {
 		return nil
 	}
 
-	// Step 3: Get configuration and password
+	// Step 3: Get configuration
 	cfg, err := s.config.GetConfig()
 	if err != nil {
 		return fmt.Errorf("failed to get configuration: %w", err)
 	}
 
-	password, err := s.getPassword(cfg)
+	// Step 4: Get password (secure)
+	securePassword, err := common.GetPassword(cfg, s.prompt, s.logger, false)
 	if err != nil {
 		return err
 	}
+	defer securePassword.Clear() // Ensure password is cleared from memory
 
-	// Step 4: Open database
+	// Step 5: Open database
 	dbPath := s.config.GetDatabasePath()
 	keyfilePath := s.config.GetKeyfilePath()
 
-	err = s.keepass.Open(dbPath, keyfilePath, password)
+	err = s.keepass.Open(dbPath, keyfilePath, securePassword.String())
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
@@ -182,23 +176,6 @@ func (s *service) List(profileName string) error {
 	structuredData := s.structureSnapshotsData(allSnapshots)
 
 	return s.output.Output(structuredData, outputFormat)
-}
-
-// getPassword retrieves password from config or prompts user
-func (s *service) getPassword(cfg *config.Config) (string, error) {
-	// Check if password is provided via config (from env var or other sources)
-	if cfg.Password != "" {
-		s.logger.Debug("Using password from configuration (SECRETS_YOHNAH_PASSWORD environment variable)")
-		return cfg.Password, nil
-	}
-
-	// If in non-interactive mode and no password provided, fail
-	if cfg.NoInteractive {
-		return "", fmt.Errorf("password required. Set SECRETS_YOHNAH_PASSWORD environment variable or remove -f flag")
-	}
-
-	// Prompt user for password
-	return s.prompt.PromptPassword("Enter database password: ")
 }
 
 // readSnapshotMetadata reads metadata from a tree group
@@ -314,36 +291,19 @@ func (s *service) structureSnapshotsData(profiles []ProfileSnapshots) map[string
 
 // New creates a new snapshot by cloning HEAD to v{current_version} and incrementing HEAD version
 func (s *service) New(profileName string) error {
-	// Step 1: Read and validate secrets.yml
+	// Step 1: Validate profile exists in secrets.yml
 	secretsFilePath := s.config.GetSecretsFilePath()
-	if secretsFilePath == "" {
-		return fmt.Errorf("secrets.yml file not found. Use --secrets-file flag or set SECRETS_YOHNAH_SECRETS_FILE environment variable")
+	if err := common.ValidateProfileInSecretsYML(secretsFilePath, profileName, s.validator); err != nil {
+		return err
 	}
 
-	secretsConfig, errs := s.validator.ReadAndValidateSecretsYML(secretsFilePath)
-	if len(errs) > 0 {
-		return fmt.Errorf("invalid secrets.yml: %v", errs[0])
-	}
-
-	// Step 2: Check if profile exists in secrets.yml
-	profileFound := false
-	for _, profile := range secretsConfig.Profiles {
-		if profile.Metadata.Profile == profileName {
-			profileFound = true
-			break
-		}
-	}
-	if !profileFound {
-		return fmt.Errorf("error: Profile '%s' does not exist in secrets.yml. Please check your configuration", profileName)
-	}
-
-	// Step 3: Get configuration
+	// Step 2: Get configuration
 	cfg, err := s.config.GetConfig()
 	if err != nil {
 		return fmt.Errorf("failed to get configuration: %w", err)
 	}
 
-	// Step 3b: Ask for confirmation if not in force mode (BEFORE opening database)
+	// Step 3: Ask for confirmation if not in force mode (BEFORE opening database)
 	if !cfg.NoInteractive {
 		s.logger.Info(fmt.Sprintf("You are about to create a new snapshot for profile '%s'.", profileName))
 		s.logger.Info("This will clone HEAD to a new versioned snapshot and update the database.")
@@ -357,17 +317,18 @@ func (s *service) New(profileName string) error {
 		}
 	}
 
-	// Step 4: Get password
-	password, err := s.getPassword(cfg)
+	// Step 4: Get password (secure)
+	securePassword, err := common.GetPassword(cfg, s.prompt, s.logger, false)
 	if err != nil {
 		return err
 	}
+	defer securePassword.Clear() // Ensure password is cleared from memory
 
 	// Step 5: Open database
 	dbPath := s.config.GetDatabasePath()
 	keyfilePath := s.config.GetKeyfilePath()
 
-	err = s.keepass.Open(dbPath, keyfilePath, password)
+	err = s.keepass.Open(dbPath, keyfilePath, securePassword.String())
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}

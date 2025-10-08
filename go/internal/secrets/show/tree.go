@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/Yohnah/secrets/internal/config"
+	"github.com/Yohnah/secrets/internal/secrets/common"
 	"github.com/Yohnah/secrets/internal/validator"
 )
 
@@ -56,17 +56,18 @@ func (s *service) Tree(profileName, environmentName, outputFormat string) error 
 		return fmt.Errorf("failed to get configuration: %w", err)
 	}
 
-	// Get password
-	password, err := s.getPassword(cfg)
+	// Get password (secure)
+	securePassword, err := common.GetPassword(cfg, s.prompt, s.logger, false)
 	if err != nil {
 		return err
 	}
+	defer securePassword.Clear() // Ensure password is cleared from memory
 
 	// Open database
 	dbPath := s.config.GetDatabasePath()
 	keyfilePath := s.config.GetKeyfilePath()
 
-	err = s.keepass.Open(dbPath, keyfilePath, password)
+	err = s.keepass.Open(dbPath, keyfilePath, securePassword.String())
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
@@ -82,21 +83,6 @@ func (s *service) Tree(profileName, environmentName, outputFormat string) error 
 	s.displayTree(root, outputFormat == "ansi")
 
 	return nil
-}
-
-// getPassword gets the password for database access
-func (s *service) getPassword(cfg *config.Config) (string, error) {
-	if cfg.Password != "" {
-		return cfg.Password, nil
-	}
-
-	// If no password in config, prompt user
-	password, err := s.prompt.PromptPassword("Enter database password: ")
-	if err != nil {
-		return "", fmt.Errorf("failed to get password: %w", err)
-	}
-
-	return password, nil
 }
 
 // buildTree builds the tree structure from secrets.yml and database

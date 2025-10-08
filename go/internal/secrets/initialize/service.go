@@ -213,14 +213,15 @@ func (s *service) Init() error {
 			s.keepass.CloseWithoutSave()
 		}
 
-		// Get password (1 time for verification)
-		password, err := s.getPassword(cfg, false)
+		// Get password (1 time for verification) - secure
+		securePassword, err := common.GetPassword(cfg, s.prompt, s.logger, false)
 		if err != nil {
 			return err
 		}
+		defer securePassword.Clear() // Ensure password is cleared from memory
 
 		// Try to open database to verify access
-		if err := s.keepass.Open(dbPath, keyfilePath, password); err != nil {
+		if err := s.keepass.Open(dbPath, keyfilePath, securePassword.String()); err != nil {
 			return fmt.Errorf("failed to open existing database: %w\n\nPlease verify your password and keyfile are correct", err)
 		}
 		// Close immediately after verification without saving
@@ -233,7 +234,7 @@ func (s *service) Init() error {
 		s.logger.Info(fmt.Sprintf("Keyfile: %s", keyfilePath))
 
 		// Step 11.1: Load profiles from secrets.yml (if exists)
-		if err := s.loadProfilesFromSecretsYML(dbPath, keyfilePath, password, targetDir); err != nil {
+		if err := s.loadProfilesFromSecretsYML(dbPath, keyfilePath, securePassword.String(), targetDir); err != nil {
 			// Don't fail if secrets.yml doesn't exist or has issues
 			s.logger.Info(fmt.Sprintf("Note: Could not load profiles from secrets.yml: %v", err))
 		}
@@ -290,11 +291,12 @@ func (s *service) Init() error {
 	// Step 12: Create new database and keyfile
 	s.logger.Info("Creating new database and keyfile...")
 
-	// Get password (2 times for creation - confirmation)
-	password, err := s.getPassword(cfg, true)
+	// Get password (2 times for creation - confirmation) - secure
+	securePassword, err := common.GetPassword(cfg, s.prompt, s.logger, true)
 	if err != nil {
 		return err
 	}
+	defer securePassword.Clear() // Ensure password is cleared from memory
 
 	// Generate keyfile
 	s.logger.Debug("Generating cryptographically secure keyfile...")
@@ -314,7 +316,7 @@ func (s *service) Init() error {
 	}
 	s.logger.Debug(fmt.Sprintf("Using root group name: %s", rootGroupName))
 
-	if err := s.keepass.CreateDatabase(dbPath, keyfilePath, password, rootGroupName); err != nil {
+	if err := s.keepass.CreateDatabase(dbPath, keyfilePath, securePassword.String(), rootGroupName); err != nil {
 		return fmt.Errorf("failed to create database: %w", err)
 	}
 	s.logger.Debug(fmt.Sprintf("Database created: %s", dbPath))
@@ -330,7 +332,7 @@ func (s *service) Init() error {
 	}
 
 	// Step 14: Load profiles from secrets.yml (if exists)
-	if err := s.loadProfilesFromSecretsYML(dbPath, keyfilePath, password, targetDir); err != nil {
+	if err := s.loadProfilesFromSecretsYML(dbPath, keyfilePath, securePassword.String(), targetDir); err != nil {
 		// Don't fail the entire init if secrets.yml doesn't exist or has issues
 		// Just log a warning
 		s.logger.Info(fmt.Sprintf("Note: Could not load profiles from secrets.yml: %v", err))
@@ -344,30 +346,6 @@ func (s *service) Init() error {
 	s.logger.Info(fmt.Sprintf("Keyfile: %s", keyfilePath))
 
 	return nil
-}
-
-// getPassword retrieves password from config or prompts user
-// If creating is true, prompts twice for confirmation
-func (s *service) getPassword(cfg *config.Config, creating bool) (string, error) {
-	// Check if password is provided via config (from env var or other sources)
-	if cfg.Password != "" {
-		s.logger.Debug("Using password from configuration (SECRETS_YOHNAH_PASSWORD environment variable)")
-		return cfg.Password, nil
-	}
-
-	// If in non-interactive mode and no password provided, fail
-	if cfg.NoInteractive {
-		return "", fmt.Errorf("password required. Set SECRETS_YOHNAH_PASSWORD environment variable or remove -f flag")
-	}
-
-	// Prompt user for password
-	if creating {
-		// Creating new database: ask twice for confirmation
-		return s.prompt.PromptPasswordConfirm("Enter database password")
-	}
-
-	// Verifying existing database: ask once
-	return s.prompt.PromptPassword("Enter database password: ")
 }
 
 // getGitRepoName gets the full repository name from git remote origin URL

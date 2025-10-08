@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/Yohnah/secrets/internal/secrets/common"
 	"github.com/Yohnah/secrets/internal/validator"
 )
 
@@ -57,22 +58,24 @@ func (s *service) Profiles(profileFilter string) error {
 		return nil
 	}
 
-	// Step 3: Get configuration and password
+	// Step 3: Get configuration
 	cfg, err := s.config.GetConfig()
 	if err != nil {
 		return fmt.Errorf("failed to get configuration: %w", err)
 	}
 
-	password, err := s.getPassword(cfg)
+	// Step 4: Get password (secure)
+	securePassword, err := common.GetPassword(cfg, s.prompt, s.logger, false)
 	if err != nil {
 		return err
 	}
+	defer securePassword.Clear() // Ensure password is cleared from memory
 
-	// Step 4: Open database
+	// Step 5: Open database
 	dbPath := s.config.GetDatabasePath()
 	keyfilePath := s.config.GetKeyfilePath()
 
-	err = s.keepass.Open(dbPath, keyfilePath, password)
+	err = s.keepass.Open(dbPath, keyfilePath, securePassword.String())
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
