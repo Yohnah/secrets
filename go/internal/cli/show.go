@@ -8,9 +8,10 @@ import (
 )
 
 var (
-	flagMinimal      bool
-	flagOutputFormat string
-	flagTreeOutput   string
+	flagMinimal        bool
+	flagOutputFormat   string
+	flagTreeOutput     string
+	flagProfilesOutput string
 ) // showCmd represents the show command
 var showCmd = &cobra.Command{
 	Use:   "show",
@@ -67,6 +68,26 @@ Example:
 	RunE: runShowTree,
 }
 
+// showProfilesCmd represents the show profiles command
+var showProfilesCmd = &cobra.Command{
+	Use:   "profiles [profile_name|all]",
+	Short: "Show profiles information from secrets.yml",
+	Long: `Display information about profiles and their environments defined in secrets.yml.
+
+Shows for each profile:
+- Total number of environments
+- Environment existence in database (✓/✗)
+- Entry count (existing/total entries)
+
+Examples:
+  secrets show profiles              # Show all profiles
+  secrets show profiles all          # Show all profiles (explicit)
+  secrets show profiles webapp-prod  # Show specific profile
+  secrets show profiles -o json      # Output in JSON format`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runShowProfiles,
+}
+
 func init() {
 	// Register show command with root
 	rootCmd.AddCommand(showCmd)
@@ -75,6 +96,7 @@ func init() {
 	showCmd.AddCommand(showTemplateCmd)
 	showCmd.AddCommand(showStatusCmd)
 	showCmd.AddCommand(showTreeCmd)
+	showCmd.AddCommand(showProfilesCmd)
 
 	// Flags for template subcommand only
 	showTemplateCmd.Flags().BoolVar(&flagMinimal, "minimal", false, "Show minimal template without examples")
@@ -84,6 +106,9 @@ func init() {
 
 	// Flags for tree subcommand only
 	showTreeCmd.Flags().StringVarP(&flagTreeOutput, "output", "o", "ansi", "Output format: ansi, ascii")
+
+	// Flags for profiles subcommand only
+	showProfilesCmd.Flags().StringVarP(&flagProfilesOutput, "output", "o", "table", "Output format: table, json, yaml")
 }
 
 func runShowTemplate(cmd *cobra.Command, args []string) error {
@@ -139,6 +164,31 @@ func runShowTree(cmd *cobra.Command, args []string) error {
 	environmentName := args[1]
 
 	if err := managers.Secrets.ShowTree(profileName, environmentName, flagTreeOutput); err != nil {
+		managers.Logger.Error(err.Error())
+		os.Exit(1)
+	}
+
+	return nil
+}
+
+func runShowProfiles(cmd *cobra.Command, args []string) error {
+	// CliMgr captures ALL command-specific flags and feeds them to ConfigMgr
+	commandFlags := &types.CommandFlags{
+		OutputFormat: flagProfilesOutput,
+	}
+
+	// Create manager context with captured flags
+	managers := NewManagerContext(commandFlags)
+
+	// Get profile name from args (optional, default "all")
+	profileFilter := "all"
+	if len(args) > 0 {
+		profileFilter = args[0]
+	}
+
+	// Execute business logic (delegate all decisions to CORE)
+	// SecretsManager will pull processed config from ConfigMgr
+	if err := managers.Secrets.ShowProfiles(profileFilter); err != nil {
 		managers.Logger.Error(err.Error())
 		os.Exit(1)
 	}

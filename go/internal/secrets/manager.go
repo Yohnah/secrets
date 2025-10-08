@@ -19,6 +19,7 @@ type Manager interface {
 	Status() error
 	ShowTemplate() error
 	ShowTree(profileName, environmentName, outputFormat string) error
+	ShowProfiles(profileFilter string) error
 	SnapshotsList(profileName string) error
 }
 
@@ -59,6 +60,11 @@ func (m *manager) ShowTemplate() error {
 // ShowTree delegates to the show service
 func (m *manager) ShowTree(profileName, environmentName, outputFormat string) error {
 	return m.showService.Tree(profileName, environmentName, outputFormat)
+}
+
+// ShowProfiles delegates to the show service
+func (m *manager) ShowProfiles(profileFilter string) error {
+	return m.showService.Profiles(profileFilter)
 }
 
 // SnapshotsList delegates to the snapshots service

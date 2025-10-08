@@ -14,6 +14,7 @@ type Service interface {
 	Status() error
 	Template() error
 	Tree(profileName, environmentName, outputFormat string) error
+	Profiles(profileFilter string) error
 }
 
 type service struct {

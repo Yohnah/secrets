@@ -121,6 +121,8 @@ func (m *manager) outputTable(data interface{}) error {
 		switch format {
 		case "snapshots_list":
 			return m.renderSnapshotsList(statusData, displayMeta)
+		case "profiles_list":
+			return m.renderProfilesList(statusData, displayMeta)
 		}
 	}
 
@@ -487,6 +489,127 @@ func (m *manager) renderSnapshotsList(data map[string]interface{}, displayMeta m
 
 			// Print snapshot line
 			fmt.Printf("  %s %-8s  %s%s\n", indicator, version, age, mutableStr)
+		}
+
+		fmt.Println()
+	}
+
+	return nil
+}
+
+// renderProfilesList renders profiles list in table format
+func (m *manager) renderProfilesList(data map[string]interface{}, displayMeta map[string]interface{}) error {
+	// Print title if present
+	if title, ok := displayMeta["title"].(string); ok {
+		fmt.Println()
+		fmt.Println(title)
+		fmt.Println(m.repeatString("=", len(title)))
+		fmt.Println()
+	}
+
+	// Get profiles data
+	profilesRaw := data["profiles"]
+	if profilesRaw == nil {
+		fmt.Println("No profiles found")
+		return nil
+	}
+
+	// Try to convert to []interface{}
+	profilesData, ok := profilesRaw.([]interface{})
+	if !ok {
+		// Try to convert to []map[string]interface{}
+		if profilesSlice, ok2 := profilesRaw.([]map[string]interface{}); ok2 {
+			// Convert to []interface{}
+			profilesData = make([]interface{}, len(profilesSlice))
+			for i, p := range profilesSlice {
+				profilesData[i] = p
+			}
+		} else {
+			// Unknown type, fallback to JSON
+			return m.outputJSON(data)
+		}
+	}
+
+	if len(profilesData) == 0 {
+		fmt.Println("No profiles found")
+		return nil
+	}
+
+	// Render each profile
+	for _, profileItem := range profilesData {
+		profileMap, ok := profileItem.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Extract profile info
+		profileName, _ := profileMap["name"].(string)
+		total := 0
+		if t, ok := profileMap["total"].(int); ok {
+			total = t
+		}
+
+		// Profile header
+		pluralSuffix := ""
+		if total != 1 {
+			pluralSuffix = "s"
+		}
+		fmt.Printf("Profile: %s (%d environment%s)\n", profileName, total, pluralSuffix)
+
+		// Get environments array
+		environmentsRaw := profileMap["environments"]
+		if environmentsRaw == nil {
+			fmt.Println("  No environments")
+			fmt.Println()
+			continue
+		}
+
+		// Try to convert to []interface{}
+		environmentsData, ok := environmentsRaw.([]interface{})
+		if !ok {
+			// Try to convert to []map[string]interface{}
+			if environmentsSlice, ok2 := environmentsRaw.([]map[string]interface{}); ok2 {
+				// Convert to []interface{}
+				environmentsData = make([]interface{}, len(environmentsSlice))
+				for i, e := range environmentsSlice {
+					environmentsData[i] = e
+				}
+			} else {
+				// Unknown type, skip
+				fmt.Println("  No environments")
+				fmt.Println()
+				continue
+			}
+		}
+
+		if len(environmentsData) == 0 {
+			fmt.Println("  No environments")
+			fmt.Println()
+			continue
+		}
+
+		// Render each environment
+		for _, environmentItem := range environmentsData {
+			environmentMap, ok := environmentItem.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			envName, _ := environmentMap["name"].(string)
+			entriesCount, _ := environmentMap["entries_count"].(string)
+			existsInDB := false
+			if exists, ok := environmentMap["exists_in_db"].(bool); ok {
+				existsInDB = exists
+			}
+
+			// Indicator (✓ for exists in DB, ✗ otherwise)
+			indicator := "✗"
+			if existsInDB {
+				indicator = "✓"
+			}
+
+			// Print environment line
+			fmt.Printf("  %s %-15s  %s\n", indicator, envName, entriesCount)
 		}
 
 		fmt.Println()
