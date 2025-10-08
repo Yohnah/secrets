@@ -20,6 +20,8 @@ import (
 type Service interface {
 	List(profileName string) error
 	New(profileName string) error
+	Restore(profileName, version string) error
+	Delete(profileName, version string) error
 }
 
 type service struct {
@@ -408,6 +410,223 @@ func (s *service) New(profileName string) error {
 	// Step 12: Success message
 	s.logger.Info(fmt.Sprintf("Snapshot '%s' created successfully for profile '%s'", newSnapshotName, profileName))
 	s.logger.Info(fmt.Sprintf("HEAD updated to version %d", newVersion))
+
+	return nil
+}
+
+// Restore restores a snapshot to HEAD
+// This method renames current HEAD to v{currentVersion}, then clones specified version to new HEAD
+func (s *service) Restore(profileName, version string) error {
+	// Step 1: Validate profile exists in secrets.yml
+	secretsFilePath := s.config.GetSecretsFilePath()
+	if err := common.ValidateProfileInSecretsYML(secretsFilePath, profileName, s.validator); err != nil {
+		return err
+	}
+
+	// Step 2: Get configuration
+	cfg, err := s.config.GetConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get configuration: %w", err)
+	}
+
+	// Step 3: Ask for confirmation if not in force mode (BEFORE opening database)
+	if !cfg.NoInteractive {
+		s.logger.Info(fmt.Sprintf("You are about to restore snapshot '%s' for profile '%s'.", version, profileName))
+		s.logger.Info("This will rename current HEAD to a new version and restore the specified snapshot as new HEAD.")
+		confirmed, err := s.prompt.Confirm("Do you want to continue?")
+		if err != nil {
+			return fmt.Errorf("failed to get confirmation: %w", err)
+		}
+		if !confirmed {
+			s.logger.Info("Operation cancelled by user")
+			return nil
+		}
+	}
+
+	// Step 4: Get password (secure)
+	securePassword, err := common.GetPassword(cfg, s.prompt, s.logger, false)
+	if err != nil {
+		return err
+	}
+	defer securePassword.Clear() // Ensure password is cleared from memory
+
+	// Step 5: Open database
+	dbPath := s.config.GetDatabasePath()
+	keyfilePath := s.config.GetKeyfilePath()
+
+	err = s.keepass.Open(dbPath, keyfilePath, securePassword.String())
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer s.keepass.SaveAndClose() // Use SaveAndClose() to save changes
+
+	// Step 6: Check if profile exists in database
+	profileExistsInDB, err := s.keepass.ProfileExists(profileName)
+	if err != nil {
+		return fmt.Errorf("error checking profile in database: %w", err)
+	}
+	if !profileExistsInDB {
+		return fmt.Errorf("error: Profile '%s' does not exist in database. Please check your configuration", profileName)
+	}
+
+	// Step 7: Validate target snapshot exists
+	targetExists, err := s.keepass.TreeGroupExists(profileName, version)
+	if err != nil {
+		return fmt.Errorf("error checking if snapshot '%s' exists: %w", version, err)
+	}
+	if !targetExists {
+		return fmt.Errorf("error: Snapshot '%s' does not exist for profile '%s'. Please check available snapshots", version, profileName)
+	}
+
+	// Step 8: Read current HEAD version from metadata
+	currentVersionStr, err := s.keepass.GetTreeGroupEntryField(profileName, "HEAD", "metadata", "version")
+	if err != nil {
+		return fmt.Errorf("error: HEAD metadata is invalid. Failed to read version field: %w. Please check your database", err)
+	}
+
+	// Convert version string to integer
+	currentVersion, err := strconv.Atoi(currentVersionStr)
+	if err != nil {
+		return fmt.Errorf("error: HEAD metadata version is invalid (not a number): %s. Please check your database", currentVersionStr)
+	}
+
+	// Step 9: Rename current HEAD to v{currentVersion}
+	oldHeadName := fmt.Sprintf("v%d", currentVersion)
+	s.logger.Info(fmt.Sprintf("Renaming current HEAD to '%s'...", oldHeadName))
+	err = s.keepass.RenameTreeGroup(profileName, "HEAD", oldHeadName)
+	if err != nil {
+		return fmt.Errorf("failed to rename HEAD to %s: %w", oldHeadName, err)
+	}
+
+	// Step 10: Update datetime in renamed HEAD (now v{currentVersion})
+	// Version field NOT touched (remains currentVersion)
+	oldHeadDatetime := time.Now().UTC().Format(time.RFC3339)
+	err = s.keepass.SetTreeGroupEntryField(profileName, oldHeadName, "metadata", "datetime", oldHeadDatetime)
+	if err != nil {
+		return fmt.Errorf("failed to update %s datetime: %w", oldHeadName, err)
+	}
+
+	// Step 11: Clone target version to new HEAD
+	s.logger.Info(fmt.Sprintf("Restoring snapshot '%s' to HEAD...", version))
+	err = s.keepass.CloneTreeGroup(profileName, version, "HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to clone %s to HEAD: %w", version, err)
+	}
+
+	// Step 12: Calculate new HEAD version (currentVersion + 1)
+	newHeadVersion := currentVersion + 1
+	newHeadVersionStr := strconv.Itoa(newHeadVersion)
+
+	// Step 13: Update version in new HEAD metadata
+	err = s.keepass.SetTreeGroupEntryField(profileName, "HEAD", "metadata", "version", newHeadVersionStr)
+	if err != nil {
+		return fmt.Errorf("failed to update new HEAD version: %w", err)
+	}
+
+	// Step 14: Update datetime in new HEAD metadata
+	newHeadDatetime := time.Now().UTC().Format(time.RFC3339)
+	err = s.keepass.SetTreeGroupEntryField(profileName, "HEAD", "metadata", "datetime", newHeadDatetime)
+	if err != nil {
+		return fmt.Errorf("failed to update new HEAD datetime: %w", err)
+	}
+
+	// Step 15: Success message
+	s.logger.Info(fmt.Sprintf("Snapshot '%s' restored successfully to HEAD", version))
+	s.logger.Info(fmt.Sprintf("Old HEAD (v%d) preserved as %s", currentVersion, oldHeadName))
+	s.logger.Info(fmt.Sprintf("New HEAD version: v%d", newHeadVersion))
+
+	return nil
+}
+
+// Delete deletes a specific snapshot version from a profile
+// HEAD cannot be deleted
+func (s *service) Delete(profileName, version string) error {
+	// Step 1: Validate that version is not HEAD (check first before format validation)
+	if strings.ToUpper(version) == "HEAD" {
+		return fmt.Errorf("error: HEAD cannot be deleted. Only versioned snapshots (v1, v2, etc.) can be deleted")
+	}
+
+	// Step 2: Validate version format (must be v<number>)
+	if !strings.HasPrefix(version, "v") {
+		return fmt.Errorf("invalid version format: '%s'. Version must start with 'v' (e.g., v1, v2)", version)
+	}
+
+	// Extract version number
+	versionNum := extractVersionNumber(version)
+	if versionNum <= 0 {
+		return fmt.Errorf("invalid version format: '%s'. Version must be v followed by a positive number (e.g., v1, v2)", version)
+	}
+
+	// Step 3: Validate profile exists in secrets.yml
+	secretsFilePath := s.config.GetSecretsFilePath()
+	if err := common.ValidateProfileInSecretsYML(secretsFilePath, profileName, s.validator); err != nil {
+		return err
+	}
+
+	// Step 4: Get configuration
+	cfg, err := s.config.GetConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get configuration: %w", err)
+	}
+
+	// Step 5: Ask for confirmation if not in force mode (BEFORE opening database)
+	if !cfg.NoInteractive {
+		s.logger.Info(fmt.Sprintf("You are about to DELETE snapshot '%s' from profile '%s'.", version, profileName))
+		s.logger.Info("This operation is PERMANENT and cannot be undone.")
+		confirmed, err := s.prompt.Confirm("Are you sure you want to continue?")
+		if err != nil {
+			return fmt.Errorf("failed to get confirmation: %w", err)
+		}
+		if !confirmed {
+			s.logger.Info("Operation cancelled by user")
+			return nil
+		}
+	}
+
+	// Step 6: Get password (secure)
+	securePassword, err := common.GetPassword(cfg, s.prompt, s.logger, false)
+	if err != nil {
+		return err
+	}
+	defer securePassword.Clear() // Ensure password is cleared from memory
+
+	// Step 7: Open database
+	dbPath := s.config.GetDatabasePath()
+	keyfilePath := s.config.GetKeyfilePath()
+
+	err = s.keepass.Open(dbPath, keyfilePath, securePassword.String())
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer s.keepass.SaveAndClose() // Use SaveAndClose() to save changes
+
+	// Step 8: Check if profile exists in database
+	profileExistsInDB, err := s.keepass.ProfileExists(profileName)
+	if err != nil {
+		return fmt.Errorf("error checking profile in database: %w", err)
+	}
+	if !profileExistsInDB {
+		return fmt.Errorf("error: Profile '%s' does not exist in database. Please check your configuration", profileName)
+	}
+
+	// Step 9: Check if version exists
+	versionExists, err := s.keepass.TreeGroupExists(profileName, version)
+	if err != nil {
+		return fmt.Errorf("error checking version in database: %w", err)
+	}
+	if !versionExists {
+		return fmt.Errorf("error: Version '%s' not found in profile '%s'", version, profileName)
+	}
+
+	// Step 10: Delete the version group
+	s.logger.Info(fmt.Sprintf("Deleting snapshot '%s' from profile '%s'...", version, profileName))
+	err = s.keepass.DeleteTreeGroup(profileName, version)
+	if err != nil {
+		return fmt.Errorf("failed to delete version '%s': %w", version, err)
+	}
+
+	// Step 11: Success message
+	s.logger.Info(fmt.Sprintf("Snapshot '%s' deleted successfully from profile '%s'", version, profileName))
 
 	return nil
 }

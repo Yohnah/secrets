@@ -72,12 +72,68 @@ var snapshotsNewCmd = &cobra.Command{
 	},
 }
 
+// snapshotsRestoreCmd restores a snapshot to HEAD
+var snapshotsRestoreCmd = &cobra.Command{
+	Use:   "restore <profile_name> v<version>",
+	Short: "Restore a snapshot to HEAD",
+	Long:  "Restore a snapshot by renaming current HEAD to v{current_version} and cloning the specified version to new HEAD with incremented version",
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		// Get profile name and version from args (both required)
+		profileName := args[0]
+		version := args[1]
+
+		// Create command flags (no specific flags for this command)
+		commandFlags := &types.CommandFlags{}
+
+		// Create manager context
+		managers := NewManagerContext(commandFlags)
+
+		// Execute restore command (delegate to CORE)
+		if err := managers.Secrets.SnapshotsRestore(profileName, version); err != nil {
+			managers.Logger.Error(err.Error())
+			os.Exit(1)
+		}
+	},
+}
+
+// snapshotsDeleteCmd deletes a specific snapshot version
+var snapshotsDeleteCmd = &cobra.Command{
+	Use:   "delete <profile_name> v<version>",
+	Short: "Delete a snapshot version",
+	Long:  "Delete a specific snapshot version from a profile. HEAD cannot be deleted. This operation is permanent.",
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		// Get profile name and version from args (both required)
+		profileName := args[0]
+		version := args[1]
+
+		// Create command flags (no specific flags for this command)
+		commandFlags := &types.CommandFlags{}
+
+		// Create manager context
+		managers := NewManagerContext(commandFlags)
+
+		// Execute delete command (delegate to CORE)
+		if err := managers.Secrets.SnapshotsDelete(profileName, version); err != nil {
+			managers.Logger.Error(err.Error())
+			os.Exit(1)
+		}
+	},
+}
+
 func init() {
 	// Add list subcommand to snapshots
 	snapshotsCmd.AddCommand(snapshotsListCmd)
 
 	// Add new subcommand to snapshots
 	snapshotsCmd.AddCommand(snapshotsNewCmd)
+
+	// Add restore subcommand to snapshots
+	snapshotsCmd.AddCommand(snapshotsRestoreCmd)
+
+	// Add delete subcommand to snapshots
+	snapshotsCmd.AddCommand(snapshotsDeleteCmd)
 
 	// Add flags to list command
 	snapshotsListCmd.Flags().StringVarP(&flagSnapshotsOutput, "output", "o", "table", "Output format: table, json, yaml")

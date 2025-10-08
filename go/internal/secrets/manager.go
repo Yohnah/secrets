@@ -22,6 +22,8 @@ type Manager interface {
 	ShowProfiles(profileFilter string) error
 	SnapshotsList(profileName string) error
 	SnapshotsNew(profileName string) error
+	SnapshotsRestore(profileName, version string) error
+	SnapshotsDelete(profileName, version string) error
 }
 
 type manager struct {
@@ -76,4 +78,14 @@ func (m *manager) SnapshotsList(profileName string) error {
 // SnapshotsNew delegates to the snapshots service
 func (m *manager) SnapshotsNew(profileName string) error {
 	return m.snapshotsService.New(profileName)
+}
+
+// SnapshotsRestore delegates to the snapshots service
+func (m *manager) SnapshotsRestore(profileName, version string) error {
+	return m.snapshotsService.Restore(profileName, version)
+}
+
+// SnapshotsDelete delegates to the snapshots service
+func (m *manager) SnapshotsDelete(profileName, version string) error {
+	return m.snapshotsService.Delete(profileName, version)
 }

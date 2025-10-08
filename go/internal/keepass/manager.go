@@ -43,6 +43,9 @@ type Manager interface {
 	GetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName string) (string, error)
 	CloneTreeGroup(profileName, sourceTreeGroup, targetTreeGroup string) error
 	SetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName, value string) error
+	TreeGroupExists(profileName, treeGroup string) (bool, error)
+	RenameTreeGroup(profileName, oldName, newName string) error
+	DeleteTreeGroup(profileName, treeGroup string) error
 }
 
 // manager implements the Manager interface
@@ -1617,4 +1620,155 @@ func deepCloneEntry(source *gokeepasslib.Entry) gokeepasslib.Entry {
 	}
 
 	return cloned
+}
+
+// TreeGroupExists checks if a tree group exists under a profile
+func (m *manager) TreeGroupExists(profileName, treeGroup string) (bool, error) {
+	if m.db == nil {
+		return false, fmt.Errorf("database not open")
+	}
+
+	// Validate input
+	if profileName == "" {
+		return false, fmt.Errorf("profile name cannot be empty")
+	}
+	if treeGroup == "" {
+		return false, fmt.Errorf("tree group name cannot be empty")
+	}
+
+	// Check if root group exists
+	if len(m.db.Content.Root.Groups) == 0 {
+		return false, nil
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+
+	// Find profile group
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+
+	if profileGroup == nil {
+		return false, nil
+	}
+
+	// Try to find tree group under profile
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == treeGroup {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// RenameTreeGroup renames a tree group under a profile
+func (m *manager) RenameTreeGroup(profileName, oldName, newName string) error {
+	if m.db == nil {
+		return fmt.Errorf("database not open")
+	}
+
+	// Validate input
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if oldName == "" {
+		return fmt.Errorf("old name cannot be empty")
+	}
+	if newName == "" {
+		return fmt.Errorf("new name cannot be empty")
+	}
+
+	// Check if root group exists
+	if len(m.db.Content.Root.Groups) == 0 {
+		return fmt.Errorf("root group not found")
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+
+	// Find profile group
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+
+	if profileGroup == nil {
+		return fmt.Errorf("profile '%s' not found", profileName)
+	}
+
+	// Find tree group to rename
+	var treeGroupFound bool
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == oldName {
+			profileGroup.Groups[i].Name = newName
+			treeGroupFound = true
+			break
+		}
+	}
+
+	if !treeGroupFound {
+		return fmt.Errorf("tree group '%s' not found in profile '%s'", oldName, profileName)
+	}
+
+	return nil
+}
+
+// DeleteTreeGroup deletes a tree group under a profile
+func (m *manager) DeleteTreeGroup(profileName, treeGroup string) error {
+	if m.db == nil {
+		return fmt.Errorf("database not open")
+	}
+
+	// Validate input
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if treeGroup == "" {
+		return fmt.Errorf("tree group name cannot be empty")
+	}
+
+	// Check if root group exists
+	if len(m.db.Content.Root.Groups) == 0 {
+		return fmt.Errorf("root group not found")
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+
+	// Find profile group
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+
+	if profileGroup == nil {
+		return fmt.Errorf("profile '%s' not found", profileName)
+	}
+
+	// Find and delete tree group
+	var treeGroupIndex = -1
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == treeGroup {
+			treeGroupIndex = i
+			break
+		}
+	}
+
+	if treeGroupIndex == -1 {
+		return fmt.Errorf("tree group '%s' not found in profile '%s'", treeGroup, profileName)
+	}
+
+	// Remove tree group from slice
+	profileGroup.Groups = append(profileGroup.Groups[:treeGroupIndex], profileGroup.Groups[treeGroupIndex+1:]...)
+
+	return nil
 }

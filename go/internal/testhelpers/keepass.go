@@ -2,7 +2,9 @@ package testhelpers
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Yohnah/secrets/internal/keepass"
@@ -126,4 +128,17 @@ func CreateTestProfile(t *testing.T, mgr keepass.Manager, profileName, envName s
 	if err != nil {
 		t.Fatalf("Failed to create environment '%s': %v", envName, err)
 	}
+}
+
+// RunCommand creates an exec.Cmd to run the secrets binary with given arguments
+// The binary path is assumed to be ./bin/secrets relative to the current working directory
+func RunCommand(args ...string) *exec.Cmd {
+	cmd := exec.Command("./bin/secrets", args...)
+	cmd.Dir = "/workspaces/secrets" // Set working directory to project root
+	return cmd
+}
+
+// ContainsString checks if the haystack contains the needle substring
+func ContainsString(haystack, needle string) bool {
+	return strings.Contains(haystack, needle)
 }
