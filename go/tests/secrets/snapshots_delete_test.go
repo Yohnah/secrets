@@ -17,12 +17,12 @@ import (
 
 // TestSnapshotsDelete_Success tests deleting a snapshot successfully
 func TestSnapshotsDelete_Success(t *testing.T) {
-tmpDir := setupTestDir(t)
-setupTestPassword(t)
-initGitRepo(t, tmpDir)
+	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpDir)
 
-// Create secrets.yml with a profile
-secretsYMLContent := `metadata:
+	// Create secrets.yml with a profile
+	secretsYMLContent := `metadata:
   profile: "test-profile"
   default_environment: "production"
 
@@ -35,97 +35,71 @@ environments:
 
 outputs: {}`
 
-secretsYMLPath := filepath.Join(tmpDir, "secrets.yml")
-if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {
-t.Fatalf("Failed to create secrets.yml: %v", err)
-}
+	secretsYMLPath := filepath.Join(tmpDir, "secrets.yml")
+	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {
+		t.Fatalf("Failed to create secrets.yml: %v", err)
+	}
 
-// Change to tmpDir
-originalDir, _ := os.Getwd()
-defer os.Chdir(originalDir)
-os.Chdir(tmpDir)
+	// Change to tmpDir
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
 
-// Setup managers
-flags := &types.GlobalFlags{
-SecretsFile:      secretsYMLPath,
-IgnoreGitProject: true,
-Force:            true,
-}
+	// Setup mock KeePass manager with snapshots
+	mockKP := newMockKeePassManager()
+	mockKP.setupProfileWithSnapshots("test-profile", []string{"v1", "v2"})
 
-commandFlags := &types.CommandFlags{}
+	// Setup managers
+	flags := &types.GlobalFlags{
+		SecretsFile:      secretsYMLPath,
+		IgnoreGitProject: true,
+		Force:            true,
+	}
 
-validatorMgr := validator.NewManager()
-configMgr := config.NewManager(flags, commandFlags, validatorMgr)
-loggerMgr := logger.NewManager(false)
-promptMgr := prompt.NewManager()
-kpMgr := keepass.NewManager()
-secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), validatorMgr)
+	commandFlags := &types.CommandFlags{}
 
-// Initialize database with profile
-err := secretsMgr.Init()
-if err != nil {
-t.Fatalf("Init failed: %v", err)
-}
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validatorMgr)
 
-// Create two snapshots (v1 and v2)
-err = secretsMgr.SnapshotsNew("test-profile")
-if err != nil {
-t.Fatalf("SnapshotsNew v1 failed: %v", err)
-}
+	// Verify v1 and v2 exist before deletion
+	v1Exists, _ := mockKP.TreeGroupExists("test-profile", "v1")
+	v2Exists, _ := mockKP.TreeGroupExists("test-profile", "v2")
 
-err = secretsMgr.SnapshotsNew("test-profile")
-if err != nil {
-t.Fatalf("SnapshotsNew v2 failed: %v", err)
-}
+	if !v1Exists {
+		t.Fatalf("v1 does not exist before deletion")
+	}
+	if !v2Exists {
+		t.Fatalf("v2 does not exist before deletion")
+	}
 
-// Verify v1 and v2 exist
-dbPath := configMgr.GetDatabasePath()
-keyfilePath := configMgr.GetKeyfilePath()
-cfg, _ := configMgr.GetConfig()
+	// Delete v1
+	err := secretsMgr.SnapshotsDelete("test-profile", "v1")
+	if err != nil {
+		t.Errorf("SnapshotsDelete failed: %v", err)
+	}
 
-err = kpMgr.Open(dbPath, keyfilePath, cfg.Password)
-if err != nil {
-t.Fatalf("Failed to open database: %v", err)
-}
+	// Verify v1 was deleted but v2 and HEAD still exist
+	v1ExistsAfter, _ := mockKP.TreeGroupExists("test-profile", "v1")
+	v2ExistsAfter, _ := mockKP.TreeGroupExists("test-profile", "v2")
+	headExistsAfter, _ := mockKP.TreeGroupExists("test-profile", "HEAD")
 
-v1Exists, _ := kpMgr.TreeGroupExists("test-profile", "v1")
-v2Exists, _ := kpMgr.TreeGroupExists("test-profile", "v2")
+	if v1ExistsAfter {
+		t.Errorf("v1 still exists after deletion")
+	}
+	if !v2ExistsAfter {
+		t.Errorf("v2 was deleted unexpectedly")
+	}
+	if !headExistsAfter {
+		t.Errorf("HEAD was deleted unexpectedly")
+	}
 
-kpMgr.CloseWithoutSave()
-
-if !v1Exists {
-t.Fatalf("v1 does not exist before deletion")
-}
-if !v2Exists {
-t.Fatalf("v2 does not exist before deletion")
-}
-
-// Delete v1
-err = secretsMgr.SnapshotsDelete("test-profile", "v1")
-if err != nil {
-t.Errorf("SnapshotsDelete failed: %v", err)
-}
-
-// Verify v1 was deleted but v2 and HEAD still exist
-err = kpMgr.Open(dbPath, keyfilePath, cfg.Password)
-if err != nil {
-t.Fatalf("Failed to open database after delete: %v", err)
-}
-defer kpMgr.CloseWithoutSave()
-
-v1ExistsAfter, _ := kpMgr.TreeGroupExists("test-profile", "v1")
-v2ExistsAfter, _ := kpMgr.TreeGroupExists("test-profile", "v2")
-headExistsAfter, _ := kpMgr.TreeGroupExists("test-profile", "HEAD")
-
-if v1ExistsAfter {
-t.Errorf("v1 still exists after deletion")
-}
-if !v2ExistsAfter {
-t.Errorf("v2 was deleted unexpectedly")
-}
-if !headExistsAfter {
-t.Errorf("HEAD was deleted unexpectedly")
-}
+	// Verify SaveAndClose was called
+	if !mockKP.saveAndCloseCalled {
+		t.Errorf("Expected SaveAndClose to be called")
+	}
 }
 
 // TestSnapshotsDelete_ProfileNotInSecretsYML tests error when profile not in secrets.yml

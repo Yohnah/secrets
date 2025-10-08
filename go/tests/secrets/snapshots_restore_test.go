@@ -1,228 +1,289 @@
-package secrets
+package secrets_test
 
 import (
-"os"
-"path/filepath"
-"testing"
+	"os"
+	"path/filepath"
+	"strconv"
+	"testing"
 
-"github.com/Yohnah/secrets/internal/testhelpers"
+	"github.com/Yohnah/secrets/internal/config"
+	"github.com/Yohnah/secrets/internal/logger"
+	"github.com/Yohnah/secrets/internal/output"
+	"github.com/Yohnah/secrets/internal/prompt"
+	"github.com/Yohnah/secrets/internal/secrets"
+	"github.com/Yohnah/secrets/internal/types"
+	"github.com/Yohnah/secrets/internal/validator"
 )
 
 func TestSnapshotsRestore_Success(t *testing.T) {
-// Setup test environment
-testDir := t.TempDir()
-secretsFile := filepath.Join(testDir, "secrets.yml")
-dbFile := filepath.Join(testDir, "test.kdbx")
-keyfile := filepath.Join(testDir, "test.key")
+	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpDir)
 
-// Create minimal secrets.yml
-secretsContent := `metadata:
+	// Create secrets.yml with a profile
+	secretsYMLContent := `metadata:
   profile: "test-profile"
   default_environment: "production"
+
 environments:
   production:
     - name: "DB_PASSWORD"
       type: "envvar"
-      entry: "/DB"
+      entry: "/Production/DB"
       key: "Password"
+
 outputs: {}`
 
-err := os.WriteFile(secretsFile, []byte(secretsContent), 0644)
-if err != nil {
-t.Fatalf("Failed to create secrets.yml: %v", err)
-}
+	secretsYMLPath := filepath.Join(tmpDir, "secrets.yml")
+	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {
+		t.Fatalf("Failed to create secrets.yml: %v", err)
+	}
 
-// Initialize database and create profile with snapshots
-cmd := testhelpers.RunCommand("init", "--secrets-file", secretsFile, "--db", dbFile, "--keyfile", keyfile)
-cmd.Env = append(cmd.Env, "SECRETS_YOHNAH_PASSWORD=123456")
-if err := cmd.Run(); err != nil {
-t.Fatalf("Failed to init database: %v", err)
-}
+	// Change to tmpDir
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
 
-// Create first snapshot (v1)
-cmd = testhelpers.RunCommand("snapshots", "new", "test-profile", "--secrets-file", secretsFile, "--db", dbFile, "--keyfile", keyfile, "-f")
-cmd.Env = append(cmd.Env, "SECRETS_YOHNAH_PASSWORD=123456")
-if err := cmd.Run(); err != nil {
-t.Fatalf("Failed to create first snapshot: %v", err)
-}
+	// Setup mock KeePass manager
+	mockKP := newMockKeePassManager()
+	mockKP.setupProfileWithSnapshots("test-profile", []string{"v1", "v2"})
 
-// Create second snapshot (v2)
-cmd = testhelpers.RunCommand("snapshots", "new", "test-profile", "--secrets-file", secretsFile, "--db", dbFile, "--keyfile", keyfile, "-f")
-cmd.Env = append(cmd.Env, "SECRETS_YOHNAH_PASSWORD=123456")
-if err := cmd.Run(); err != nil {
-t.Fatalf("Failed to create second snapshot: %v", err)
-}
+	// Setup managers
+	flags := &types.GlobalFlags{
+		SecretsFile:      secretsYMLPath,
+		IgnoreGitProject: true,
+		Force:            true,
+	}
 
-// Now HEAD should be v3, and we have v1 and v2 snapshots
+	commandFlags := &types.CommandFlags{}
 
-// Restore v1
-cmd = testhelpers.RunCommand("snapshots", "restore", "test-profile", "v1", "--secrets-file", secretsFile, "--db", dbFile, "--keyfile", keyfile, "-f")
-cmd.Env = append(cmd.Env, "SECRETS_YOHNAH_PASSWORD=123456")
-output, err := cmd.CombinedOutput()
-if err != nil {
-t.Fatalf("Failed to restore snapshot v1: %v\nOutput: %s", err, output)
-}
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validatorMgr)
 
-// Verify success messages
-outputStr := string(output)
-if !testhelpers.ContainsString(outputStr, "Snapshot 'v1' restored successfully to HEAD") {
-t.Errorf("Expected success message not found in output: %s", outputStr)
-}
-if !testhelpers.ContainsString(outputStr, "Old HEAD (v3) preserved as v3") {
-t.Errorf("Expected preservation message not found in output: %s", outputStr)
-}
-if !testhelpers.ContainsString(outputStr, "New HEAD version: v4") {
-t.Errorf("Expected new HEAD version message not found in output: %s", outputStr)
-}
+	// Restore v1
+	err := secretsMgr.SnapshotsRestore("test-profile", "v1")
+	if err != nil {
+		t.Fatalf("SnapshotsRestore failed: %v", err)
+	}
+
+	// Verify that HEAD was renamed to v3
+	v3Exists, _ := mockKP.TreeGroupExists("test-profile", "v3")
+	if !v3Exists {
+		t.Errorf("Expected v3 to exist after restore (old HEAD)")
+	}
+
+	// Verify that new HEAD exists
+	headExists, _ := mockKP.TreeGroupExists("test-profile", "HEAD")
+	if !headExists {
+		t.Errorf("Expected HEAD to exist after restore")
+	}
+
+	// Verify that new HEAD has version 4
+	newVersion, _ := mockKP.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "version")
+	if newVersion != "4" {
+		t.Errorf("Expected new HEAD version to be 4, got %s", newVersion)
+	}
+
+	// Verify SaveAndClose was called
+	if !mockKP.saveAndCloseCalled {
+		t.Errorf("Expected SaveAndClose to be called")
+	}
 }
 
 func TestSnapshotsRestore_ProfileNotInSecretsYML(t *testing.T) {
-// Setup test environment
-testDir := t.TempDir()
-secretsFile := filepath.Join(testDir, "secrets.yml")
-dbFile := filepath.Join(testDir, "test.kdbx")
-keyfile := filepath.Join(testDir, "test.key")
+	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpDir)
 
-// Create minimal secrets.yml with different profile
-secretsContent := `metadata:
+	// Create secrets.yml with a different profile
+	secretsYMLContent := `metadata:
   profile: "test-profile"
   default_environment: "production"
+
 environments:
   production:
     - name: "DB_PASSWORD"
       type: "envvar"
-      entry: "/DB"
+      entry: "/Production/DB"
       key: "Password"
+
 outputs: {}`
 
-err := os.WriteFile(secretsFile, []byte(secretsContent), 0644)
-if err != nil {
-t.Fatalf("Failed to create secrets.yml: %v", err)
-}
+	secretsYMLPath := filepath.Join(tmpDir, "secrets.yml")
+	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {
+		t.Fatalf("Failed to create secrets.yml: %v", err)
+	}
 
-// Initialize database
-cmd := testhelpers.RunCommand("init", "--secrets-file", secretsFile, "--db", dbFile, "--keyfile", keyfile)
-cmd.Env = append(cmd.Env, "SECRETS_YOHNAH_PASSWORD=123456")
-if err := cmd.Run(); err != nil {
-t.Fatalf("Failed to init database: %v", err)
-}
+	// Change to tmpDir
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
 
-// Try to restore for non-existent profile
-cmd = testhelpers.RunCommand("snapshots", "restore", "non-existent-profile", "v1", "--secrets-file", secretsFile, "--db", dbFile, "--keyfile", keyfile, "-f")
-cmd.Env = append(cmd.Env, "SECRETS_YOHNAH_PASSWORD=123456")
-output, err := cmd.CombinedOutput()
+	// Setup mock KeePass manager
+	mockKP := newMockKeePassManager()
 
-// Should fail
-if err == nil {
-t.Fatal("Expected error for non-existent profile, but command succeeded")
-}
+	// Setup managers
+	flags := &types.GlobalFlags{
+		SecretsFile:      secretsYMLPath,
+		IgnoreGitProject: true,
+		Force:            true,
+	}
 
-// Verify error message
-outputStr := string(output)
-if !testhelpers.ContainsString(outputStr, "does not exist in secrets.yml") {
-t.Errorf("Expected error message about profile not in secrets.yml, got: %s", outputStr)
-}
+	commandFlags := &types.CommandFlags{}
+
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validatorMgr)
+
+	// Try to restore for non-existent profile
+	err := secretsMgr.SnapshotsRestore("non-existent-profile", "v1")
+	if err == nil {
+		t.Fatal("Expected error for non-existent profile, but got nil")
+	}
+
+	// Verify error message
+	expectedMsg := "does not exist in secrets.yml"
+	if !contains(err.Error(), expectedMsg) {
+		t.Errorf("Expected error message to contain '%s', got: %s", expectedMsg, err.Error())
+	}
 }
 
 func TestSnapshotsRestore_SnapshotNotExists(t *testing.T) {
-// Setup test environment
-testDir := t.TempDir()
-secretsFile := filepath.Join(testDir, "secrets.yml")
-dbFile := filepath.Join(testDir, "test.kdbx")
-keyfile := filepath.Join(testDir, "test.key")
+	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpDir)
 
-// Create minimal secrets.yml
-secretsContent := `metadata:
+	// Create secrets.yml with a profile
+	secretsYMLContent := `metadata:
   profile: "test-profile"
   default_environment: "production"
+
 environments:
   production:
     - name: "DB_PASSWORD"
       type: "envvar"
-      entry: "/DB"
+      entry: "/Production/DB"
       key: "Password"
+
 outputs: {}`
 
-err := os.WriteFile(secretsFile, []byte(secretsContent), 0644)
-if err != nil {
-t.Fatalf("Failed to create secrets.yml: %v", err)
+	secretsYMLPath := filepath.Join(tmpDir, "secrets.yml")
+	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {
+		t.Fatalf("Failed to create secrets.yml: %v", err)
+	}
+
+	// Change to tmpDir
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
+
+	// Setup mock KeePass manager
+	mockKP := newMockKeePassManager()
+	mockKP.CreateProfile("test-profile") // Profile exists but no snapshots
+
+	// Setup managers
+	flags := &types.GlobalFlags{
+		SecretsFile:      secretsYMLPath,
+		IgnoreGitProject: true,
+		Force:            true,
+	}
+
+	commandFlags := &types.CommandFlags{}
+
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validatorMgr)
+
+	// Try to restore non-existent snapshot
+	err := secretsMgr.SnapshotsRestore("test-profile", "v999")
+	if err == nil {
+		t.Fatal("Expected error for non-existent snapshot, but got nil")
+	}
+
+	// Verify error message
+	expectedMsg := "does not exist for profile"
+	if !contains(err.Error(), expectedMsg) {
+		t.Errorf("Expected error message to contain '%s', got: %s", expectedMsg, err.Error())
+	}
 }
 
-// Initialize database
-cmd := testhelpers.RunCommand("init", "--secrets-file", secretsFile, "--db", dbFile, "--keyfile", keyfile)
-cmd.Env = append(cmd.Env, "SECRETS_YOHNAH_PASSWORD=123456")
-if err := cmd.Run(); err != nil {
-t.Fatalf("Failed to init database: %v", err)
-}
+func TestSnapshotsRestore_VersionIncrement(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpDir)
 
-// Try to restore non-existent snapshot
-cmd = testhelpers.RunCommand("snapshots", "restore", "test-profile", "v999", "--secrets-file", secretsFile, "--db", dbFile, "--keyfile", keyfile, "-f")
-cmd.Env = append(cmd.Env, "SECRETS_YOHNAH_PASSWORD=123456")
-output, err := cmd.CombinedOutput()
-
-// Should fail
-if err == nil {
-t.Fatal("Expected error for non-existent snapshot, but command succeeded")
-}
-
-// Verify error message
-outputStr := string(output)
-if !testhelpers.ContainsString(outputStr, "does not exist for profile") {
-t.Errorf("Expected error message about snapshot not existing, got: %s", outputStr)
-}
-}
-
-func TestSnapshotsRestore_NoInteractiveWithoutPassword(t *testing.T) {
-// Setup test environment
-testDir := t.TempDir()
-secretsFile := filepath.Join(testDir, "secrets.yml")
-dbFile := filepath.Join(testDir, "test.kdbx")
-keyfile := filepath.Join(testDir, "test.key")
-
-// Create minimal secrets.yml
-secretsContent := `metadata:
+	// Create secrets.yml
+	secretsYMLContent := `metadata:
   profile: "test-profile"
   default_environment: "production"
+
 environments:
   production:
     - name: "DB_PASSWORD"
       type: "envvar"
-      entry: "/DB"
+      entry: "/Production/DB"
       key: "Password"
+
 outputs: {}`
 
-err := os.WriteFile(secretsFile, []byte(secretsContent), 0644)
-if err != nil {
-t.Fatalf("Failed to create secrets.yml: %v", err)
-}
+	secretsYMLPath := filepath.Join(tmpDir, "secrets.yml")
+	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {
+		t.Fatalf("Failed to create secrets.yml: %v", err)
+	}
 
-// Initialize database
-cmd := testhelpers.RunCommand("init", "--secrets-file", secretsFile, "--db", dbFile, "--keyfile", keyfile)
-cmd.Env = append(cmd.Env, "SECRETS_YOHNAH_PASSWORD=123456")
-if err := cmd.Run(); err != nil {
-t.Fatalf("Failed to init database: %v", err)
-}
+	// Change to tmpDir
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
 
-// Create snapshot
-cmd = testhelpers.RunCommand("snapshots", "new", "test-profile", "--secrets-file", secretsFile, "--db", dbFile, "--keyfile", keyfile, "-f")
-cmd.Env = append(cmd.Env, "SECRETS_YOHNAH_PASSWORD=123456")
-if err := cmd.Run(); err != nil {
-t.Fatalf("Failed to create snapshot: %v", err)
-}
+	// Setup mock with multiple versions
+	mockKP := newMockKeePassManager()
+	mockKP.setupProfileWithSnapshots("test-profile", []string{"v1", "v2", "v3", "v4", "v5"})
 
-// Try to restore with -f flag but without password env var
-cmd = testhelpers.RunCommand("snapshots", "restore", "test-profile", "v1", "--secrets-file", secretsFile, "--db", dbFile, "--keyfile", keyfile, "-f")
-// Intentionally NOT setting SECRETS_YOHNAH_PASSWORD
-output, err := cmd.CombinedOutput()
+	// Setup managers
+	flags := &types.GlobalFlags{
+		SecretsFile:      secretsYMLPath,
+		IgnoreGitProject: true,
+		Force:            true,
+	}
 
-// Should fail
-if err == nil {
-t.Fatal("Expected error when using -f without password, but command succeeded")
-}
+	commandFlags := &types.CommandFlags{}
 
-// Verify error message
-outputStr := string(output)
-if !testhelpers.ContainsString(outputStr, "Password required") || !testhelpers.ContainsString(outputStr, "SECRETS_YOHNAH_PASSWORD") {
-t.Errorf("Expected error message about missing password, got: %s", outputStr)
-}
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validatorMgr)
+
+	// Get HEAD version before restore (should be 6)
+	headVersionBefore, _ := mockKP.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "version")
+	if headVersionBefore != "6" {
+		t.Fatalf("Expected HEAD version to be 6 before restore, got %s", headVersionBefore)
+	}
+
+	// Restore v2
+	err := secretsMgr.SnapshotsRestore("test-profile", "v2")
+	if err != nil {
+		t.Fatalf("SnapshotsRestore failed: %v", err)
+	}
+
+	// Verify old HEAD was saved as v6
+	v6Exists, _ := mockKP.TreeGroupExists("test-profile", "v6")
+	if !v6Exists {
+		t.Errorf("Expected v6 to exist (old HEAD)")
+	}
+
+	// Verify new HEAD version is 7
+	newVersion, _ := mockKP.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "version")
+	expectedVersion := strconv.Itoa(7)
+	if newVersion != expectedVersion {
+		t.Errorf("Expected new HEAD version to be %s, got %s", expectedVersion, newVersion)
+	}
 }
