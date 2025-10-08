@@ -21,13 +21,16 @@ var snapshotsCmd = &cobra.Command{
 
 // snapshotsListCmd lists all snapshots
 var snapshotsListCmd = &cobra.Command{
-	Use:   "list <profile_name|all>",
+	Use:   "list [profile_name|all]",
 	Short: "List snapshots",
 	Long:  "List all snapshots for a specific profile or all profiles. Use 'all' to list snapshots from all profiles",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		// Get profile name from args (required)
-		profileName := args[0]
+		// Get profile name from args (optional, default "all")
+		profileName := "all"
+		if len(args) > 0 {
+			profileName = args[0]
+		}
 
 		// Create command flags
 		commandFlags := &types.CommandFlags{
