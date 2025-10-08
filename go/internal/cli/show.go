@@ -10,6 +10,7 @@ import (
 var (
 	flagMinimal      bool
 	flagOutputFormat string
+	flagTreeOutput   string
 ) // showCmd represents the show command
 var showCmd = &cobra.Command{
 	Use:   "show",
@@ -46,6 +47,26 @@ var showStatusCmd = &cobra.Command{
 	RunE: runShowStatus,
 }
 
+// showTreeCmd represents the show tree command
+var showTreeCmd = &cobra.Command{
+	Use:   "tree <profile-name> <environment-name>",
+	Short: "Show tree structure of secrets",
+	Long: `Display a tree structure of the secrets for a specific profile and environment.
+
+The tree shows:
+- Groups and entries hierarchically organized
+- Synchronization status indicators:
+  ✓ Entry exists in both secrets.yml and database
+  ✗ Entry defined in secrets.yml but missing in database
+  ⚠ Entry exists in database but not defined in secrets.yml
+
+Example:
+  secrets show tree webapp-production production
+  secrets show tree webapp-production production -o ascii`,
+	Args: cobra.ExactArgs(2),
+	RunE: runShowTree,
+}
+
 func init() {
 	// Register show command with root
 	rootCmd.AddCommand(showCmd)
@@ -53,12 +74,16 @@ func init() {
 	// Register subcommands with show
 	showCmd.AddCommand(showTemplateCmd)
 	showCmd.AddCommand(showStatusCmd)
+	showCmd.AddCommand(showTreeCmd)
 
 	// Flags for template subcommand only
 	showTemplateCmd.Flags().BoolVar(&flagMinimal, "minimal", false, "Show minimal template without examples")
 
 	// Flags for status subcommand only
 	showStatusCmd.Flags().StringVarP(&flagOutputFormat, "output", "o", "table", "Output format: json, yaml, table")
+
+	// Flags for tree subcommand only
+	showTreeCmd.Flags().StringVarP(&flagTreeOutput, "output", "o", "ansi", "Output format: ansi, ascii")
 }
 
 func runShowTemplate(cmd *cobra.Command, args []string) error {
@@ -92,6 +117,35 @@ func runShowStatus(cmd *cobra.Command, args []string) error {
 	// Execute business logic (delegate all decisions to CORE)
 	// SecretsManager will pull processed config from ConfigMgr
 	if err := managers.Secrets.Status(); err != nil {
+		managers.Logger.Error(err.Error())
+		os.Exit(1)
+	}
+
+	return nil
+}
+
+func runShowTree(cmd *cobra.Command, args []string) error {
+	// Validate output format
+	if flagTreeOutput != "ansi" && flagTreeOutput != "ascii" {
+		managers := NewManagerContext(nil)
+		managers.Logger.Error("Invalid output format. Use 'ansi' or 'ascii'")
+		os.Exit(1)
+	}
+
+	// CliMgr captures ALL command-specific flags and feeds them to ConfigMgr
+	commandFlags := &types.CommandFlags{
+		OutputFormat: flagTreeOutput,
+	}
+
+	// Create manager context with captured flags
+	managers := NewManagerContext(commandFlags)
+
+	// Execute business logic (delegate all decisions to CORE)
+	// SecretsManager will pull processed config from ConfigMgr
+	profileName := args[0]
+	environmentName := args[1]
+
+	if err := managers.Secrets.ShowTree(profileName, environmentName, flagTreeOutput); err != nil {
 		managers.Logger.Error(err.Error())
 		os.Exit(1)
 	}

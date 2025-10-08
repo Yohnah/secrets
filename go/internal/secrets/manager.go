@@ -18,6 +18,7 @@ type Manager interface {
 	Init() error
 	Status() error
 	ShowTemplate() error
+	ShowTree(profileName, environmentName, outputFormat string) error
 	SnapshotsList(profileName string) error
 }
 
@@ -53,6 +54,11 @@ func (m *manager) Status() error {
 // The service will pull configuration from ConfigMgr
 func (m *manager) ShowTemplate() error {
 	return m.showService.Template()
+}
+
+// ShowTree delegates to the show service
+func (m *manager) ShowTree(profileName, environmentName, outputFormat string) error {
+	return m.showService.Tree(profileName, environmentName, outputFormat)
 }
 
 // SnapshotsList delegates to the snapshots service
