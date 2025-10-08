@@ -19,9 +19,14 @@ type TreeNode struct {
 
 // Tree displays a tree representation of the specified profile and environment
 func (s *service) Tree(profileName, environmentName, outputFormat string) error {
+	// Validate output format
+	if outputFormat != "ansi" && outputFormat != "ascii" {
+		return fmt.Errorf("invalid output format '%s': must be 'ansi' or 'ascii'", outputFormat)
+	}
+
 	// Get secrets.yml path from config
 	secretsFilePath := s.config.GetSecretsFilePath()
-	
+
 	// Validate that profile and environment exist in secrets.yml
 	secretsConfig, errs := s.validator.ReadAndValidateSecretsYML(secretsFilePath)
 	if len(errs) > 0 {
@@ -236,14 +241,14 @@ func capitalizeEnvironmentName(name string) string {
 	if name == "" {
 		return name
 	}
-	
+
 	// Convert to lowercase first
 	name = strings.ToLower(name)
-	
+
 	// Capitalize first letter
 	runes := []rune(name)
 	runes[0] = unicode.ToUpper(runes[0])
-	
+
 	return string(runes)
 }
 

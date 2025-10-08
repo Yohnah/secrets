@@ -125,13 +125,6 @@ func runShowStatus(cmd *cobra.Command, args []string) error {
 }
 
 func runShowTree(cmd *cobra.Command, args []string) error {
-	// Validate output format
-	if flagTreeOutput != "ansi" && flagTreeOutput != "ascii" {
-		managers := NewManagerContext(nil)
-		managers.Logger.Error("Invalid output format. Use 'ansi' or 'ascii'")
-		os.Exit(1)
-	}
-
 	// CliMgr captures ALL command-specific flags and feeds them to ConfigMgr
 	commandFlags := &types.CommandFlags{
 		OutputFormat: flagTreeOutput,
