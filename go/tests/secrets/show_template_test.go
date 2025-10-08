@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Yohnah/secrets/internal/config"
-	"github.com/Yohnah/secrets/internal/keepass"
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
@@ -44,7 +43,7 @@ func TestShowTemplate_FullTemplate(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	outputMock := &mockOutputManager{}
 
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), outputMock, validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), outputMock, validator.NewManager())
 
 	// Test full template
 	err := secretsMgr.ShowTemplate()
@@ -97,7 +96,7 @@ func TestShowTemplate_MinimalTemplate(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	outputMock := &mockOutputManager{}
 
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), outputMock, validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), outputMock, validator.NewManager())
 
 	// Test minimal template
 	err := secretsMgr.ShowTemplate()
@@ -140,7 +139,7 @@ func TestShowTemplate_MinimalTemplate(t *testing.T) {
 	outputMock2 := &mockOutputManager{}
 	commandFlags2 := &types.CommandFlags{Minimal: false}
 	configMgr2 := config.NewManager(globalFlags, commandFlags2, validatorMgr)
-	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr, promptMgr, keepass.NewManager(), outputMock2, validator.NewManager())
+	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr, promptMgr, newMockKeePassManager(), outputMock2, validator.NewManager())
 	_ = secretsMgr2.ShowTemplate()
 	fullTemplate := outputMock2.output
 
@@ -165,7 +164,7 @@ func TestShowTemplate_UsesOutputManager(t *testing.T) {
 
 	// Use real OutputManager to ensure integration works
 	outputMgr := output.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), outputMgr, validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), outputMgr, validator.NewManager())
 
 	// This should not panic or error - output goes to stdout
 	err := secretsMgr.ShowTemplate()

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Yohnah/secrets/internal/config"
-	"github.com/Yohnah/secrets/internal/keepass"
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
@@ -58,7 +57,7 @@ outputs: {}`
 	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	kpMgr := keepass.NewManager()
+	kpMgr := newMockKeePassManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), validatorMgr)
 
 	// Initialize database with profile
@@ -196,7 +195,7 @@ outputs: {}`
 	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validatorMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validatorMgr)
 
 	// Initialize database
 	err := secretsMgr.Init()
@@ -267,7 +266,7 @@ outputs: {}`
 	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	kpMgr := keepass.NewManager()
+	kpMgr := newMockKeePassManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), validatorMgr)
 
 	// Initialize database (only profile-in-db will be created)
@@ -355,7 +354,7 @@ outputs: {}`
 	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	kpMgr := keepass.NewManager()
+	kpMgr := newMockKeePassManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), validatorMgr)
 
 	// Initialize database

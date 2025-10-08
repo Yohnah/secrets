@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Yohnah/secrets/internal/config"
-	"github.com/Yohnah/secrets/internal/keepass"
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
@@ -26,7 +25,7 @@ func TestCreateProfile(t *testing.T) {
 	password := "testpassword123"
 
 	// Create KeePassManager
-	keepassManager := keepass.NewManager()
+	keepassManager := newMockKeePassManager()
 
 	// Generate keyfile first
 	err := keepassManager.GenerateKeyfile(keyfilePath)
@@ -141,7 +140,7 @@ func TestCreateProfileIdempotent(t *testing.T) {
 	keyfilePath := filepath.Join(tempDir, "test.key")
 	password := "testpassword123"
 
-	keepassManager := keepass.NewManager()
+	keepassManager := newMockKeePassManager()
 
 	// Generate keyfile first
 	err := keepassManager.GenerateKeyfile(keyfilePath)
@@ -200,7 +199,7 @@ func TestProfileExists(t *testing.T) {
 	keyfilePath := filepath.Join(tempDir, "test.key")
 	password := "testpassword123"
 
-	keepassManager := keepass.NewManager()
+	keepassManager := newMockKeePassManager()
 
 	// Generate keyfile first
 	err := keepassManager.GenerateKeyfile(keyfilePath)
@@ -301,7 +300,7 @@ outputs: {}`
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	outputMgr := output.NewManager()
-	keepassMgr := keepass.NewManager()
+	keepassMgr := newMockKeePassManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 
 	// Execute: Run init
@@ -394,7 +393,7 @@ outputs: {}`
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	outputMgr := output.NewManager()
-	keepassMgr := keepass.NewManager()
+	keepassMgr := newMockKeePassManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 
 	// Execute: Run init
@@ -510,7 +509,7 @@ outputs: {}`
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	outputMgr := output.NewManager()
-	keepassMgr := keepass.NewManager()
+	keepassMgr := newMockKeePassManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 
 	// Execute: Run init
@@ -610,7 +609,7 @@ outputs: {}
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	outputMgr := output.NewManager()
-	keepassMgr := keepass.NewManager()
+	keepassMgr := newMockKeePassManager()
 
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 
@@ -762,7 +761,7 @@ outputs: {}
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	outputMgr := output.NewManager()
-	keepassMgr := keepass.NewManager()
+	keepassMgr := newMockKeePassManager()
 
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 
@@ -866,7 +865,7 @@ outputs: {}
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	outputMgr := output.NewManager()
-	keepassMgr := keepass.NewManager()
+	keepassMgr := newMockKeePassManager()
 
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
 

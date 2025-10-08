@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Yohnah/secrets/internal/config"
-	"github.com/Yohnah/secrets/internal/keepass"
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
@@ -86,7 +85,7 @@ outputs: {}`
 	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validatorMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validatorMgr)
 
 	// Initialize database with profiles
 	err := secretsMgr.Init()
@@ -159,7 +158,7 @@ outputs: {}`
 	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validatorMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validatorMgr)
 
 	// Initialize database with profiles
 	err := secretsMgr.Init()
@@ -219,7 +218,7 @@ outputs: {}`
 	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validatorMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validatorMgr)
 
 	// Initialize database with profiles
 	err := secretsMgr.Init()
@@ -284,7 +283,7 @@ outputs: {}`
 			configMgr := config.NewManager(flags, commandFlags, validatorMgr)
 			loggerMgr := logger.NewManager(false)
 			promptMgr := prompt.NewManager()
-			secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validatorMgr)
+			secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validatorMgr)
 
 			// Initialize database with profiles
 			err := secretsMgr.Init()

@@ -9,7 +9,6 @@ import (
 	"github.com/Yohnah/secrets/internal/validator"
 
 	"github.com/Yohnah/secrets/internal/config"
-	"github.com/Yohnah/secrets/internal/keepass"
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
@@ -36,7 +35,7 @@ func TestInitCreatesDatabaseAndKeyfile(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
 	err := secretsMgr.Init()
 	if err != nil {
@@ -90,7 +89,7 @@ func TestInitVerifiesExistingDatabase(t *testing.T) {
 	configMgr1 := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr1 := logger.NewManager(false)
 	promptMgr1 := prompt.NewManager()
-	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
 	err := secretsMgr1.Init()
 	if err != nil {
@@ -112,7 +111,7 @@ func TestInitVerifiesExistingDatabase(t *testing.T) {
 	configMgr2 := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr2 := logger.NewManager(false)
 	promptMgr2 := prompt.NewManager()
-	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
 	err = secretsMgr2.Init()
 	if err != nil {
@@ -152,7 +151,7 @@ func TestInitWithForceRecreate(t *testing.T) {
 	configMgr1 := config.NewManager(flags1, &types.CommandFlags{}, validatorMgr)
 	loggerMgr1 := logger.NewManager(false)
 	promptMgr1 := prompt.NewManager()
-	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
 	err := secretsMgr1.Init()
 	if err != nil {
@@ -180,7 +179,7 @@ func TestInitWithForceRecreate(t *testing.T) {
 	configMgr2 := config.NewManager(flags1, commandFlags2, validatorMgr)
 	loggerMgr2 := logger.NewManager(false)
 	promptMgr2 := prompt.NewManager()
-	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
 	err = secretsMgr2.Init()
 	if err != nil {
@@ -230,7 +229,7 @@ func TestInitFailsWithInconsistentFiles(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
 	err := secretsMgr.Init()
 	if err == nil {
@@ -247,7 +246,7 @@ func TestInitFailsWithInconsistentFiles(t *testing.T) {
 	configMgr2 := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr2 := logger.NewManager(false)
 	promptMgr2 := prompt.NewManager()
-	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
 	err = secretsMgr2.Init()
 	if err == nil {
@@ -275,7 +274,7 @@ func TestInitWithWrongPassword(t *testing.T) {
 	configMgr1 := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr1 := logger.NewManager(false)
 	promptMgr1 := prompt.NewManager()
-	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
 	err := secretsMgr1.Init()
 	if err != nil {
@@ -293,7 +292,7 @@ func TestInitWithWrongPassword(t *testing.T) {
 	configMgr2 := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr2 := logger.NewManager(false)
 	promptMgr2 := prompt.NewManager()
-	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
 	err = secretsMgr2.Init()
 	if err == nil {
@@ -320,7 +319,7 @@ func TestInitWithoutPasswordInNonInteractiveMode(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
 	err := secretsMgr.Init()
 	if err == nil {

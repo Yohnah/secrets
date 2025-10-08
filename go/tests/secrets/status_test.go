@@ -6,14 +6,22 @@ import (
 	"testing"
 
 	"github.com/Yohnah/secrets/internal/config"
-	"github.com/Yohnah/secrets/internal/keepass"
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/secrets"
 	"github.com/Yohnah/secrets/internal/types"
 	"github.com/Yohnah/secrets/internal/validator"
+	"github.com/tobischo/gokeepasslib/v3"
 )
+
+type testError struct {
+	msg string
+}
+
+func (e *testError) Error() string {
+	return e.msg
+}
 
 // TestStatus_WithValidDatabase tests status command with accessible database
 func TestStatus_WithValidDatabase(t *testing.T) {
@@ -25,6 +33,19 @@ func TestStatus_WithValidDatabase(t *testing.T) {
 	defer os.Chdir(originalDir)
 	os.Chdir(tmpDir)
 
+	// Setup mock KeePass manager
+	mockKP := newMockKeePassManager()
+	// Configure mock for valid database with proper structure
+	mockKP.db = &gokeepasslib.Database{
+		Content: &gokeepasslib.DBContent{
+			Root: &gokeepasslib.RootData{
+				Groups: []gokeepasslib.Group{
+					{Name: "Root", Groups: []gokeepasslib.Group{}},
+				},
+			},
+		},
+	}
+
 	// Setup managers
 	flags := &types.GlobalFlags{
 		Force: true,
@@ -34,7 +55,7 @@ func TestStatus_WithValidDatabase(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validator.NewManager())
 
 	// Initialize first
 	err := secretsMgr.Init()
@@ -58,6 +79,11 @@ func TestStatus_WithoutDatabase(t *testing.T) {
 	defer os.Chdir(originalDir)
 	os.Chdir(tmpDir)
 
+	// Setup mock KeePass manager
+	mockKP := newMockKeePassManager()
+	// Configure mock for non-existent database
+	mockKP.openError = &testError{msg: "database not found"}
+
 	// Setup managers without initializing
 	flags := &types.GlobalFlags{
 		Force: true,
@@ -67,7 +93,7 @@ func TestStatus_WithoutDatabase(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validator.NewManager())
 
 	// Run status without initializing first
 	err := secretsMgr.Status()
@@ -86,6 +112,19 @@ func TestStatus_WithIgnoreConfigFile(t *testing.T) {
 	defer os.Chdir(originalDir)
 	os.Chdir(tmpDir)
 
+	// Setup mock KeePass manager
+	mockKP := newMockKeePassManager()
+	// Configure mock for valid database with proper structure
+	mockKP.db = &gokeepasslib.Database{
+		Content: &gokeepasslib.DBContent{
+			Root: &gokeepasslib.RootData{
+				Groups: []gokeepasslib.Group{
+					{Name: "Root", Groups: []gokeepasslib.Group{}},
+				},
+			},
+		},
+	}
+
 	// Setup managers with IgnoreConfigFile=true
 	flags := &types.GlobalFlags{
 		Force:            true,
@@ -96,7 +135,7 @@ func TestStatus_WithIgnoreConfigFile(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validator.NewManager())
 
 	// Initialize first
 	err := secretsMgr.Init()
@@ -149,7 +188,7 @@ func TestStatus_WithCustomPaths(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
 	// Initialize first
 	err := secretsMgr.Init()
@@ -191,7 +230,7 @@ func TestStatus_WithWrongPassword(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
 	// Initialize with correct password
 	err := secretsMgr.Init()
@@ -228,7 +267,7 @@ func TestStatus_AfterInit(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepass.NewManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
 	// Initialize
 	err := secretsMgr.Init()
