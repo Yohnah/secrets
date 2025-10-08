@@ -3,6 +3,7 @@ package show
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/Yohnah/secrets/internal/config"
 	"github.com/Yohnah/secrets/internal/validator"
@@ -18,8 +19,11 @@ type TreeNode struct {
 
 // Tree displays a tree representation of the specified profile and environment
 func (s *service) Tree(profileName, environmentName, outputFormat string) error {
+	// Get secrets.yml path from config
+	secretsFilePath := s.config.GetSecretsFilePath()
+	
 	// Validate that profile and environment exist in secrets.yml
-	secretsConfig, errs := s.validator.ReadAndValidateSecretsYML("secrets.yml")
+	secretsConfig, errs := s.validator.ReadAndValidateSecretsYML(secretsFilePath)
 	if len(errs) > 0 {
 		return fmt.Errorf("invalid secrets.yml: %v", errs[0])
 	}
@@ -115,7 +119,7 @@ func (s *service) buildTree(secretsConfig interface{}, profileName, environmentN
 	}
 
 	// Get all entries defined in secrets.yml for this environment
-	environmentNameCapitalized := strings.Title(strings.ToLower(environmentName))
+	environmentNameCapitalized := capitalizeEnvironmentName(environmentName)
 	for _, item := range targetProfile.Environments[environmentName] {
 		// Trim the environment prefix from the entry path
 		// Example: "/Production/Database/PostgreSQL" -> "Database/PostgreSQL"
@@ -224,6 +228,23 @@ func (s *service) displayTree(node *TreeNode, useAnsi bool) {
 		isLast := i == len(node.Children)-1
 		s.printNodeWithPrefix(child, "", isLast, useAnsi)
 	}
+}
+
+// capitalizeEnvironmentName capitalizes the first letter of each word in the environment name
+// This replaces the deprecated strings.Title function
+func capitalizeEnvironmentName(name string) string {
+	if name == "" {
+		return name
+	}
+	
+	// Convert to lowercase first
+	name = strings.ToLower(name)
+	
+	// Capitalize first letter
+	runes := []rune(name)
+	runes[0] = unicode.ToUpper(runes[0])
+	
+	return string(runes)
 }
 
 // printNodeWithPrefix recursively prints a tree node with prefix
