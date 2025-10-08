@@ -21,6 +21,7 @@ type Manager interface {
 	ShowTree(profileName, environmentName, outputFormat string) error
 	ShowProfiles(profileFilter string) error
 	SnapshotsList(profileName string) error
+	SnapshotsNew(profileName string) error
 }
 
 type manager struct {
@@ -70,4 +71,9 @@ func (m *manager) ShowProfiles(profileFilter string) error {
 // SnapshotsList delegates to the snapshots service
 func (m *manager) SnapshotsList(profileName string) error {
 	return m.snapshotsService.List(profileName)
+}
+
+// SnapshotsNew delegates to the snapshots service
+func (m *manager) SnapshotsNew(profileName string) error {
+	return m.snapshotsService.New(profileName)
 }

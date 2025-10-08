@@ -48,9 +48,36 @@ var snapshotsListCmd = &cobra.Command{
 	},
 }
 
+// snapshotsNewCmd creates a new snapshot
+var snapshotsNewCmd = &cobra.Command{
+	Use:   "new <profile_name>",
+	Short: "Create a new snapshot",
+	Long:  "Create a new snapshot by cloning HEAD to v{current_version} and incrementing HEAD version",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		// Get profile name from args (required)
+		profileName := args[0]
+
+		// Create command flags (no specific flags for this command)
+		commandFlags := &types.CommandFlags{}
+
+		// Create manager context
+		managers := NewManagerContext(commandFlags)
+
+		// Execute new command (delegate to CORE)
+		if err := managers.Secrets.SnapshotsNew(profileName); err != nil {
+			managers.Logger.Error(err.Error())
+			os.Exit(1)
+		}
+	},
+}
+
 func init() {
 	// Add list subcommand to snapshots
 	snapshotsCmd.AddCommand(snapshotsListCmd)
+
+	// Add new subcommand to snapshots
+	snapshotsCmd.AddCommand(snapshotsNewCmd)
 
 	// Add flags to list command
 	snapshotsListCmd.Flags().StringVarP(&flagSnapshotsOutput, "output", "o", "table", "Output format: table, json, yaml")

@@ -364,9 +364,9 @@ func (m *manager) repeatString(s string, count int) string {
 //
 // Profile: name (X snapshot/s)
 //
-//	✓ HEAD      5h (mutable)
-//	  v1        2d
-//	  v2        5d
+//	✓ HEAD      2025-10-08T15:21:37Z  (5h) (mutable)
+//	  v1        2025-10-06T10:15:20Z  (2d)
+//	  v2        2025-10-03T08:30:45Z  (5d)
 func (m *manager) renderSnapshotsList(data map[string]interface{}, displayMeta map[string]interface{}) error {
 	// Print title if present
 	if title, ok := displayMeta["title"].(string); ok {
@@ -465,6 +465,7 @@ func (m *manager) renderSnapshotsList(data map[string]interface{}, displayMeta m
 			}
 
 			version, _ := snapshotMap["version"].(string)
+			datetime, _ := snapshotMap["datetime"].(string)
 			age, _ := snapshotMap["age"].(string)
 			isActive := false
 			if ia, ok := snapshotMap["is_active"].(bool); ok {
@@ -487,8 +488,8 @@ func (m *manager) renderSnapshotsList(data map[string]interface{}, displayMeta m
 				mutableStr = " (mutable)"
 			}
 
-			// Print snapshot line
-			fmt.Printf("  %s %-8s  %s%s\n", indicator, version, age, mutableStr)
+			// Print snapshot line with datetime and age
+			fmt.Printf("  %s %-8s  %s  (%s)%s\n", indicator, version, datetime, age, mutableStr)
 		}
 
 		fmt.Println()

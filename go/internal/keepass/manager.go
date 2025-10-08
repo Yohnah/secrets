@@ -41,6 +41,8 @@ type Manager interface {
 	// Snapshots operations (require open session)
 	ListProfileTreeGroups(profileName string) ([]string, error)
 	GetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName string) (string, error)
+	CloneTreeGroup(profileName, sourceTreeGroup, targetTreeGroup string) error
+	SetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName, value string) error
 }
 
 // manager implements the Manager interface
@@ -1424,4 +1426,195 @@ func (m *manager) GetTreeGroupEntryField(profileName, treeGroup, entryPath, fiel
 	}
 
 	return "", fmt.Errorf("field '%s' not found in entry '%s'", fieldName, entryPath)
+}
+
+// CloneTreeGroup clones a source tree group to a new tree group within the same profile
+// This performs a recursive deep copy of all subgroups and entries
+func (m *manager) CloneTreeGroup(profileName, sourceTreeGroup, targetTreeGroup string) error {
+	// Validate session
+	if m.db == nil {
+		return fmt.Errorf("database not open")
+	}
+
+	// Validate input
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if sourceTreeGroup == "" {
+		return fmt.Errorf("source tree group cannot be empty")
+	}
+	if targetTreeGroup == "" {
+		return fmt.Errorf("target tree group cannot be empty")
+	}
+
+	// Find profile group
+	if len(m.db.Content.Root.Groups) == 0 {
+		return fmt.Errorf("no groups in database")
+	}
+
+	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
+	if err != nil {
+		return fmt.Errorf("profile '%s' not found: %w", profileName, err)
+	}
+
+	// Find source tree group
+	sourceGroup, err := findGroupByName(profileGroup, sourceTreeGroup)
+	if err != nil {
+		return fmt.Errorf("source tree group '%s' not found in profile '%s': %w", sourceTreeGroup, profileName, err)
+	}
+
+	// Check if target already exists
+	_, err = findGroupByName(profileGroup, targetTreeGroup)
+	if err == nil {
+		return fmt.Errorf("target tree group '%s' already exists in profile '%s'", targetTreeGroup, profileName)
+	}
+
+	// Deep clone the source group
+	clonedGroup := deepCloneGroup(sourceGroup)
+
+	// Rename the cloned group to target name
+	clonedGroup.Name = targetTreeGroup
+
+	// Add cloned group to profile
+	profileGroup.Groups = append(profileGroup.Groups, clonedGroup)
+
+	return nil
+}
+
+// SetTreeGroupEntryField sets a field value in an entry within a tree group
+func (m *manager) SetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName, value string) error {
+	// Validate session
+	if m.db == nil {
+		return fmt.Errorf("database not open")
+	}
+
+	// Validate input
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if treeGroup == "" {
+		return fmt.Errorf("tree group cannot be empty")
+	}
+	if entryPath == "" {
+		return fmt.Errorf("entry path cannot be empty")
+	}
+	if fieldName == "" {
+		return fmt.Errorf("field name cannot be empty")
+	}
+
+	// Find profile group
+	if len(m.db.Content.Root.Groups) == 0 {
+		return fmt.Errorf("no groups in database")
+	}
+
+	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
+	if err != nil {
+		return fmt.Errorf("profile '%s' not found: %w", profileName, err)
+	}
+
+	// Find tree group
+	treeGroupObj, err := findGroupByName(profileGroup, treeGroup)
+	if err != nil {
+		return fmt.Errorf("tree group '%s' not found in profile '%s': %w", treeGroup, profileName, err)
+	}
+
+	// Find entry by path
+	entry, err := findEntryByPath(treeGroupObj, entryPath)
+	if err != nil {
+		return fmt.Errorf("entry '%s' not found in tree group '%s': %w", entryPath, treeGroup, err)
+	}
+
+	// Check if field is standard
+	isStandard := m.IsStandardField(fieldName)
+
+	// Set or update the field
+	fieldFound := false
+	for i := range entry.Values {
+		if isStandard {
+			// Case-insensitive comparison for standard fields
+			if strings.ToLower(entry.Values[i].Key) == strings.ToLower(fieldName) {
+				entry.Values[i].Value.Content = value
+				fieldFound = true
+				break
+			}
+		} else {
+			// Case-sensitive comparison for custom fields
+			if entry.Values[i].Key == fieldName {
+				entry.Values[i].Value.Content = value
+				fieldFound = true
+				break
+			}
+		}
+	}
+
+	// If field doesn't exist, create it
+	if !fieldFound {
+		newValue := gokeepasslib.ValueData{
+			Key:   fieldName,
+			Value: gokeepasslib.V{Content: value},
+		}
+		entry.Values = append(entry.Values, newValue)
+	}
+
+	return nil
+}
+
+// deepCloneGroup performs a deep clone of a group and all its subgroups/entries
+func deepCloneGroup(source *gokeepasslib.Group) gokeepasslib.Group {
+	cloned := gokeepasslib.Group{
+		UUID:                    gokeepasslib.NewUUID(),
+		Name:                    source.Name,
+		Notes:                   source.Notes,
+		IconID:                  source.IconID,
+		Times:                   source.Times,
+		IsExpanded:              source.IsExpanded,
+		DefaultAutoTypeSequence: source.DefaultAutoTypeSequence,
+		EnableAutoType:          source.EnableAutoType,
+		EnableSearching:         source.EnableSearching,
+		LastTopVisibleEntry:     source.LastTopVisibleEntry,
+	}
+
+	// Clone entries
+	cloned.Entries = make([]gokeepasslib.Entry, len(source.Entries))
+	for i, entry := range source.Entries {
+		cloned.Entries[i] = deepCloneEntry(&entry)
+	}
+
+	// Clone subgroups recursively
+	cloned.Groups = make([]gokeepasslib.Group, len(source.Groups))
+	for i, group := range source.Groups {
+		cloned.Groups[i] = deepCloneGroup(&group)
+	}
+
+	return cloned
+}
+
+// deepCloneEntry performs a deep clone of an entry
+func deepCloneEntry(source *gokeepasslib.Entry) gokeepasslib.Entry {
+	cloned := gokeepasslib.Entry{
+		UUID:            gokeepasslib.NewUUID(),
+		IconID:          source.IconID,
+		ForegroundColor: source.ForegroundColor,
+		BackgroundColor: source.BackgroundColor,
+		OverrideURL:     source.OverrideURL,
+		Tags:            source.Tags,
+		Times:           source.Times,
+	}
+
+	// Clone values
+	cloned.Values = make([]gokeepasslib.ValueData, len(source.Values))
+	for i, value := range source.Values {
+		cloned.Values[i] = gokeepasslib.ValueData{
+			Key:   value.Key,
+			Value: gokeepasslib.V{Content: value.Value.Content, Protected: value.Value.Protected},
+		}
+	}
+
+	// Clone binaries if any
+	if len(source.Binaries) > 0 {
+		cloned.Binaries = make([]gokeepasslib.BinaryReference, len(source.Binaries))
+		copy(cloned.Binaries, source.Binaries)
+	}
+
+	return cloned
 }
