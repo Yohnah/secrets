@@ -1380,8 +1380,9 @@ func (m *manager) SetCustomField(profileName, envName, entryPath, fieldName, val
 }
 
 // CreateAttachment creates or updates an attachment in an entry
-// Note: This is a placeholder implementation. Attachments in gokeepasslib
-// require special handling with the BinaryReference system.
+// Attachments in gokeepasslib use a BinaryReference system where:
+// 1. Binary data is stored in db.Content.Meta.Binaries
+// 2. Entry references binary by ID via entry.Binaries (BinaryReference)
 func (m *manager) CreateAttachment(profileName, envName, entryPath, attachmentName string, data []byte) error {
 	// Check if database is open
 	if !m.IsOpen() {
@@ -1401,17 +1402,59 @@ func (m *manager) CreateAttachment(profileName, envName, entryPath, attachmentNa
 	if attachmentName == "" {
 		return fmt.Errorf("attachment name cannot be empty")
 	}
+	if data == nil {
+		return fmt.Errorf("attachment data cannot be nil")
+	}
 
-	// TODO: Implement attachment creation
-	// Attachments in gokeepasslib use a BinaryReference system where:
-	// 1. Binary data is stored in db.Content.Meta.Binaries
-	// 2. Entry references binary by ID via entry.Binaries (BinaryReference)
-	// This requires:
-	// - Adding binary to db.Content.Meta.Binaries
-	// - Creating BinaryReference in entry.Binaries
-	// - Managing binary IDs correctly
+	// Find profile group
+	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
+	if err != nil {
+		return fmt.Errorf("failed to find profile: %w", err)
+	}
 
-	return fmt.Errorf("attachment creation not yet implemented")
+	// Find HEAD group
+	headGroup, err := findGroupByName(profileGroup, "HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to find HEAD group: %w", err)
+	}
+
+	// Find environment group
+	envGroup, err := findGroupByName(headGroup, envName)
+	if err != nil {
+		return fmt.Errorf("failed to find environment '%s': %w", envName, err)
+	}
+
+	// Find entry
+	entry, err := findEntryByPath(envGroup, entryPath)
+	if err != nil {
+		return fmt.Errorf("failed to find entry '%s': %w", entryPath, err)
+	}
+
+	// Check if attachment with same name already exists
+	for i := range entry.Binaries {
+		if entry.Binaries[i].Name == attachmentName {
+			// According to .context, if something already exists, it should not be touched
+			// Return success silently (idempotent behavior)
+			return nil
+		}
+	}
+
+	// Generate unique binary ID
+	// Use the next available ID in db.Content.Meta.Binaries
+	binaryID := len(m.db.Content.Meta.Binaries)
+
+	// Create binary data in Meta.Binaries
+	binary := gokeepasslib.Binary{
+		ID:      binaryID,
+		Content: data,
+	}
+	m.db.Content.Meta.Binaries = append(m.db.Content.Meta.Binaries, binary)
+
+	// Create binary reference in entry using the helper function
+	binaryRef := gokeepasslib.NewBinaryReference(attachmentName, binaryID)
+	entry.Binaries = append(entry.Binaries, binaryRef)
+
+	return nil
 }
 
 // FieldExists checks if a field exists in an entry (standard or custom field)
@@ -1461,7 +1504,21 @@ func (m *manager) FieldExists(profileName, envName, entryPath, fieldName string)
 		return false, fmt.Errorf("failed to find entry '%s': %w", entryPath, err)
 	}
 
-	// Check if field exists
+	// Check if it's an attachment field
+	if strings.HasPrefix(fieldName, "attachments/") {
+		// Extract attachment name
+		attachmentName := strings.TrimPrefix(fieldName, "attachments/")
+
+		// Check in entry binaries
+		for _, binary := range entry.Binaries {
+			if binary.Name == attachmentName {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
+	// Check if field exists (standard or custom)
 	isStandard := m.IsStandardField(fieldName)
 
 	for _, value := range entry.Values {

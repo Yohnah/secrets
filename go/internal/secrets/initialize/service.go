@@ -738,8 +738,31 @@ func (s *service) createKeys(profileName string, profile validator.Profile) (int
 			for keyName := range uniqueKeys {
 				// Check if it's an attachment
 				if strings.HasPrefix(keyName, "attachments/") {
-					// Skip attachments for now (CreateAttachment not fully implemented)
-					s.logger.Debug(fmt.Sprintf("        - Field '%s' is an attachment (skipped, not yet implemented)", keyName))
+					// Extract attachment name
+					attachmentName := strings.TrimPrefix(keyName, "attachments/")
+
+					// Check if attachment already exists
+					exists, err := s.keepass.FieldExists(profileName, envName, entryPath, keyName)
+					if err != nil {
+						return 0, fmt.Errorf("failed to check if attachment '%s' exists in entry '%s': %w", attachmentName, entryPath, err)
+					}
+
+					if exists {
+						s.logger.Debug(fmt.Sprintf("        - Attachment '%s' already exists (skipped)", attachmentName))
+						keysExisted++
+						continue
+					}
+
+					s.logger.Debug(fmt.Sprintf("        - Creating attachment '%s'...", attachmentName))
+
+					// Create empty attachment with default content
+					defaultAttachmentContent := []byte("Attachment pending to be filled by the developer")
+					if err := s.keepass.CreateAttachment(profileName, envName, entryPath, attachmentName, defaultAttachmentContent); err != nil {
+						return 0, fmt.Errorf("failed to create attachment '%s' in entry '%s': %w", attachmentName, entryPath, err)
+					}
+
+					s.logger.Debug(fmt.Sprintf("          ✓ Attachment '%s' created", attachmentName))
+					keysCreated++
 					continue
 				}
 
@@ -761,7 +784,7 @@ func (s *service) createKeys(profileName string, profile validator.Profile) (int
 					s.logger.Debug(fmt.Sprintf("        - Creating standard field '%s'...", keyName))
 
 					// Validate unique field in entry
-					fullEntryPath := fmt.Sprintf("%s/HEAD/%s%s", profileName, envName, entryPath)
+					fullEntryPath := fmt.Sprintf("%s/HEAD/%s/%s", profileName, envName, entryPath)
 					existingFields, err := s.keepass.GetFieldsByEntry(fullEntryPath)
 					if err != nil {
 						return 0, fmt.Errorf("failed to get existing fields in entry '%s': %w", fullEntryPath, err)
@@ -778,7 +801,7 @@ func (s *service) createKeys(profileName string, profile validator.Profile) (int
 					s.logger.Debug(fmt.Sprintf("        - Creating custom field '%s'...", keyName))
 
 					// Validate unique field in entry
-					fullEntryPath := fmt.Sprintf("%s/HEAD/%s%s", profileName, envName, entryPath)
+					fullEntryPath := fmt.Sprintf("%s/HEAD/%s/%s", profileName, envName, entryPath)
 					existingFields, err := s.keepass.GetFieldsByEntry(fullEntryPath)
 					if err != nil {
 						return 0, fmt.Errorf("failed to get existing fields in entry '%s': %w", fullEntryPath, err)
