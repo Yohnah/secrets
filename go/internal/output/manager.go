@@ -402,6 +402,7 @@ type treeRenderCharset struct {
 type treeNode struct {
 	Name     string
 	IsEntry  bool
+	IsKey    bool
 	Status   string
 	Children []*treeNode
 }
@@ -437,6 +438,7 @@ func (m *manager) parseTreeNode(raw interface{}) (*treeNode, error) {
 
 	name, _ := nodeMap["name"].(string)
 	isEntry, _ := nodeMap["is_entry"].(bool)
+	isKey, _ := nodeMap["is_key"].(bool)
 	status, _ := nodeMap["status"].(string)
 
 	var childrenRaw []interface{}
@@ -466,6 +468,7 @@ func (m *manager) parseTreeNode(raw interface{}) (*treeNode, error) {
 	return &treeNode{
 		Name:     name,
 		IsEntry:  isEntry,
+		IsKey:    isKey,
 		Status:   status,
 		Children: children,
 	}, nil
@@ -511,7 +514,12 @@ func (m *manager) renderTreeNode(node *treeNode, prefix string, isLast bool, cha
 
 // treeStatusSuffix returns the visual status marker for a node
 func (m *manager) treeStatusSuffix(node *treeNode) string {
-	if node == nil || !node.IsEntry {
+	if node == nil {
+		return ""
+	}
+
+	// Show status for both entries and keys
+	if !node.IsEntry && !node.IsKey {
 		return ""
 	}
 

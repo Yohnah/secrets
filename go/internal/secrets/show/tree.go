@@ -13,6 +13,7 @@ import (
 type TreeNode struct {
 	Name     string
 	IsEntry  bool
+	IsKey    bool   // New: indicates if this is a key/field
 	Status   string // "", "exists", "missing", "extra"
 	Children []*TreeNode
 }
@@ -82,6 +83,7 @@ func (s *service) Tree(profileName, environmentName, outputFormat string) error 
 func (s *service) buildTree(profileName, environmentName string, environmentItems []validator.Item) (*TreeNode, error) {
 	// Get entries defined in secrets.yml for this environment
 	secretsYMLEntries := make(map[string]bool)
+	secretsYMLKeys := make(map[string]map[string]bool) // entryPath -> map of keys
 
 	environmentNameCapitalized := capitalizeEnvironmentName(environmentName)
 	for _, item := range environmentItems {
@@ -89,6 +91,12 @@ func (s *service) buildTree(profileName, environmentName string, environmentItem
 		// Example: "/Production/Database/PostgreSQL" -> "Database/PostgreSQL"
 		relativePath := strings.TrimPrefix(item.Entry, fmt.Sprintf("/%s/", environmentNameCapitalized))
 		secretsYMLEntries[relativePath] = true
+
+		// Add key to the entry's key map
+		if secretsYMLKeys[relativePath] == nil {
+			secretsYMLKeys[relativePath] = make(map[string]bool)
+		}
+		secretsYMLKeys[relativePath][item.Key] = true
 	}
 
 	// Get all entries from database
@@ -125,13 +133,13 @@ func (s *service) buildTree(profileName, environmentName string, environmentItem
 		if dbEntriesMap[entryPath] {
 			status = "exists"
 		}
-		s.addPathToTree(envNode, entryPath, status)
+		s.addPathToTree(envNode, entryPath, status, profileName, environmentName, secretsYMLKeys)
 	}
 
 	// Process entries that exist in DB but not in secrets.yml
 	for dbPath := range dbEntriesMap {
 		if !secretsYMLEntries[dbPath] {
-			s.addPathToTree(envNode, dbPath, "extra")
+			s.addPathToTree(envNode, dbPath, "extra", profileName, environmentName, secretsYMLKeys)
 		}
 	}
 
@@ -140,7 +148,7 @@ func (s *service) buildTree(profileName, environmentName string, environmentItem
 }
 
 // addPathToTree adds a path to the tree structure
-func (s *service) addPathToTree(parent *TreeNode, path string, status string) {
+func (s *service) addPathToTree(parent *TreeNode, path string, status string, profileName string, environmentName string, secretsYMLKeys map[string]map[string]bool) {
 	if path == "" {
 		return
 	}
@@ -166,6 +174,7 @@ func (s *service) addPathToTree(parent *TreeNode, path string, status string) {
 			child = &TreeNode{
 				Name:     part,
 				IsEntry:  isLast,
+				IsKey:    false,
 				Status:   "",
 				Children: []*TreeNode{},
 			}
@@ -173,6 +182,98 @@ func (s *service) addPathToTree(parent *TreeNode, path string, status string) {
 			// Only set status on leaf nodes (entries)
 			if isLast {
 				child.Status = status
+
+				// Get keys defined in secrets.yml for this entry
+				ymlKeys := make(map[string]bool)
+				if secretsYMLKeys[path] != nil {
+					ymlKeys = secretsYMLKeys[path]
+				}
+
+				// If the entry exists in the database, fetch and add its fields as children
+				if status == "exists" {
+					// Get ALL fields (including empty) to check existence for status
+					allDBFields, err := s.keepass.GetAllFieldsByEnvironmentEntry(profileName, environmentName, path)
+					if err == nil {
+						// Create map of all db fields for status checking
+						allDBFieldsMap := make(map[string]bool)
+						for _, fieldName := range allDBFields {
+							allDBFieldsMap[fieldName] = true
+						}
+
+						// Get only fields with values (to show extra fields)
+						fieldsWithValue, err := s.keepass.GetFieldsByEnvironmentEntry(profileName, environmentName, path)
+						fieldsWithValueMap := make(map[string]bool)
+						if err == nil {
+							for _, fieldName := range fieldsWithValue {
+								fieldsWithValueMap[fieldName] = true
+							}
+						}
+
+						// Process keys from secrets.yml
+						// Show ALL keys from secrets.yml with appropriate status:
+						// - "exists": field exists in DB and has value
+						// - "missing": field doesn't exist in DB OR exists but is empty
+						for keyName := range ymlKeys {
+							keyStatus := "missing"
+							if fieldsWithValueMap[keyName] {
+								keyStatus = "exists"
+							}
+
+							keyNode := &TreeNode{
+								Name:     "key: " + keyName,
+								IsEntry:  false,
+								IsKey:    true,
+								Status:   keyStatus,
+								Children: []*TreeNode{},
+							}
+							child.Children = append(child.Children, keyNode)
+						}
+
+						// Process keys from database that are NOT in secrets.yml (extra)
+						// Only show if they have value
+						for _, fieldName := range fieldsWithValue {
+							if !ymlKeys[fieldName] {
+								keyNode := &TreeNode{
+									Name:     "key: " + fieldName,
+									IsEntry:  false,
+									IsKey:    true,
+									Status:   "extra",
+									Children: []*TreeNode{},
+								}
+								child.Children = append(child.Children, keyNode)
+							}
+						}
+					}
+				} else if status == "missing" {
+					// Entry doesn't exist in DB, but keys are defined in secrets.yml
+					for keyName := range ymlKeys {
+						keyNode := &TreeNode{
+							Name:     "key: " + keyName,
+							IsEntry:  false,
+							IsKey:    true,
+							Status:   "missing",
+							Children: []*TreeNode{},
+						}
+						child.Children = append(child.Children, keyNode)
+					}
+				}
+				// Note: if status == "extra", the entry exists in DB but not in secrets.yml
+				// In this case, we show all DB fields as "extra"
+				if status == "extra" {
+					dbFields, err := s.keepass.GetFieldsByEnvironmentEntry(profileName, environmentName, path)
+					if err == nil {
+						for _, fieldName := range dbFields {
+							keyNode := &TreeNode{
+								Name:     "key: " + fieldName,
+								IsEntry:  false,
+								IsKey:    true,
+								Status:   "extra",
+								Children: []*TreeNode{},
+							}
+							child.Children = append(child.Children, keyNode)
+						}
+					}
+				}
 			}
 
 			current.Children = append(current.Children, child)
@@ -226,6 +327,7 @@ func (s *service) serializeTreeNode(node *TreeNode) map[string]interface{} {
 	return map[string]interface{}{
 		"name":     node.Name,
 		"is_entry": node.IsEntry,
+		"is_key":   node.IsKey,
 		"status":   node.Status,
 		"children": children,
 	}

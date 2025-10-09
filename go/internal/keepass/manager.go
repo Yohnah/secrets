@@ -34,6 +34,8 @@ type Manager interface {
 	GetGroupsByParent(parentPath string) ([]string, error)
 	GetEntriesByGroup(groupPath string) ([]string, error)
 	GetFieldsByEntry(entryPath string) ([]string, error)
+	GetFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error)
+	GetAllFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error)
 
 	// Field operations (require open session)
 	IsStandardField(fieldName string) bool
@@ -1068,6 +1070,320 @@ func (m *manager) GetFieldsByEntry(entryPath string) ([]string, error) {
 	var fields []string
 	for _, value := range entry.Values {
 		fields = append(fields, value.Key)
+	}
+
+	return fields, nil
+}
+
+// GetFieldsByEnvironmentEntry returns all field names (standard and custom) and attachments
+// for the specified entry within a profile and environment
+func (m *manager) GetFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error) {
+	// Check session
+	if m.db == nil {
+		return nil, fmt.Errorf("database not open")
+	}
+
+	// Validate input parameters
+	if profileName == "" {
+		return nil, fmt.Errorf("profile name cannot be empty")
+	}
+	if envName == "" {
+		return nil, fmt.Errorf("environment name cannot be empty")
+	}
+	if entryPath == "" {
+		return nil, fmt.Errorf("entry path cannot be empty")
+	}
+
+	// Check if root group exists
+	if len(m.db.Content.Root.Groups) == 0 {
+		return nil, fmt.Errorf("root group not found")
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+
+	// Find profile group
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+
+	if profileGroup == nil {
+		return nil, fmt.Errorf("profile '%s' not found", profileName)
+	}
+
+	// Find HEAD group within profile
+	var headGroup *gokeepasslib.Group
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == "HEAD" {
+			headGroup = &profileGroup.Groups[i]
+			break
+		}
+	}
+
+	if headGroup == nil {
+		return nil, fmt.Errorf("HEAD group not found in profile '%s'", profileName)
+	}
+
+	// Find environment group within HEAD
+	var envGroup *gokeepasslib.Group
+	for i := range headGroup.Groups {
+		if headGroup.Groups[i].Name == envName {
+			envGroup = &headGroup.Groups[i]
+			break
+		}
+	}
+
+	if envGroup == nil {
+		return nil, fmt.Errorf("environment '%s' not found in profile '%s'", envName, profileName)
+	}
+
+	// Parse entry path - remove leading slash if present
+	if len(entryPath) > 0 && entryPath[0] == '/' {
+		entryPath = entryPath[1:]
+	}
+
+	// Remove environment prefix from path if present (case-insensitive)
+	envPrefix := envName + "/"
+	if len(entryPath) >= len(envPrefix) {
+		if strings.EqualFold(entryPath[:len(envPrefix)], envPrefix) {
+			entryPath = entryPath[len(envPrefix):]
+		}
+	}
+
+	// Split path into components
+	if entryPath == "" {
+		return nil, fmt.Errorf("entry path cannot be empty")
+	}
+
+	components := strings.Split(entryPath, "/")
+	if len(components) == 0 {
+		return nil, fmt.Errorf("invalid entry path")
+	}
+
+	// Navigate through intermediate groups
+	currentGroup := envGroup
+	for i := 0; i < len(components)-1; i++ {
+		groupName := components[i]
+		if groupName == "" {
+			continue
+		}
+
+		// Find group
+		found := false
+		for j := range currentGroup.Groups {
+			if currentGroup.Groups[j].Name == groupName {
+				currentGroup = &currentGroup.Groups[j]
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return nil, fmt.Errorf("group '%s' not found in path", groupName)
+		}
+	}
+
+	// Find the entry in the final group
+	entryName := components[len(components)-1]
+	if entryName == "" {
+		return nil, fmt.Errorf("entry name cannot be empty")
+	}
+
+	// Search for entry by Title
+	var targetEntry *gokeepasslib.Entry
+	for i := range currentGroup.Entries {
+		for _, value := range currentGroup.Entries[i].Values {
+			if value.Key == "Title" && value.Value.Content == entryName {
+				targetEntry = &currentGroup.Entries[i]
+				break
+			}
+		}
+		if targetEntry != nil {
+			break
+		}
+	}
+
+	if targetEntry == nil {
+		return nil, fmt.Errorf("entry '%s' not found", entryName)
+	}
+
+	// Collect all field names that have non-empty values
+	var fields []string
+
+	// Add standard and custom fields (only if they have content)
+	for _, value := range targetEntry.Values {
+		// Skip Title field (it's the entry name, not a user-facing field)
+		if value.Key == "Title" {
+			continue
+		}
+
+		// Include field if it has any content (even placeholder text)
+		if value.Value.Content != "" {
+			fields = append(fields, value.Key)
+		}
+	}
+
+	// Add attachments with "attachments/" prefix
+	for _, binary := range targetEntry.Binaries {
+		fields = append(fields, "attachments/"+binary.Name)
+	}
+
+	return fields, nil
+}
+
+// GetAllFieldsByEnvironmentEntry returns ALL field names (standard and custom) and attachments
+// for the specified entry within a profile and environment, including empty fields
+func (m *manager) GetAllFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error) {
+	// Check session
+	if m.db == nil {
+		return nil, fmt.Errorf("database not open")
+	}
+
+	// Validate input parameters
+	if profileName == "" {
+		return nil, fmt.Errorf("profile name cannot be empty")
+	}
+	if envName == "" {
+		return nil, fmt.Errorf("environment name cannot be empty")
+	}
+	if entryPath == "" {
+		return nil, fmt.Errorf("entry path cannot be empty")
+	}
+
+	// Check if root group exists
+	if len(m.db.Content.Root.Groups) == 0 {
+		return nil, fmt.Errorf("root group not found")
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+
+	// Find profile group
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+
+	if profileGroup == nil {
+		return nil, fmt.Errorf("profile '%s' not found", profileName)
+	}
+
+	// Find HEAD group within profile
+	var headGroup *gokeepasslib.Group
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == "HEAD" {
+			headGroup = &profileGroup.Groups[i]
+			break
+		}
+	}
+
+	if headGroup == nil {
+		return nil, fmt.Errorf("HEAD group not found in profile '%s'", profileName)
+	}
+
+	// Find environment group within HEAD
+	var envGroup *gokeepasslib.Group
+	for i := range headGroup.Groups {
+		if headGroup.Groups[i].Name == envName {
+			envGroup = &headGroup.Groups[i]
+			break
+		}
+	}
+
+	if envGroup == nil {
+		return nil, fmt.Errorf("environment '%s' not found in profile '%s'", envName, profileName)
+	}
+
+	// Parse entry path - remove leading slash if present
+	if len(entryPath) > 0 && entryPath[0] == '/' {
+		entryPath = entryPath[1:]
+	}
+
+	// Remove environment prefix from path if present (case-insensitive)
+	envPrefix := envName + "/"
+	if len(entryPath) >= len(envPrefix) {
+		if strings.EqualFold(entryPath[:len(envPrefix)], envPrefix) {
+			entryPath = entryPath[len(envPrefix):]
+		}
+	}
+
+	// Split path into components
+	if entryPath == "" {
+		return nil, fmt.Errorf("entry path cannot be empty")
+	}
+
+	components := strings.Split(entryPath, "/")
+	if len(components) == 0 {
+		return nil, fmt.Errorf("invalid entry path")
+	}
+
+	// Navigate through intermediate groups
+	currentGroup := envGroup
+	for i := 0; i < len(components)-1; i++ {
+		groupName := components[i]
+		if groupName == "" {
+			continue
+		}
+
+		// Find group
+		found := false
+		for j := range currentGroup.Groups {
+			if currentGroup.Groups[j].Name == groupName {
+				currentGroup = &currentGroup.Groups[j]
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return nil, fmt.Errorf("group '%s' not found in path", groupName)
+		}
+	}
+
+	// Find the entry in the final group
+	entryName := components[len(components)-1]
+	if entryName == "" {
+		return nil, fmt.Errorf("entry name cannot be empty")
+	}
+
+	// Search for entry by Title
+	var targetEntry *gokeepasslib.Entry
+	for i := range currentGroup.Entries {
+		for _, value := range currentGroup.Entries[i].Values {
+			if value.Key == "Title" && value.Value.Content == entryName {
+				targetEntry = &currentGroup.Entries[i]
+				break
+			}
+		}
+		if targetEntry != nil {
+			break
+		}
+	}
+
+	if targetEntry == nil {
+		return nil, fmt.Errorf("entry '%s' not found", entryName)
+	}
+
+	// Collect ALL field names (including empty ones)
+	var fields []string
+
+	// Add all standard and custom fields
+	for _, value := range targetEntry.Values {
+		// Skip Title field (it's the entry name, not a user-facing field)
+		if value.Key == "Title" {
+			continue
+		}
+		fields = append(fields, value.Key)
+	}
+
+	// Add attachments with "attachments/" prefix
+	for _, binary := range targetEntry.Binaries {
+		fields = append(fields, "attachments/"+binary.Name)
 	}
 
 	return fields, nil
