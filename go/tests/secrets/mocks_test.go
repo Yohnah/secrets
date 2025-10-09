@@ -3,9 +3,13 @@ package secrets_test
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/Yohnah/secrets/internal/config"
+	"github.com/Yohnah/secrets/internal/validator"
 	"github.com/tobischo/gokeepasslib/v3"
+	"gopkg.in/yaml.v3"
 )
 
 // Global state for mock password validation across test instances
@@ -449,4 +453,138 @@ func (m *mockKeePassManager) GetFieldsByEntry(entryPath string) ([]string, error
 	}
 	// Simple implementation - return empty for testing
 	return []string{}, nil
+}
+
+// mockConfigManager is a mock implementation of config.Manager for testing
+type mockConfigManager struct {
+	secretsFilePath string
+}
+
+func newMockConfigManager(secretsFilePath string) *mockConfigManager {
+	return &mockConfigManager{
+		secretsFilePath: secretsFilePath,
+	}
+}
+
+func (m *mockConfigManager) GetConfig() (*config.Config, error) {
+	return &config.Config{}, nil
+}
+
+func (m *mockConfigManager) CreateDefaultConfig(path string) error {
+	return nil
+}
+
+func (m *mockConfigManager) CreateDefaultConfigWithNoCreate(path string, noCreateDatabase bool) error {
+	return nil
+}
+
+func (m *mockConfigManager) GetDatabasePath() string {
+	return "/tmp/test.db"
+}
+
+func (m *mockConfigManager) GetKeyfilePath() string {
+	return "/tmp/test.key"
+}
+
+func (m *mockConfigManager) GetSecretsFilePath() string {
+	return m.secretsFilePath
+}
+
+func (m *mockConfigManager) ShouldIgnoreConfigFile() bool {
+	return false
+}
+
+func (m *mockConfigManager) ShouldIgnoreGitProject() bool {
+	return true
+}
+
+// mockValidatorManager is a mock implementation of validator.ValidatorManager for testing
+type mockValidatorManager struct {
+	secretsContent string
+}
+
+func newMockValidatorManager(secretsContent string) *mockValidatorManager {
+	return &mockValidatorManager{
+		secretsContent: secretsContent,
+	}
+}
+
+func (m *mockValidatorManager) ReadAndValidateSecretsYML(path string) (*validator.SecretsConfig, []error) {
+	// Parse the YAML content using the same logic as the real validator
+	profiles, parseErrors := m.parseMultiDocumentYAML([]byte(m.secretsContent))
+	if len(parseErrors) > 0 {
+		return nil, parseErrors
+	}
+
+	// Return successful configuration
+	config := &validator.SecretsConfig{
+		Profiles: profiles,
+	}
+
+	return config, nil
+}
+
+// parseMultiDocumentYAML parses a YAML file with multiple documents (separated by ---)
+func (m *mockValidatorManager) parseMultiDocumentYAML(data []byte) ([]validator.Profile, []error) {
+	var profiles []validator.Profile
+	var errors []error
+
+	decoder := yaml.NewDecoder(strings.NewReader(string(data)))
+
+	docIndex := 0
+	for {
+		var profile validator.Profile
+		err := decoder.Decode(&profile)
+		if err != nil {
+			// EOF is expected when no more documents
+			if err.Error() == "EOF" {
+				break
+			}
+			errors = append(errors, fmt.Errorf("failed to parse YAML document %d: %w", docIndex+1, err))
+			return nil, errors
+		}
+
+		profiles = append(profiles, profile)
+		docIndex++
+	}
+
+	// At least one profile must exist
+	if len(profiles) == 0 {
+		errors = append(errors, fmt.Errorf("secrets.yml must contain at least one profile"))
+		return nil, errors
+	}
+
+	return profiles, nil
+}
+
+func (m *mockValidatorManager) ValidateConfigFile(path string) error {
+	return nil
+}
+
+func (m *mockValidatorManager) ValidateTemplate(template string) error {
+	return nil
+}
+
+func (m *mockValidatorManager) ValidateSecretsYML(config *validator.SecretsConfig) []error {
+	return nil
+}
+
+func (m *mockValidatorManager) ValidateKeePassDuplicates(db validator.KeePassManager) []error {
+	return nil
+}
+
+func (m *mockValidatorManager) ValidateNoDuplicateEntries(envName string, entryPaths []string) error {
+	return nil
+}
+
+func (m *mockValidatorManager) ValidateUniqueProfileInRoot(profiles []string, profileName string) error {
+	return nil
+}
+
+func (m *mockValidatorManager) ValidateUniqueEntryInPath(entries []string, entryName string, fullPath string) error {
+	return nil
+}
+
+func (m *mockValidatorManager) ValidateUniqueFieldsInEntry(fields []string, entryPath string) error {
+	return nil
 }

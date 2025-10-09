@@ -1,28 +1,15 @@
 package secrets_test
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/Yohnah/secrets/internal/config"
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/secrets/profile"
-	"github.com/Yohnah/secrets/internal/types"
-	"github.com/Yohnah/secrets/internal/validator"
 )
 
 // TestProfileResolverAutoDetectSingleProfile verifies that the resolver selects the only profile automatically.
 func TestProfileResolverAutoDetectSingleProfile(t *testing.T) {
-	tmpDir := setupTestDir(t)
-	setupTestPassword(t)
-	initGitRepo(t, tmpDir)
-
-	originalDir, _ := os.Getwd()
-	t.Cleanup(func() { os.Chdir(originalDir) })
-	os.Chdir(tmpDir)
-
 	secretsContent := `---
 metadata:
   profile: "auto-detect-profile"
@@ -35,19 +22,8 @@ environments:
       key: "Password"
 outputs: {}`
 
-	secretsPath := filepath.Join(tmpDir, "secrets.yml")
-	if err := os.WriteFile(secretsPath, []byte(secretsContent), 0644); err != nil {
-		t.Fatalf("failed to create secrets.yml: %v", err)
-	}
-
-	flags := &types.GlobalFlags{
-		SecretsFile:      secretsPath,
-		IgnoreGitProject: true,
-	}
-	commandFlags := &types.CommandFlags{}
-
-	validatorMgr := validator.NewManager()
-	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
+	validatorMgr := newMockValidatorManager(secretsContent)
+	configMgr := newMockConfigManager("/tmp/test-secrets.yml")
 	loggerMgr := logger.NewManager(false)
 	resolver := profile.NewResolver(configMgr, loggerMgr, validatorMgr)
 
@@ -71,14 +47,6 @@ outputs: {}`
 
 // TestProfileResolverMultipleProfilesRequiresFlag ensures auto-detection fails when multiple profiles exist.
 func TestProfileResolverMultipleProfilesRequiresFlag(t *testing.T) {
-	tmpDir := setupTestDir(t)
-	setupTestPassword(t)
-	initGitRepo(t, tmpDir)
-
-	originalDir, _ := os.Getwd()
-	t.Cleanup(func() { os.Chdir(originalDir) })
-	os.Chdir(tmpDir)
-
 	secretsContent := `---
 metadata:
   profile: "profile-one"
@@ -102,18 +70,8 @@ environments:
       key: "Token"
 outputs: {}`
 
-	secretsPath := filepath.Join(tmpDir, "secrets.yml")
-	if err := os.WriteFile(secretsPath, []byte(secretsContent), 0644); err != nil {
-		t.Fatalf("failed to create secrets.yml: %v", err)
-	}
-
-	flags := &types.GlobalFlags{
-		SecretsFile:      secretsPath,
-		IgnoreGitProject: true,
-	}
-
-	validatorMgr := validator.NewManager()
-	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
+	validatorMgr := newMockValidatorManager(secretsContent)
+	configMgr := newMockConfigManager("/tmp/test-secrets.yml")
 	loggerMgr := logger.NewManager(false)
 	resolver := profile.NewResolver(configMgr, loggerMgr, validatorMgr)
 
@@ -129,14 +87,6 @@ outputs: {}`
 
 // TestProfileResolverUnknownProfile verifies that specifying an unknown profile fails.
 func TestProfileResolverUnknownProfile(t *testing.T) {
-	tmpDir := setupTestDir(t)
-	setupTestPassword(t)
-	initGitRepo(t, tmpDir)
-
-	originalDir, _ := os.Getwd()
-	t.Cleanup(func() { os.Chdir(originalDir) })
-	os.Chdir(tmpDir)
-
 	secretsContent := `---
 metadata:
   profile: "known-profile"
@@ -149,18 +99,8 @@ environments:
       key: "Password"
 outputs: {}`
 
-	secretsPath := filepath.Join(tmpDir, "secrets.yml")
-	if err := os.WriteFile(secretsPath, []byte(secretsContent), 0644); err != nil {
-		t.Fatalf("failed to create secrets.yml: %v", err)
-	}
-
-	flags := &types.GlobalFlags{
-		SecretsFile:      secretsPath,
-		IgnoreGitProject: true,
-	}
-
-	validatorMgr := validator.NewManager()
-	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
+	validatorMgr := newMockValidatorManager(secretsContent)
+	configMgr := newMockConfigManager("/tmp/test-secrets.yml")
 	loggerMgr := logger.NewManager(false)
 	resolver := profile.NewResolver(configMgr, loggerMgr, validatorMgr)
 
