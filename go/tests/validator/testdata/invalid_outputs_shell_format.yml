@@ -1,0 +1,15 @@
+metadata:
+  profile: "test-invalid-shell-format"
+
+environments:
+  production:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Production/Database"
+      key: "Password"
+
+outputs:
+  shell:
+    - file: "set-env.sh"
+      environment: "production"
+      format: "invalid_format"

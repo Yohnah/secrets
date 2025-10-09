@@ -1,0 +1,17 @@
+metadata:
+  profile: "test-missing-fields"
+
+environments:
+  production:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Production/Database"
+      key: "Password"
+
+outputs:
+  dotenv:
+    - file: ".env"
+  
+  shell:
+    - file: "set-env.bash"
+      environment: "production"

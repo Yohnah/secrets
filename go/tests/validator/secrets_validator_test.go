@@ -1,6 +1,7 @@
 package validator_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -391,5 +392,181 @@ outputs: {}
 				}
 			}
 		})
+	}
+}
+
+// TestReadAndValidateSecretsYML_ValidOutputs tests valid outputs configuration
+func TestReadAndValidateSecretsYML_ValidOutputs(t *testing.T) {
+	filePath := filepath.Join("testdata", "valid_with_outputs.yml")
+
+	validatorMgr := validator.NewManager()
+	config, errors := validatorMgr.ReadAndValidateSecretsYML(filePath)
+
+	if len(errors) > 0 {
+		t.Errorf("Expected no errors for valid outputs file, got: %s", formatErrors(errors))
+	}
+
+	if config == nil {
+		t.Fatal("Expected config to be non-nil")
+	}
+
+	if len(config.Profiles) != 1 {
+		t.Fatalf("Expected 1 profile, got %d", len(config.Profiles))
+	}
+
+	profile := config.Profiles[0]
+
+	// Check that outputs are parsed correctly
+	if len(profile.Outputs.Dotenv) != 2 {
+		t.Errorf("Expected 2 dotenv outputs, got %d", len(profile.Outputs.Dotenv))
+	}
+
+	if len(profile.Outputs.Dotnet) != 1 {
+		t.Errorf("Expected 1 dotnet output, got %d", len(profile.Outputs.Dotnet))
+	}
+
+	if len(profile.Outputs.Shell) != 2 {
+		t.Errorf("Expected 2 shell outputs, got %d", len(profile.Outputs.Shell))
+	}
+
+	if len(profile.Outputs.Terraform) != 1 {
+		t.Errorf("Expected 1 terraform output, got %d", len(profile.Outputs.Terraform))
+	}
+}
+
+// TestReadAndValidateSecretsYML_InvalidOutputs tests invalid outputs configurations
+func TestReadAndValidateSecretsYML_InvalidOutputs(t *testing.T) {
+	testCases := []struct {
+		name          string
+		filename      string
+		expectedError string
+	}{
+		{"Duplicate File", "invalid_outputs_duplicate_file.yml", "already used"},
+		{"Environment Not Exists", "invalid_outputs_env_not_exists.yml", "does not exist"},
+		{"Invalid Shell Format", "invalid_outputs_shell_format.yml", "format"},
+		{"Missing Required Fields", "invalid_outputs_missing_fields.yml", "required"},
+		{"Custom Template Not Exists", "invalid_outputs_custom_template_not_exists.yml", "does not exist"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			filePath := filepath.Join("testdata", tc.filename)
+
+			validatorMgr := validator.NewManager()
+			_, errors := validatorMgr.ReadAndValidateSecretsYML(filePath)
+
+			if len(errors) == 0 {
+				t.Errorf("Expected error for %s, but got none", tc.filename)
+				return
+			}
+
+			if !containsErrorWithMessage(errors, tc.expectedError) {
+				t.Errorf("Expected error containing '%s' for %s, got: %s",
+					tc.expectedError, tc.filename, formatErrors(errors))
+			}
+		})
+	}
+}
+
+// TestReadAndValidateSecretsYML_EmptyOutputs tests that empty outputs are allowed
+func TestReadAndValidateSecretsYML_EmptyOutputs(t *testing.T) {
+	// Use existing valid file that should have empty outputs
+	filePath := filepath.Join("testdata", "valid_single_profile.yml")
+
+	validatorMgr := validator.NewManager()
+	config, errors := validatorMgr.ReadAndValidateSecretsYML(filePath)
+
+	if len(errors) > 0 {
+		t.Errorf("Expected no errors for file with empty outputs, got: %s", formatErrors(errors))
+	}
+
+	if config == nil {
+		t.Fatal("Expected config to be non-nil")
+	}
+
+	// Empty outputs should be allowed
+	if len(config.Profiles) == 0 {
+		t.Fatal("Expected at least one profile")
+	}
+}
+
+// TestReadAndValidateSecretsYML_ValidCustomOutputWithTemplate tests custom output with valid template
+func TestReadAndValidateSecretsYML_ValidCustomOutputWithTemplate(t *testing.T) {
+	// Create temporary template file for testing
+	tmpFile, err := os.CreateTemp("", "test-template-*.tpl")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	templateContent := "# Test template\n{{range .}}\n{{.Name}}={{.Value}}\n{{end}}"
+	if _, err := tmpFile.WriteString(templateContent); err != nil {
+		t.Fatalf("Failed to write to temp file: %v", err)
+	}
+	tmpFile.Close()
+
+	// Create test YAML file with reference to temp template
+	testYAML := fmt.Sprintf(`metadata:
+  profile: "test-custom-output-temp"
+
+environments:
+  production:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Production/Database"
+      key: "Password"
+
+outputs:
+  custom:
+    - file: "custom-output.txt"
+      environment: "production"
+      template: "%s"
+`, tmpFile.Name())
+
+	// Create temporary YAML file
+	tmpYAML, err := os.CreateTemp("", "test-yaml-*.yml")
+	if err != nil {
+		t.Fatalf("Failed to create temp YAML file: %v", err)
+	}
+	defer os.Remove(tmpYAML.Name())
+
+	if _, err := tmpYAML.WriteString(testYAML); err != nil {
+		t.Fatalf("Failed to write to temp YAML file: %v", err)
+	}
+	tmpYAML.Close()
+
+	validatorMgr := validator.NewManager()
+	config, errors := validatorMgr.ReadAndValidateSecretsYML(tmpYAML.Name())
+
+	if len(errors) > 0 {
+		t.Errorf("Expected no errors for valid custom output with template, got: %s", formatErrors(errors))
+	}
+
+	if config == nil {
+		t.Fatal("Expected config to be non-nil")
+	}
+
+	if len(config.Profiles) != 1 {
+		t.Fatalf("Expected 1 profile, got %d", len(config.Profiles))
+	}
+
+	profile := config.Profiles[0]
+
+	if len(profile.Outputs.Custom) != 1 {
+		t.Fatalf("Expected 1 custom output, got %d", len(profile.Outputs.Custom))
+	}
+
+	customOutput := profile.Outputs.Custom[0]
+	if customOutput.File != "custom-output.txt" {
+		t.Errorf("Expected file 'custom-output.txt', got '%s'", customOutput.File)
+	}
+
+	if customOutput.Environment != "production" {
+		t.Errorf("Expected environment 'production', got '%s'", customOutput.Environment)
+	}
+
+	// Just verify template field is set and not empty
+	if customOutput.Template == "" {
+		t.Errorf("Expected template to be set, got empty string")
 	}
 }

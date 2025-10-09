@@ -1,0 +1,15 @@
+metadata:
+  profile: "test-custom-output"
+
+environments:
+  production:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Production/Database"
+      key: "Password"
+
+outputs:
+  custom:
+    - file: "custom-output.txt"
+      environment: "production"
+      template: "testdata/templates/test.tpl"

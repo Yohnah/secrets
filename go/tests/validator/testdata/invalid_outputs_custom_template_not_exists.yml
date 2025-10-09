@@ -1,0 +1,15 @@
+metadata:
+  profile: "test-template-not-exists"
+
+environments:
+  production:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Production/Database"
+      key: "Password"
+
+outputs:
+  custom:
+    - file: "custom-output.txt"
+      environment: "production"
+      template: "non_existent_template.tpl"

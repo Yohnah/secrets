@@ -1,0 +1,14 @@
+metadata:
+  profile: "test-env-not-exists"
+
+environments:
+  production:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Production/Database"
+      key: "Password"
+
+outputs:
+  dotenv:
+    - file: ".env.staging"
+      environment: "staging"

@@ -9,13 +9,46 @@ type SecretsConfig struct {
 type Profile struct {
 	Metadata     Metadata          `yaml:"metadata"`
 	Environments map[string][]Item `yaml:"environments"`
-	Outputs      interface{}       `yaml:"outputs,omitempty"`
+	Outputs      Outputs           `yaml:"outputs,omitempty"`
 }
 
 // Metadata contains the profile configuration
 type Metadata struct {
 	Profile            string `yaml:"profile"`
 	DefaultEnvironment string `yaml:"default_environment,omitempty"` // Deprecated, will be removed
+}
+
+// Outputs represents the outputs section
+type Outputs struct {
+	Dotenv        []OutputItem `yaml:"dotenv,omitempty"`
+	Dotnet        []OutputItem `yaml:"dotnet,omitempty"`
+	SpringBoot    []OutputItem `yaml:"spring_boot,omitempty"`
+	Terraform     []OutputItem `yaml:"terraform,omitempty"`
+	Shell         []ShellItem  `yaml:"shell,omitempty"`
+	Ansible       []OutputItem `yaml:"ansible,omitempty"`
+	DockerCompose []OutputItem `yaml:"docker_compose,omitempty"`
+	Kubernetes    []OutputItem `yaml:"kubernetes,omitempty"`
+	Custom        []CustomItem `yaml:"custom,omitempty"`
+}
+
+// OutputItem represents a basic output item with file and environment
+type OutputItem struct {
+	File        string `yaml:"file"`
+	Environment string `yaml:"environment"`
+}
+
+// ShellItem represents a shell output item with additional format field
+type ShellItem struct {
+	File        string `yaml:"file"`
+	Environment string `yaml:"environment"`
+	Format      string `yaml:"format"`
+}
+
+// CustomItem represents a custom output item with template field
+type CustomItem struct {
+	File        string `yaml:"file"`
+	Environment string `yaml:"environment"`
+	Template    string `yaml:"template"`
 }
 
 // Item represents a secret item within an environment

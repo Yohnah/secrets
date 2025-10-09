@@ -1,0 +1,38 @@
+metadata:
+  profile: "test-outputs"
+
+environments:
+  production:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Production/Database"
+      key: "Password"
+  
+  staging:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Staging/Database"
+      key: "Password"
+
+outputs:
+  dotenv:
+    - file: ".env.production"
+      environment: "production"
+    - file: ".env.staging"
+      environment: "staging"
+  
+  dotnet:
+    - file: "appsettings.Production.json"
+      environment: "production"
+  
+  shell:
+    - file: "set-env.bash"
+      environment: "production"
+      format: "bash"
+    - file: "set-env.fish"
+      environment: "staging"
+      format: "fish"
+  
+  terraform:
+    - file: "production.tfvars"
+      environment: "production"

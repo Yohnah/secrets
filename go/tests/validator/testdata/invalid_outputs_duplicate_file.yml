@@ -1,0 +1,18 @@
+metadata:
+  profile: "test-duplicate-file"
+
+environments:
+  production:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Production/Database"
+      key: "Password"
+
+outputs:
+  dotenv:
+    - file: ".env"
+      environment: "production"
+  
+  dotnet:
+    - file: ".env"
+      environment: "production"
