@@ -117,7 +117,7 @@ func validateProfiles(profiles []Profile) []error {
 
 		if profile.Metadata.DefaultEnvironment != "" {
 			errors = append(errors, fmt.Errorf("profile %d ('%s'): metadata.default_environment is no longer supported, please remove it from your secrets.yml", i+1, profile.Metadata.Profile))
-		}		// Check for duplicate profile names (case-insensitive)
+		} // Check for duplicate profile names (case-insensitive)
 		profileNameLower := strings.ToLower(profile.Metadata.Profile)
 		if existingIndex, exists := profileNames[profileNameLower]; exists {
 			errors = append(errors, fmt.Errorf("duplicate profile name found: '%s' (document %d conflicts with document %d, case-insensitive match)", profile.Metadata.Profile, i+1, existingIndex+1))
