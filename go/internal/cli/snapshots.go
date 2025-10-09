@@ -23,13 +23,31 @@ var snapshotsCmd = &cobra.Command{
 var snapshotsListCmd = &cobra.Command{
 	Use:   "list [profile_name|all]",
 	Short: "List snapshots",
-	Long:  "List all snapshots for a specific profile or all profiles. Use 'all' to list snapshots from all profiles",
-	Args:  cobra.MaximumNArgs(1),
+	Long: `List all snapshots for a specific profile or all profiles.
+
+Profile name can be specified via:
+  1. Flag: -p/--profile-name (e.g., -p webapp-prod)
+  2. Positional argument (legacy, deprecated)
+  3. Default: "all" (shows all profiles)
+
+Examples:
+  secrets snapshots list                 # List all snapshots
+  secrets snapshots list -p webapp-prod  # List for specific profile via flag
+  secrets snapshots list webapp-prod     # List for specific profile (legacy)`,
+	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		// Get profile name from args (optional, default "all")
-		profileName := "all"
-		if len(args) > 0 {
+		// Determine profile name from flag or positional argument
+		var profileName string
+		
+		if flagProfileName != "" {
+			// Priority 1: Use flag if provided
+			profileName = flagProfileName
+		} else if len(args) > 0 {
+			// Priority 2: Legacy positional argument (backward compatibility)
 			profileName = args[0]
+		} else {
+			// Default: show all profiles
+			profileName = "all"
 		}
 
 		// Create command flags
@@ -50,13 +68,34 @@ var snapshotsListCmd = &cobra.Command{
 
 // snapshotsNewCmd creates a new snapshot
 var snapshotsNewCmd = &cobra.Command{
-	Use:   "new <profile_name>",
+	Use:   "new [profile_name]",
 	Short: "Create a new snapshot",
-	Long:  "Create a new snapshot by cloning HEAD to v{current_version} and incrementing HEAD version",
-	Args:  cobra.ExactArgs(1),
+	Long: `Create a new snapshot by cloning HEAD to v{current_version} and incrementing HEAD version.
+
+Profile name can be specified via:
+  1. Flag: -p/--profile-name (e.g., -p webapp-prod)
+  2. Positional argument (legacy, deprecated)
+
+Examples:
+  secrets snapshots new -p webapp-prod  # Via flag
+  secrets snapshots new webapp-prod     # Legacy style`,
+	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		// Get profile name from args (required)
-		profileName := args[0]
+		// Determine profile name from flag or positional argument
+		var profileName string
+		
+		if flagProfileName != "" {
+			// Priority 1: Use flag if provided
+			profileName = flagProfileName
+		} else if len(args) > 0 {
+			// Priority 2: Legacy positional argument (backward compatibility)
+			profileName = args[0]
+		} else {
+			// Error: profile name is required
+			managers := NewManagerContext(&types.CommandFlags{})
+			managers.Logger.Error("profile name is required (use -p/--profile-name flag or positional argument)")
+			os.Exit(1)
+		}
 
 		// Create command flags (no specific flags for this command)
 		commandFlags := &types.CommandFlags{}
@@ -74,14 +113,46 @@ var snapshotsNewCmd = &cobra.Command{
 
 // snapshotsRestoreCmd restores a snapshot to HEAD
 var snapshotsRestoreCmd = &cobra.Command{
-	Use:   "restore <profile_name> v<version>",
+	Use:   "restore [profile_name] <version>",
 	Short: "Restore a snapshot to HEAD",
-	Long:  "Restore a snapshot by renaming current HEAD to v{current_version} and cloning the specified version to new HEAD with incremented version",
-	Args:  cobra.ExactArgs(2),
+	Long: `Restore a snapshot by renaming current HEAD to v{current_version} and cloning the specified version to new HEAD with incremented version.
+
+Profile name can be specified via:
+  1. Flag: -p/--profile-name (e.g., -p webapp-prod)
+  2. Positional argument (legacy, deprecated)
+
+Examples:
+  secrets snapshots restore -p webapp-prod v3  # Via flag
+  secrets snapshots restore webapp-prod v3     # Legacy style`,
+	Args: cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
-		// Get profile name and version from args (both required)
-		profileName := args[0]
-		version := args[1]
+		// Determine profile name and version from flag/args
+		var profileName, version string
+		
+		if flagProfileName != "" {
+			// Priority 1: Use flag if provided
+			profileName = flagProfileName
+			if len(args) < 1 {
+				managers := NewManagerContext(&types.CommandFlags{})
+				managers.Logger.Error("version is required")
+				os.Exit(1)
+			}
+			version = args[0]
+		} else if len(args) == 2 {
+			// Priority 2: Legacy positional arguments (backward compatibility)
+			profileName = args[0]
+			version = args[1]
+		} else if len(args) == 1 {
+			// Ambiguous: only one argument without flag
+			managers := NewManagerContext(&types.CommandFlags{})
+			managers.Logger.Error("profile name must be specified via -p/--profile-name flag or as first positional argument")
+			os.Exit(1)
+		} else {
+			// No arguments at all
+			managers := NewManagerContext(&types.CommandFlags{})
+			managers.Logger.Error("profile name and version are required")
+			os.Exit(1)
+		}
 
 		// Create command flags (no specific flags for this command)
 		commandFlags := &types.CommandFlags{}
@@ -99,14 +170,46 @@ var snapshotsRestoreCmd = &cobra.Command{
 
 // snapshotsDeleteCmd deletes a specific snapshot version
 var snapshotsDeleteCmd = &cobra.Command{
-	Use:   "delete <profile_name> v<version>",
+	Use:   "delete [profile_name] <version>",
 	Short: "Delete a snapshot version",
-	Long:  "Delete a specific snapshot version from a profile. HEAD cannot be deleted. This operation is permanent.",
-	Args:  cobra.ExactArgs(2),
+	Long: `Delete a specific snapshot version from a profile. HEAD cannot be deleted. This operation is permanent.
+
+Profile name can be specified via:
+  1. Flag: -p/--profile-name (e.g., -p webapp-prod)
+  2. Positional argument (legacy, deprecated)
+
+Examples:
+  secrets snapshots delete -p webapp-prod v2  # Via flag
+  secrets snapshots delete webapp-prod v2     # Legacy style`,
+	Args: cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
-		// Get profile name and version from args (both required)
-		profileName := args[0]
-		version := args[1]
+		// Determine profile name and version from flag/args
+		var profileName, version string
+		
+		if flagProfileName != "" {
+			// Priority 1: Use flag if provided
+			profileName = flagProfileName
+			if len(args) < 1 {
+				managers := NewManagerContext(&types.CommandFlags{})
+				managers.Logger.Error("version is required")
+				os.Exit(1)
+			}
+			version = args[0]
+		} else if len(args) == 2 {
+			// Priority 2: Legacy positional arguments (backward compatibility)
+			profileName = args[0]
+			version = args[1]
+		} else if len(args) == 1 {
+			// Ambiguous: only one argument without flag
+			managers := NewManagerContext(&types.CommandFlags{})
+			managers.Logger.Error("profile name must be specified via -p/--profile-name flag or as first positional argument")
+			os.Exit(1)
+		} else {
+			// No arguments at all
+			managers := NewManagerContext(&types.CommandFlags{})
+			managers.Logger.Error("profile name and version are required")
+			os.Exit(1)
+		}
 
 		// Create command flags (no specific flags for this command)
 		commandFlags := &types.CommandFlags{}

@@ -15,6 +15,7 @@ var (
 	flagSecretsFile  string
 	flagIgnoreConfig bool
 	flagIgnoreGit    bool
+	flagProfileName  string
 )
 
 // rootCmd represents the base command
@@ -44,6 +45,7 @@ func init() {
 	// Global flags available to all commands
 	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "Enable verbose output")
 	rootCmd.PersistentFlags().BoolVarP(&flagForce, "force", "f", false, "Force operation without confirmation (non-interactive mode)")
+	rootCmd.PersistentFlags().StringVarP(&flagProfileName, "profile-name", "p", "", "Profile name (alternative to positional argument)")
 	rootCmd.PersistentFlags().StringVar(&flagDatabase, "database", ".secrets_yohnah/secrets.kdbx", "Path to KeePass database file")
 	rootCmd.PersistentFlags().StringVar(&flagKeyfile, "keyfile", ".secrets_yohnah/secrets.keyfile", "Path to key file for database authentication")
 	rootCmd.PersistentFlags().StringVar(&flagConfig, "config", ".secrets_yohnah/config.yml", "Path to configuration file")
@@ -114,6 +116,9 @@ func GetGlobalFlags() *types.GlobalFlags {
 	}
 	if rootCmd.PersistentFlags().Changed("secrets-file") {
 		flags.SecretsFile = flagSecretsFile
+	}
+	if rootCmd.PersistentFlags().Changed("profile-name") {
+		flags.ProfileName = flagProfileName
 	}
 
 	return flags

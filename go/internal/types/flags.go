@@ -11,6 +11,7 @@ type GlobalFlags struct {
 	SecretsFile      string
 	IgnoreConfigFile bool
 	IgnoreGitProject bool
+	ProfileName      string
 }
 
 // CommandFlags holds all command-specific flag values

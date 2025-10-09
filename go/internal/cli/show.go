@@ -50,7 +50,7 @@ var showStatusCmd = &cobra.Command{
 
 // showTreeCmd represents the show tree command
 var showTreeCmd = &cobra.Command{
-	Use:   "tree <profile-name> <environment-name>",
+	Use:   "tree [profile-name] <environment-name>",
 	Short: "Show tree structure of secrets",
 	Long: `Display a tree structure of the secrets for a specific profile and environment.
 
@@ -61,10 +61,15 @@ The tree shows:
   ✗ Entry defined in secrets.yml but missing in database
   ⚠ Entry exists in database but not defined in secrets.yml
 
-Example:
-  secrets show tree webapp-production production
+Profile name can be specified via:
+  1. Flag: -p/--profile-name
+  2. Positional argument (legacy, deprecated)
+
+Examples:
+  secrets show tree -p webapp-production production
+  secrets show tree webapp-production production        # Legacy style
   secrets show tree webapp-production production -o ascii`,
-	Args: cobra.ExactArgs(2),
+	Args: cobra.RangeArgs(1, 2),
 	RunE: runShowTree,
 }
 
@@ -79,11 +84,17 @@ Shows for each profile:
 - Environment existence in database (✓/✗)
 - Entry count (existing/total entries)
 
+Profile name can be specified via:
+  1. Flag: -p/--profile-name (e.g., -p webapp-prod)
+  2. Positional argument (legacy, deprecated)
+  3. Default: "all" (shows all profiles)
+
 Examples:
-  secrets show profiles              # Show all profiles
-  secrets show profiles all          # Show all profiles (explicit)
-  secrets show profiles webapp-prod  # Show specific profile
-  secrets show profiles -o json      # Output in JSON format`,
+  secrets show profiles                    # Show all profiles
+  secrets show profiles all                # Show all profiles (explicit)
+  secrets show profiles -p webapp-prod     # Show specific profile via flag
+  secrets show profiles webapp-prod        # Show specific profile (legacy)
+  secrets show profiles -o json            # Output in JSON format`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runShowProfiles,
 }
@@ -158,11 +169,33 @@ func runShowTree(cmd *cobra.Command, args []string) error {
 	// Create manager context with captured flags
 	managers := NewManagerContext(commandFlags)
 
+	// Determine profile name from flag or positional argument
+	var profileName, environmentName string
+	
+	if flagProfileName != "" {
+		// Priority 1: Use flag if provided
+		profileName = flagProfileName
+		if len(args) < 1 {
+			managers.Logger.Error("environment name is required")
+			os.Exit(1)
+		}
+		environmentName = args[0]
+	} else if len(args) == 2 {
+		// Priority 2: Legacy positional arguments (backward compatibility)
+		profileName = args[0]
+		environmentName = args[1]
+	} else if len(args) == 1 {
+		// Ambiguous: only one argument without flag
+		managers.Logger.Error("profile name must be specified via -p/--profile-name flag or as first positional argument")
+		os.Exit(1)
+	} else {
+		// No arguments at all
+		managers.Logger.Error("profile name and environment name are required")
+		os.Exit(1)
+	}
+
 	// Execute business logic (delegate all decisions to CORE)
 	// SecretsManager will pull processed config from ConfigMgr
-	profileName := args[0]
-	environmentName := args[1]
-
 	if err := managers.Secrets.ShowTree(profileName, environmentName, flagTreeOutput); err != nil {
 		managers.Logger.Error(err.Error())
 		os.Exit(1)
@@ -180,10 +213,18 @@ func runShowProfiles(cmd *cobra.Command, args []string) error {
 	// Create manager context with captured flags
 	managers := NewManagerContext(commandFlags)
 
-	// Get profile name from args (optional, default "all")
-	profileFilter := "all"
-	if len(args) > 0 {
+	// Determine profile name from flag or positional argument
+	var profileFilter string
+	
+	if flagProfileName != "" {
+		// Priority 1: Use flag if provided
+		profileFilter = flagProfileName
+	} else if len(args) > 0 {
+		// Priority 2: Legacy positional argument (backward compatibility)
 		profileFilter = args[0]
+	} else {
+		// Default: show all profiles
+		profileFilter = "all"
 	}
 
 	// Execute business logic (delegate all decisions to CORE)
