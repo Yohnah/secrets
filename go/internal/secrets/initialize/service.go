@@ -586,6 +586,16 @@ func (s *service) applySecretsConfig(secretsConfig *validator.SecretsConfig, dbP
 		} else {
 			// Create new profile
 			s.logger.Debug(fmt.Sprintf("Creating profile '%s'...", profileName))
+
+			// Validate unique profile name
+			existingProfiles, err := s.keepass.GetRootGroups()
+			if err != nil {
+				return fmt.Errorf("failed to get existing profiles: %w", err)
+			}
+			if err := s.validator.ValidateUniqueProfileInRoot(existingProfiles, profileName); err != nil {
+				return err
+			}
+
 			if err := s.keepass.CreateProfile(profileName); err != nil {
 				return fmt.Errorf("failed to create profile '%s': %w", profileName, err)
 			}
@@ -749,12 +759,34 @@ func (s *service) createKeys(profileName string, profile validator.Profile) (int
 				if s.keepass.IsStandardField(keyName) {
 					// Create standard field
 					s.logger.Debug(fmt.Sprintf("        - Creating standard field '%s'...", keyName))
+
+					// Validate unique field in entry
+					fullEntryPath := fmt.Sprintf("%s/HEAD/%s%s", profileName, envName, entryPath)
+					existingFields, err := s.keepass.GetFieldsByEntry(fullEntryPath)
+					if err != nil {
+						return 0, fmt.Errorf("failed to get existing fields in entry '%s': %w", fullEntryPath, err)
+					}
+					if err := s.validator.ValidateUniqueFieldsInEntry(existingFields, fullEntryPath); err != nil {
+						return 0, err
+					}
+
 					if err := s.keepass.SetStandardField(profileName, envName, entryPath, keyName, defaultValue); err != nil {
 						return 0, fmt.Errorf("failed to create standard field '%s' in entry '%s': %w", keyName, entryPath, err)
 					}
 				} else {
 					// Create custom field
 					s.logger.Debug(fmt.Sprintf("        - Creating custom field '%s'...", keyName))
+
+					// Validate unique field in entry
+					fullEntryPath := fmt.Sprintf("%s/HEAD/%s%s", profileName, envName, entryPath)
+					existingFields, err := s.keepass.GetFieldsByEntry(fullEntryPath)
+					if err != nil {
+						return 0, fmt.Errorf("failed to get existing fields in entry '%s': %w", fullEntryPath, err)
+					}
+					if err := s.validator.ValidateUniqueFieldsInEntry(existingFields, fullEntryPath); err != nil {
+						return 0, err
+					}
+
 					if err := s.keepass.SetCustomField(profileName, envName, entryPath, keyName, defaultValue); err != nil {
 						return 0, fmt.Errorf("failed to create custom field '%s' in entry '%s': %w", keyName, entryPath, err)
 					}
@@ -867,6 +899,16 @@ func (s *service) createEntries(profileName string, profile validator.Profile) (
 
 			// Create entry (empty, no custom fields yet)
 			s.logger.Debug(fmt.Sprintf("    - Creating entry '%s'...", entryPath))
+
+			// Validate unique entry path
+			existingEntries, err := s.keepass.GetEntriesByEnvironment(profileName, envName)
+			if err != nil {
+				return 0, fmt.Errorf("failed to get existing entries in environment '%s': %w", envName, err)
+			}
+			if err := s.validator.ValidateUniqueEntryInPath(existingEntries, entryPath, entryPath); err != nil {
+				return 0, err
+			}
+
 			if err := s.keepass.CreateEntry(profileName, envName, entryPath); err != nil {
 				return 0, fmt.Errorf("failed to create entry '%s' in environment '%s': %w", entryPath, envName, err)
 			}

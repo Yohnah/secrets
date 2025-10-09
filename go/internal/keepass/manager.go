@@ -30,6 +30,10 @@ type Manager interface {
 	CreateEntry(profileName, envName, entryPath string) error
 	EntryExists(profileName, envName, entryPath string) (bool, error)
 	GetEntriesByEnvironment(profileName, envName string) ([]string, error)
+	GetRootGroups() ([]string, error)
+	GetGroupsByParent(parentPath string) ([]string, error)
+	GetEntriesByGroup(groupPath string) ([]string, error)
+	GetFieldsByEntry(entryPath string) ([]string, error)
 
 	// Field operations (require open session)
 	IsStandardField(fieldName string) bool
@@ -983,7 +987,152 @@ func collectEntries(group *gokeepasslib.Group, currentPath string, entries *[]st
 	}
 }
 
-// findGroupByName searches for a group by name within a parent group
+// GetRootGroups returns the names of all groups directly under the root
+func (m *manager) GetRootGroups() ([]string, error) {
+	if m.db == nil {
+		return nil, fmt.Errorf("database not open")
+	}
+
+	if len(m.db.Content.Root.Groups) == 0 {
+		return []string{}, nil
+	}
+
+	rootGroup := m.db.Content.Root.Groups[0]
+	var groups []string
+	for _, group := range rootGroup.Groups {
+		groups = append(groups, group.Name)
+	}
+
+	return groups, nil
+}
+
+// GetGroupsByParent returns the names of all groups directly under the specified parent path
+func (m *manager) GetGroupsByParent(parentPath string) ([]string, error) {
+	if m.db == nil {
+		return nil, fmt.Errorf("database not open")
+	}
+
+	parentGroup, err := m.findGroupByPath(parentPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var groups []string
+	for _, group := range parentGroup.Groups {
+		groups = append(groups, group.Name)
+	}
+
+	return groups, nil
+}
+
+// GetEntriesByGroup returns the names of all entries directly under the specified group path
+func (m *manager) GetEntriesByGroup(groupPath string) ([]string, error) {
+	if m.db == nil {
+		return nil, fmt.Errorf("database not open")
+	}
+
+	group, err := m.findGroupByPath(groupPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var entries []string
+	for _, entry := range group.Entries {
+		// Get entry title
+		var title string
+		for _, value := range entry.Values {
+			if value.Key == "Title" {
+				title = value.Value.Content
+				break
+			}
+		}
+		if title != "" {
+			entries = append(entries, title)
+		}
+	}
+
+	return entries, nil
+}
+
+// GetFieldsByEntry returns all field names (standard and custom) for the specified entry path
+func (m *manager) GetFieldsByEntry(entryPath string) ([]string, error) {
+	if m.db == nil {
+		return nil, fmt.Errorf("database not open")
+	}
+
+	entry, err := m.findEntryByPath(entryPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var fields []string
+	for _, value := range entry.Values {
+		fields = append(fields, value.Key)
+	}
+
+	return fields, nil
+}
+
+// findGroupByPath finds a group by its full path
+func (m *manager) findGroupByPath(path string) (*gokeepasslib.Group, error) {
+	if path == "" {
+		// Root group
+		if len(m.db.Content.Root.Groups) == 0 {
+			return nil, fmt.Errorf("root group not found")
+		}
+		return &m.db.Content.Root.Groups[0], nil
+	}
+
+	parts := strings.Split(path, "/")
+	current := &m.db.Content.Root.Groups[0]
+
+	for _, part := range parts {
+		found := false
+		for i := range current.Groups {
+			if current.Groups[i].Name == part {
+				current = &current.Groups[i]
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("group '%s' not found in path '%s'", part, path)
+		}
+	}
+
+	return current, nil
+}
+
+// findEntryByPath finds an entry by its full path
+func (m *manager) findEntryByPath(path string) (*gokeepasslib.Entry, error) {
+	parts := strings.Split(path, "/")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid entry path: %s", path)
+	}
+
+	groupPath := strings.Join(parts[:len(parts)-1], "/")
+	entryName := parts[len(parts)-1]
+
+	group, err := m.findGroupByPath(groupPath)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, entry := range group.Entries {
+		var title string
+		for _, value := range entry.Values {
+			if value.Key == "Title" {
+				title = value.Value.Content
+				break
+			}
+		}
+		if title == entryName {
+			return &entry, nil
+		}
+	}
+
+	return nil, fmt.Errorf("entry '%s' not found in group '%s'", entryName, groupPath)
+}
 func findGroupByName(parentGroup *gokeepasslib.Group, groupName string) (*gokeepasslib.Group, error) {
 	if parentGroup == nil {
 		return nil, fmt.Errorf("parent group is nil")

@@ -73,6 +73,11 @@ func (s *service) Tree(profileName, environmentName, outputFormat string) error 
 	}
 	defer s.keepass.CloseWithoutSave()
 
+	// Validate database integrity
+	if errs := s.validator.ValidateKeePassDuplicates(s.keepass); len(errs) > 0 {
+		return fmt.Errorf("database corruption detected: %v", errs[0])
+	}
+
 	// Build tree structure
 	root, err := s.buildTree(secretsConfig, profileName, environmentName)
 	if err != nil {

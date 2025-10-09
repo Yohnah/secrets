@@ -12,7 +12,7 @@ type KeePassManager interface {
 	GetGroupsByParent(parentPath string) ([]string, error)
 	GetEntriesByGroup(groupPath string) ([]string, error)
 	GetFieldsByEntry(entryPath string) ([]string, error)
-	GetEntriesByEnvironment(dbPath, keyfilePath, password, profileName, envName string) ([]string, error)
+	GetEntriesByEnvironment(profileName, envName string) ([]string, error)
 }
 
 // ValidateKeePassDuplicates checks for duplicate elements in KeePass database

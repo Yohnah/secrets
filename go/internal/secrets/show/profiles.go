@@ -81,6 +81,11 @@ func (s *service) Profiles(profileFilter string) error {
 	}
 	defer s.keepass.CloseWithoutSave()
 
+	// Validate database integrity
+	if errs := s.validator.ValidateKeePassDuplicates(s.keepass); len(errs) > 0 {
+		return fmt.Errorf("database corruption detected: %v", errs[0])
+	}
+
 	// Step 5: For each profile, gather information
 	var allProfiles []ProfileInfo
 

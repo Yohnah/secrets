@@ -405,3 +405,48 @@ func (m *mockKeePassManager) setupProfileWithSnapshots(profileName string, versi
 		m.db.Content.Root.Groups[0].Groups = append(m.db.Content.Root.Groups[0].Groups, profileGroup)
 	}
 }
+
+func (m *mockKeePassManager) GetRootGroups() ([]string, error) {
+	if !m.isOpen {
+		return nil, fmt.Errorf("database not open")
+	}
+	if m.db == nil || len(m.db.Content.Root.Groups) == 0 {
+		return []string{}, nil
+	}
+	var groups []string
+	for _, g := range m.db.Content.Root.Groups[0].Groups {
+		groups = append(groups, g.Name)
+	}
+	return groups, nil
+}
+
+func (m *mockKeePassManager) GetGroupsByParent(parentPath string) ([]string, error) {
+	if !m.isOpen {
+		return nil, fmt.Errorf("database not open")
+	}
+	// Simple implementation for testing
+	if parentPath == "" {
+		return m.GetRootGroups()
+	}
+	// For profiles, return tree groups
+	if groups, ok := m.treeGroups[parentPath]; ok {
+		return groups, nil
+	}
+	return []string{}, nil
+}
+
+func (m *mockKeePassManager) GetEntriesByGroup(groupPath string) ([]string, error) {
+	if !m.isOpen {
+		return nil, fmt.Errorf("database not open")
+	}
+	// Simple implementation - return empty for testing
+	return []string{}, nil
+}
+
+func (m *mockKeePassManager) GetFieldsByEntry(entryPath string) ([]string, error) {
+	if !m.isOpen {
+		return nil, fmt.Errorf("database not open")
+	}
+	// Simple implementation - return empty for testing
+	return []string{}, nil
+}
