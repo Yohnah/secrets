@@ -29,7 +29,6 @@ func TestShowTreeValidProfile(t *testing.T) {
 	secretsYML := `---
 metadata:
   profile: "test-tree-profile"
-  default_environment: "development"
 environments:
   development:
     - name: "DB_HOST"
@@ -91,7 +90,6 @@ func TestShowTreeASCIIFormat(t *testing.T) {
 	secretsYML := `---
 metadata:
   profile: "ascii-test"
-  default_environment: "production"
 environments:
   production:
     - name: "SECRET_KEY"
@@ -143,7 +141,6 @@ func TestShowTreeInvalidProfile(t *testing.T) {
 	secretsYML := `---
 metadata:
   profile: "valid-profile"
-  default_environment: "development"
 environments:
   development:
     - name: "TEST_VAR"
@@ -199,7 +196,6 @@ func TestShowTreeInvalidEnvironment(t *testing.T) {
 	secretsYML := `---
 metadata:
   profile: "env-test"
-  default_environment: "development"
 environments:
   development:
     - name: "TEST_VAR"
@@ -255,7 +251,6 @@ func TestShowTreeInvalidFormat(t *testing.T) {
 	secretsYML := `---
 metadata:
   profile: "format-test"
-  default_environment: "development"
 environments:
   development:
     - name: "TEST_VAR"

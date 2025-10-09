@@ -115,11 +115,9 @@ func validateProfiles(profiles []Profile) []error {
 			errors = append(errors, fmt.Errorf("profile %d: metadata.profile is required and cannot be empty", i+1))
 		}
 
-		if profile.Metadata.DefaultEnvironment == "" {
-			errors = append(errors, fmt.Errorf("profile %d ('%s'): metadata.default_environment is required and cannot be empty", i+1, profile.Metadata.Profile))
-		}
-
-		// Check for duplicate profile names (case-insensitive)
+		if profile.Metadata.DefaultEnvironment != "" {
+			errors = append(errors, fmt.Errorf("profile %d ('%s'): metadata.default_environment is no longer supported, please remove it from your secrets.yml", i+1, profile.Metadata.Profile))
+		}		// Check for duplicate profile names (case-insensitive)
 		profileNameLower := strings.ToLower(profile.Metadata.Profile)
 		if existingIndex, exists := profileNames[profileNameLower]; exists {
 			errors = append(errors, fmt.Errorf("duplicate profile name found: '%s' (document %d conflicts with document %d, case-insensitive match)", profile.Metadata.Profile, i+1, existingIndex+1))
@@ -143,28 +141,14 @@ func validateEnvironments(profile Profile) []error {
 	// Track environment names (case-insensitive) within this profile
 	envNames := make(map[string]bool)
 
-	// Check that default_environment exists
-	defaultEnvLower := strings.ToLower(profile.Metadata.DefaultEnvironment)
-	defaultEnvExists := false
-
 	for envName := range profile.Environments {
 		envNameLower := strings.ToLower(envName)
-
-		// Check if this is the default environment
-		if envNameLower == defaultEnvLower {
-			defaultEnvExists = true
-		}
 
 		// Check for duplicate environment names (case-insensitive)
 		if envNames[envNameLower] {
 			errors = append(errors, fmt.Errorf("profile '%s': duplicate environment name '%s' (case-insensitive match)", profile.Metadata.Profile, envName))
 		}
 		envNames[envNameLower] = true
-	}
-
-	// Validate that default_environment exists in environments
-	if !defaultEnvExists {
-		errors = append(errors, fmt.Errorf("profile '%s': default_environment '%s' does not exist in environments", profile.Metadata.Profile, profile.Metadata.DefaultEnvironment))
 	}
 
 	return errors

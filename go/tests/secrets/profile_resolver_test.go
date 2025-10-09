@@ -13,7 +13,6 @@ func TestProfileResolverAutoDetectSingleProfile(t *testing.T) {
 	secretsContent := `---
 metadata:
   profile: "auto-detect-profile"
-  default_environment: "development"
 environments:
   development:
     - name: "DB_PASSWORD"
@@ -50,7 +49,6 @@ func TestProfileResolverMultipleProfilesRequiresFlag(t *testing.T) {
 	secretsContent := `---
 metadata:
   profile: "profile-one"
-  default_environment: "development"
 environments:
   development:
     - name: "DB_PASSWORD"
@@ -61,7 +59,6 @@ outputs: {}
 ---
 metadata:
   profile: "profile-two"
-  default_environment: "development"
 environments:
   development:
     - name: "API_TOKEN"
@@ -90,7 +87,6 @@ func TestProfileResolverUnknownProfile(t *testing.T) {
 	secretsContent := `---
 metadata:
   profile: "known-profile"
-  default_environment: "development"
 environments:
   development:
     - name: "DB_PASSWORD"

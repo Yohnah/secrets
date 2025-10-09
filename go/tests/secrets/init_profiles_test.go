@@ -254,7 +254,6 @@ func TestInitWithSecretsYML(t *testing.T) {
 	// Create secrets.yml
 	secretsYMLContent := `metadata:
   profile: "integration-test"
-  default_environment: "production"
 
 environments:
   production:
@@ -347,7 +346,6 @@ func TestInitWithCustomSecretsFile(t *testing.T) {
 
 	secretsYMLContent := `metadata:
   profile: "custom-location-profile"
-  default_environment: "production"
 
 environments:
   production:
@@ -439,7 +437,6 @@ func TestInitUsesCurrentDirSecretsYML(t *testing.T) {
 	// Create secrets.yml in current directory
 	secretsYMLContent := `metadata:
   profile: "current-dir-profile"
-  default_environment: "dev"
 
 environments:
   dev:
@@ -463,7 +460,6 @@ outputs: {}`
 
 	otherSecretsContent := `metadata:
   profile: "should-not-be-loaded"
-  default_environment: "prod"
 
 environments:
   prod:
@@ -564,7 +560,6 @@ func TestInitWithEnvironments(t *testing.T) {
 	// Create secrets.yml with environments
 	secretsYML := `metadata:
   profile: "test-profile-with-envs"
-  default_environment: "production"
 environments:
   production:
     - name: "DB_PASSWORD"
@@ -721,7 +716,6 @@ func TestInitEnvironmentsIdempotent(t *testing.T) {
 	// Create secrets.yml with environments
 	secretsYML := `metadata:
   profile: "idempotent-profile"
-  default_environment: "production"
 environments:
   production:
     - name: "DB_PASSWORD"
@@ -817,7 +811,6 @@ func TestCreateEntries(t *testing.T) {
 	// Create secrets.yml with environments that have multiple items pointing to same entry
 	secretsYML := `metadata:
   profile: "test-create-entries"
-  default_environment: "production"
 environments:
   production:
     - name: "DB_PASSWORD"

@@ -23,7 +23,6 @@ func TestSnapshotsList_AllProfiles(t *testing.T) {
 	// Create secrets.yml with multiple profiles
 	secretsYMLContent := `metadata:
   profile: "webapp-production"
-  default_environment: "production"
 
 environments:
   production:
@@ -36,7 +35,6 @@ outputs: {}
 ---
 metadata:
   profile: "webapp-development"
-  default_environment: "development"
 
 environments:
   development:
@@ -49,7 +47,6 @@ outputs: {}
 ---
 metadata:
   profile: "mobile-backend"
-  default_environment: "production"
 
 environments:
   production:
@@ -109,7 +106,6 @@ func TestSnapshotsList_SpecificProfile(t *testing.T) {
 	// Create secrets.yml with multiple profiles
 	secretsYMLContent := `metadata:
   profile: "webapp-production"
-  default_environment: "production"
 
 environments:
   production:
@@ -122,7 +118,6 @@ outputs: {}
 ---
 metadata:
   profile: "webapp-development"
-  default_environment: "development"
 
 environments:
   development:
@@ -182,7 +177,6 @@ func TestSnapshotsList_InvalidProfile(t *testing.T) {
 	// Create secrets.yml with one profile
 	secretsYMLContent := `metadata:
   profile: "webapp-production"
-  default_environment: "production"
 
 environments:
   production:
@@ -242,7 +236,6 @@ func TestSnapshotsList_OutputFormats(t *testing.T) {
 	// Create secrets.yml with one profile
 	secretsYMLContent := `metadata:
   profile: "webapp-production"
-  default_environment: "production"
 
 environments:
   production:

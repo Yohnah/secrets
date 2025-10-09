@@ -455,6 +455,22 @@ func (m *mockKeePassManager) GetFieldsByEntry(entryPath string) ([]string, error
 	return []string{}, nil
 }
 
+func (m *mockKeePassManager) GetFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error) {
+	if !m.isOpen {
+		return nil, fmt.Errorf("database not open")
+	}
+	// Simple implementation - return empty for testing
+	return []string{}, nil
+}
+
+func (m *mockKeePassManager) GetAllFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error) {
+	if !m.isOpen {
+		return nil, fmt.Errorf("database not open")
+	}
+	// Simple implementation - return empty for testing
+	return []string{}, nil
+}
+
 // mockConfigManager is a mock implementation of config.Manager for testing
 type mockConfigManager struct {
 	secretsFilePath string

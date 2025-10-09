@@ -15,7 +15,7 @@ type Profile struct {
 // Metadata contains the profile configuration
 type Metadata struct {
 	Profile            string `yaml:"profile"`
-	DefaultEnvironment string `yaml:"default_environment"`
+	DefaultEnvironment string `yaml:"default_environment,omitempty"` // Deprecated, will be removed
 }
 
 // Item represents a secret item within an environment

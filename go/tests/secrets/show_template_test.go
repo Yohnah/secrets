@@ -66,7 +66,6 @@ func TestShowTemplate_FullTemplate(t *testing.T) {
 		"environments:",
 		"outputs:",
 		"profile:",
-		"default_environment:",
 		"COMPLETE EXAMPLE",
 		"FIELD REFERENCE",
 	}
@@ -115,7 +114,6 @@ func TestShowTemplate_MinimalTemplate(t *testing.T) {
 		"environments:",
 		"outputs:",
 		"profile:",
-		"default_environment:",
 	}
 	for _, s := range requiredInMinimal {
 		if !strings.Contains(template, s) {

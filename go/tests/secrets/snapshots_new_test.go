@@ -23,7 +23,6 @@ func TestSnapshotsNew_Success(t *testing.T) {
 	// Create secrets.yml with a profile
 	secretsYMLContent := `metadata:
   profile: "test-profile"
-  default_environment: "production"
 
 environments:
   production:
@@ -161,7 +160,6 @@ func TestSnapshotsNew_ProfileNotInSecretsYML(t *testing.T) {
 	// Create secrets.yml with a profile
 	secretsYMLContent := `metadata:
   profile: "test-profile"
-  default_environment: "production"
 
 environments:
   production:
@@ -219,7 +217,6 @@ func TestSnapshotsNew_ProfileNotInDatabase(t *testing.T) {
 	// Create secrets.yml with two profiles
 	secretsYMLContent := `metadata:
   profile: "profile-in-db"
-  default_environment: "production"
 
 environments:
   production:
@@ -232,7 +229,6 @@ outputs: {}
 ---
 metadata:
   profile: "profile-not-in-db"
-  default_environment: "production"
 
 environments:
   production:
@@ -320,7 +316,6 @@ func TestSnapshotsNew_MultipleSnapshots(t *testing.T) {
 	// Create secrets.yml with a profile
 	secretsYMLContent := `metadata:
   profile: "test-profile"
-  default_environment: "production"
 
 environments:
   production:

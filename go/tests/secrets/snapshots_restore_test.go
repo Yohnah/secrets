@@ -23,7 +23,6 @@ func TestSnapshotsRestore_Success(t *testing.T) {
 	// Create secrets.yml with a profile
 	secretsYMLContent := `metadata:
   profile: "test-profile"
-  default_environment: "production"
 
 environments:
   production:
@@ -101,7 +100,6 @@ func TestSnapshotsRestore_ProfileNotInSecretsYML(t *testing.T) {
 	// Create secrets.yml with a different profile
 	secretsYMLContent := `metadata:
   profile: "test-profile"
-  default_environment: "production"
 
 environments:
   production:
@@ -161,7 +159,6 @@ func TestSnapshotsRestore_SnapshotNotExists(t *testing.T) {
 	// Create secrets.yml with a profile
 	secretsYMLContent := `metadata:
   profile: "test-profile"
-  default_environment: "production"
 
 environments:
   production:
@@ -222,7 +219,6 @@ func TestSnapshotsRestore_VersionIncrement(t *testing.T) {
 	// Create secrets.yml
 	secretsYMLContent := `metadata:
   profile: "test-profile"
-  default_environment: "production"
 
 environments:
   production:

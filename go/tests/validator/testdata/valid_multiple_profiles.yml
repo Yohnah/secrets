@@ -1,6 +1,5 @@
 metadata:
   profile: "myapp-production"
-  default_environment: "production"
 
 environments:
   production:
@@ -18,7 +17,6 @@ outputs: {}
 ---
 metadata:
   profile: "myapp-development"
-  default_environment: "development"
 
 environments:
   development:

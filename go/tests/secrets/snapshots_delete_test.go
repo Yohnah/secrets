@@ -23,7 +23,6 @@ func TestSnapshotsDelete_Success(t *testing.T) {
 	// Create secrets.yml with a profile
 	secretsYMLContent := `metadata:
   profile: "test-profile"
-  default_environment: "production"
 
 environments:
   production:
@@ -110,7 +109,6 @@ func TestSnapshotsDelete_ProfileNotInSecretsYML(t *testing.T) {
 	// Create secrets.yml with a profile
 	secretsYMLContent := `metadata:
   profile: "test-profile"
-  default_environment: "production"
 
 environments:
   production:
@@ -163,7 +161,6 @@ func TestSnapshotsDelete_CannotDeleteHEAD(t *testing.T) {
 	// Create secrets.yml with a profile
 	secretsYMLContent := `metadata:
   profile: "test-profile"
-  default_environment: "production"
 
 environments:
   production:
@@ -222,7 +219,6 @@ func TestSnapshotsDelete_VersionNotFound(t *testing.T) {
 	// Create secrets.yml with a profile
 	secretsYMLContent := `metadata:
   profile: "test-profile"
-  default_environment: "production"
 
 environments:
   production:
@@ -281,7 +277,6 @@ func TestSnapshotsDelete_InvalidVersionFormat(t *testing.T) {
 	// Create secrets.yml with a profile
 	secretsYMLContent := `metadata:
   profile: "test-profile"
-  default_environment: "production"
 
 environments:
   production:

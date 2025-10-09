@@ -83,7 +83,7 @@ func TestReadAndValidateSecretsYML_InvalidFiles(t *testing.T) {
 		{"Missing Required Field", "invalid_missing_fields.yml", "required"},
 		{"Bad Entry Format", "invalid_bad_entry_format.yml", "must start with"},
 		{"Bad Item Name", "invalid_bad_item_name.yml", "invalid characters"},
-		{"Default Environment Not Exists", "invalid_default_env_not_exists.yml", "does not exist"},
+		{"Default Environment Not Exists", "invalid_default_env_not_exists.yml", "no longer supported"},
 	}
 
 	for _, tc := range testCases {
@@ -122,7 +122,6 @@ func TestCaseInsensitiveComparison(t *testing.T) {
 	tempFile := filepath.Join(os.TempDir(), "test_case_insensitive.yml")
 	content := `metadata:
   profile: "MyApp"
-  default_environment: "production"
 
 environments:
   production:
@@ -136,7 +135,6 @@ outputs: {}
 ---
 metadata:
   profile: "myapp"
-  default_environment: "development"
 
 environments:
   development:
@@ -172,7 +170,6 @@ func TestErrorAccumulation(t *testing.T) {
 	tempFile := filepath.Join(os.TempDir(), "test_multiple_errors.yml")
 	content := `metadata:
   profile: ""
-  default_environment: "nonexistent"
 
 environments:
   production:
@@ -226,7 +223,6 @@ func TestValidItemName(t *testing.T) {
 			tempFile := filepath.Join(os.TempDir(), "test_item_name.yml")
 			content := `metadata:
   profile: "test"
-  default_environment: "production"
 
 environments:
   production:
@@ -285,7 +281,6 @@ func TestEntryPathValidation(t *testing.T) {
 			tempFile := filepath.Join(os.TempDir(), "test_entry_path.yml")
 			content := `metadata:
   profile: "test"
-  default_environment: "production"
 
 environments:
   production:
@@ -347,7 +342,6 @@ func TestTypeValidation(t *testing.T) {
 				// For empty test, omit the type field entirely
 				content = `metadata:
   profile: "test"
-  default_environment: "production"
 
 environments:
   production:
@@ -360,7 +354,6 @@ outputs: {}
 			} else {
 				content = `metadata:
   profile: "test"
-  default_environment: "production"
 
 environments:
   production:
