@@ -74,10 +74,8 @@ func (s *service) Tree(profileName, environmentName, outputFormat string) error 
 		return err
 	}
 
-	// Display the tree
-	s.displayTree(root, outputFormat == "ansi")
-
-	return nil
+	// Render tree using output manager
+	return s.renderTree(root, outputFormat)
 }
 
 // buildTree builds the tree structure from secrets.yml and database
@@ -184,16 +182,17 @@ func (s *service) addPathToTree(parent *TreeNode, path string, status string) {
 	}
 }
 
-// displayTree displays the tree structure
-func (s *service) displayTree(node *TreeNode, useAnsi bool) {
-	// Print the root node (profile) first using output manager
-	s.output.OutputRaw(node.Name + "\n")
-
-	// Print children with proper tree structure
-	for i, child := range node.Children {
-		isLast := i == len(node.Children)-1
-		s.printNodeWithPrefix(child, "", isLast, useAnsi)
+// renderTree prepares the tree structure for the output manager
+func (s *service) renderTree(root *TreeNode, outputFormat string) error {
+	payload := map[string]interface{}{
+		"tree": s.serializeTreeNode(root),
+		"_display": map[string]interface{}{
+			"format": "tree",
+			"style":  outputFormat,
+		},
 	}
+
+	return s.output.Output(payload, "tree")
 }
 
 // capitalizeEnvironmentName capitalizes the first letter of each word in the environment name
@@ -213,63 +212,21 @@ func capitalizeEnvironmentName(name string) string {
 	return string(runes)
 }
 
-// printNodeWithPrefix recursively prints a tree node with prefix
-func (s *service) printNodeWithPrefix(node *TreeNode, prefix string, isLast bool, useAnsi bool) {
+// serializeTreeNode converts a TreeNode into a map compatible with the output manager
+func (s *service) serializeTreeNode(node *TreeNode) map[string]interface{} {
 	if node == nil {
-		return
+		return nil
 	}
 
-	// Determine connector for current node
-	var connector string
-	if useAnsi {
-		if isLast {
-			connector = "└── "
-		} else {
-			connector = "├── "
-		}
-	} else {
-		if isLast {
-			connector = "`-- "
-		} else {
-			connector = "|-- "
-		}
+	children := make([]interface{}, 0, len(node.Children))
+	for _, child := range node.Children {
+		children = append(children, s.serializeTreeNode(child))
 	}
 
-	// Build status indicator
-	statusStr := ""
-	if node.IsEntry {
-		switch node.Status {
-		case "exists":
-			statusStr = " ✓"
-		case "missing":
-			statusStr = " ✗"
-		case "extra":
-			statusStr = " ⚠"
-		}
-	}
-
-	// Print current node using output manager
-	line := prefix + connector + node.Name + statusStr + "\n"
-	s.output.OutputRaw(line)
-
-	// Prepare prefix for children
-	var childPrefix string
-	if useAnsi {
-		if isLast {
-			childPrefix = prefix + "    "
-		} else {
-			childPrefix = prefix + "│   "
-		}
-	} else {
-		if isLast {
-			childPrefix = prefix + "    "
-		} else {
-			childPrefix = prefix + "|   "
-		}
-	}
-
-	// Print children
-	for i, child := range node.Children {
-		s.printNodeWithPrefix(child, childPrefix, i == len(node.Children)-1, useAnsi)
+	return map[string]interface{}{
+		"name":     node.Name,
+		"is_entry": node.IsEntry,
+		"status":   node.Status,
+		"children": children,
 	}
 }

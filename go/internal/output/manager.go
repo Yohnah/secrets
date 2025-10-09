@@ -38,8 +38,10 @@ func (m *manager) Output(data interface{}, format string) error {
 		return m.outputYAML(data)
 	case "table", "":
 		return m.outputTable(data)
+	case "tree":
+		return m.outputTree(data)
 	default:
-		return fmt.Errorf("unsupported output format: %s (supported: json, yaml, table)", format)
+		return fmt.Errorf("unsupported output format: %s (supported: json, yaml, table, tree)", format)
 	}
 }
 
@@ -150,6 +152,38 @@ func (m *manager) outputTable(data interface{}) error {
 		m.renderSection(sectionData)
 	}
 
+	return nil
+}
+
+// outputTree outputs a hierarchical tree structure in ANSI or ASCII formats
+func (m *manager) outputTree(data interface{}) error {
+	rootData, ok := data.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid tree output payload: expected map structure")
+	}
+
+	displayMeta := m.getDisplayMetadata(rootData)
+	style, _ := displayMeta["style"].(string)
+	if style == "" {
+		style = "ansi"
+	}
+
+	rawTree, ok := rootData["tree"]
+	if !ok {
+		return fmt.Errorf("missing tree data for rendering")
+	}
+
+	rootNode, err := m.parseTreeNode(rawTree)
+	if err != nil {
+		return fmt.Errorf("invalid tree data: %w", err)
+	}
+
+	charset, err := m.resolveTreeCharset(style)
+	if err != nil {
+		return err
+	}
+
+	m.renderTree(rootNode, charset)
 	return nil
 }
 
@@ -354,6 +388,143 @@ func (m *manager) repeatString(s string, count int) string {
 		result += s
 	}
 	return result
+}
+
+// treeRenderCharset defines the visual characters used to draw the tree
+type treeRenderCharset struct {
+	middleConnector      string
+	lastConnector        string
+	verticalContinuation string
+	emptyContinuation    string
+}
+
+// treeNode represents a tree structure prepared for rendering
+type treeNode struct {
+	Name     string
+	IsEntry  bool
+	Status   string
+	Children []*treeNode
+}
+
+// resolveTreeCharset selects the appropriate charset based on the requested style
+func (m *manager) resolveTreeCharset(style string) (treeRenderCharset, error) {
+	switch style {
+	case "ansi", "":
+		return treeRenderCharset{
+			middleConnector:      "├── ",
+			lastConnector:        "└── ",
+			verticalContinuation: "│   ",
+			emptyContinuation:    "    ",
+		}, nil
+	case "ascii":
+		return treeRenderCharset{
+			middleConnector:      "|-- ",
+			lastConnector:        "`-- ",
+			verticalContinuation: "|   ",
+			emptyContinuation:    "    ",
+		}, nil
+	default:
+		return treeRenderCharset{}, fmt.Errorf("unsupported tree output style: %s", style)
+	}
+}
+
+// parseTreeNode converts a generic raw structure into a treeNode representation
+func (m *manager) parseTreeNode(raw interface{}) (*treeNode, error) {
+	nodeMap, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("tree node must be a map structure, received %T", raw)
+	}
+
+	name, _ := nodeMap["name"].(string)
+	isEntry, _ := nodeMap["is_entry"].(bool)
+	status, _ := nodeMap["status"].(string)
+
+	var childrenRaw []interface{}
+	if value, exists := nodeMap["children"]; exists && value != nil {
+		switch typed := value.(type) {
+		case []interface{}:
+			childrenRaw = typed
+		case []map[string]interface{}:
+			childrenRaw = make([]interface{}, len(typed))
+			for i := range typed {
+				childrenRaw[i] = typed[i]
+			}
+		default:
+			return nil, fmt.Errorf("children for node %s must be an array, received %T", name, value)
+		}
+	}
+
+	children := make([]*treeNode, 0, len(childrenRaw))
+	for _, child := range childrenRaw {
+		parsedChild, err := m.parseTreeNode(child)
+		if err != nil {
+			return nil, err
+		}
+		children = append(children, parsedChild)
+	}
+
+	return &treeNode{
+		Name:     name,
+		IsEntry:  isEntry,
+		Status:   status,
+		Children: children,
+	}, nil
+}
+
+// renderTree prints the tree to stdout following the provided charset
+func (m *manager) renderTree(root *treeNode, charset treeRenderCharset) {
+	if root == nil {
+		return
+	}
+
+	fmt.Println(root.Name)
+	for idx, child := range root.Children {
+		m.renderTreeNode(child, "", idx == len(root.Children)-1, charset)
+	}
+}
+
+// renderTreeNode renders a node and its children recursively
+func (m *manager) renderTreeNode(node *treeNode, prefix string, isLast bool, charset treeRenderCharset) {
+	if node == nil {
+		return
+	}
+
+	connector := charset.middleConnector
+	if isLast {
+		connector = charset.lastConnector
+	}
+
+	statusSuffix := m.treeStatusSuffix(node)
+	fmt.Printf("%s%s%s%s\n", prefix, connector, node.Name, statusSuffix)
+
+	nextPrefix := prefix
+	if isLast {
+		nextPrefix += charset.emptyContinuation
+	} else {
+		nextPrefix += charset.verticalContinuation
+	}
+
+	for idx, child := range node.Children {
+		m.renderTreeNode(child, nextPrefix, idx == len(node.Children)-1, charset)
+	}
+}
+
+// treeStatusSuffix returns the visual status marker for a node
+func (m *manager) treeStatusSuffix(node *treeNode) string {
+	if node == nil || !node.IsEntry {
+		return ""
+	}
+
+	switch node.Status {
+	case "exists":
+		return " ✓"
+	case "missing":
+		return " ✗"
+	case "extra":
+		return " ⚠"
+	default:
+		return ""
+	}
 }
 
 // renderSnapshotsList renders snapshots in a compact list format with visual indicators
