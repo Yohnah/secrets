@@ -6,7 +6,6 @@ import (
 
 // Manager defines the interface for logging
 type Manager interface {
-	SetVerbose(verbose bool)
 	Info(message string)
 	Debug(message string)
 	Error(message string)
@@ -22,11 +21,6 @@ func NewManager(verbose bool) Manager {
 	return &manager{
 		verbose: verbose,
 	}
-}
-
-// SetVerbose updates the verbose mode
-func (m *manager) SetVerbose(verbose bool) {
-	m.verbose = verbose
 }
 
 // Info prints an informational message (always shown)

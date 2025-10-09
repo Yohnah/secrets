@@ -15,7 +15,6 @@ type Manager interface {
 	ConfirmWithDefault(message string, defaultYes bool) (bool, error)
 	PromptPassword(message string) (string, error)
 	PromptPasswordConfirm(message string) (string, error)
-	PromptText(message string) (string, error)
 }
 
 type manager struct {
@@ -95,16 +94,4 @@ func (m *manager) PromptPasswordConfirm(message string) (string, error) {
 	}
 
 	return password1, nil
-}
-
-// PromptText asks user for free-form text input
-func (m *manager) PromptText(message string) (string, error) {
-	fmt.Print(message)
-
-	text, err := m.reader.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("failed to read input: %w", err)
-	}
-
-	return strings.TrimSpace(text), nil
 }
