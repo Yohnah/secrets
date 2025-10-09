@@ -62,13 +62,15 @@ The tree shows:
   ⚠ Entry exists in database but not defined in secrets.yml
 
 Profile name can be specified via:
-  1. Flag: -p/--profile-name (required)
-  2. Positional argument (legacy, deprecated)
+	1. Flag: -p/--profile-name (recommended)
+	2. Positional argument (legacy, deprecated)
+	3. Auto-detection: if secrets.yml defines a single profile, the CLI selects it automatically
 
 Examples:
   secrets show tree -p webapp-production production
   secrets show tree webapp-production production        # Legacy style
-  secrets show tree webapp-production production -o ascii`,
+	secrets show tree production                          # Auto-detect single profile
+	secrets show tree webapp-production production -o ascii`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: runShowTree,
 }
@@ -171,7 +173,8 @@ func runShowTree(cmd *cobra.Command, args []string) error {
 	// Determine profile name from flag or positional argument
 	var profileName, environmentName string
 
-	if flagProfileName != "" {
+	switch {
+	case flagProfileName != "":
 		// Priority 1: Use flag if provided
 		profileName = flagProfileName
 		if len(args) < 1 {
@@ -179,17 +182,15 @@ func runShowTree(cmd *cobra.Command, args []string) error {
 			os.Exit(1)
 		}
 		environmentName = args[0]
-	} else if len(args) == 2 {
+	case len(args) == 2:
 		// Priority 2: Legacy positional arguments (backward compatibility)
 		profileName = args[0]
 		environmentName = args[1]
-	} else if len(args) == 1 {
-		// Ambiguous: only one argument without flag
-		managers.Logger.Error("profile name must be specified via -p/--profile-name flag or as first positional argument")
-		os.Exit(1)
-	} else {
-		// No arguments at all
-		managers.Logger.Error("profile name and environment name are required")
+	case len(args) == 1:
+		// Auto-detection path: only environment provided
+		environmentName = args[0]
+	default:
+		managers.Logger.Error("environment name is required")
 		os.Exit(1)
 	}
 

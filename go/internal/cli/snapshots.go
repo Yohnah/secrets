@@ -72,12 +72,14 @@ var snapshotsNewCmd = &cobra.Command{
 	Long: `Create a new snapshot by cloning HEAD to v{current_version} and incrementing HEAD version.
 
 Profile name can be specified via:
-  1. Flag: -p/--profile-name (required)
+  1. Flag: -p/--profile-name (recommended)
   2. Positional argument (legacy, deprecated)
+  3. Auto-detection: if secrets.yml defines a single profile, the CLI selects it automatically
 
 Examples:
   secrets snapshots new -p webapp-prod  # Via flag
-  secrets snapshots new webapp-prod     # Legacy style`,
+  secrets snapshots new webapp-prod     # Legacy style
+  secrets snapshots new                # Auto-detect single profile`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		// Determine profile name from flag or positional argument
@@ -89,11 +91,6 @@ Examples:
 		} else if len(args) > 0 {
 			// Priority 2: Legacy positional argument (backward compatibility)
 			profileName = args[0]
-		} else {
-			// Error: profile name is required
-			managers := NewManagerContext(&types.CommandFlags{})
-			managers.Logger.Error("profile name is required (use -p/--profile-name flag or positional argument)")
-			os.Exit(1)
 		}
 
 		// Create command flags (no specific flags for this command)
@@ -117,19 +114,21 @@ var snapshotsRestoreCmd = &cobra.Command{
 	Long: `Restore a snapshot by renaming current HEAD to v{current_version} and cloning the specified version to new HEAD with incremented version.
 
 Profile name can be specified via:
-  1. Flag: -p/--profile-name (required)
+  1. Flag: -p/--profile-name (recommended)
   2. Positional argument (legacy, deprecated)
+  3. Auto-detection: if secrets.yml defines a single profile, the CLI selects it automatically
 
 Examples:
   secrets snapshots restore -p webapp-prod v3  # Via flag
-  secrets snapshots restore webapp-prod v3     # Legacy style`,
+  secrets snapshots restore webapp-prod v3     # Legacy style
+  secrets snapshots restore v3                # Auto-detect single profile`,
 	Args: cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
 		// Determine profile name and version from flag/args
 		var profileName, version string
 
-		if flagProfileName != "" {
-			// Priority 1: Use flag if provided
+		switch {
+		case flagProfileName != "":
 			profileName = flagProfileName
 			if len(args) < 1 {
 				managers := NewManagerContext(&types.CommandFlags{})
@@ -137,19 +136,14 @@ Examples:
 				os.Exit(1)
 			}
 			version = args[0]
-		} else if len(args) == 2 {
-			// Priority 2: Legacy positional arguments (backward compatibility)
+		case len(args) == 2:
 			profileName = args[0]
 			version = args[1]
-		} else if len(args) == 1 {
-			// Ambiguous: only one argument without flag
+		case len(args) == 1:
+			version = args[0]
+		default:
 			managers := NewManagerContext(&types.CommandFlags{})
-			managers.Logger.Error("profile name must be specified via -p/--profile-name flag or as first positional argument")
-			os.Exit(1)
-		} else {
-			// No arguments at all
-			managers := NewManagerContext(&types.CommandFlags{})
-			managers.Logger.Error("profile name and version are required")
+			managers.Logger.Error("version is required")
 			os.Exit(1)
 		}
 
@@ -174,19 +168,21 @@ var snapshotsDeleteCmd = &cobra.Command{
 	Long: `Delete a specific snapshot version from a profile. HEAD cannot be deleted. This operation is permanent.
 
 Profile name can be specified via:
-  1. Flag: -p/--profile-name (required)
+  1. Flag: -p/--profile-name (recommended)
   2. Positional argument (legacy, deprecated)
+  3. Auto-detection: if secrets.yml defines a single profile, the CLI selects it automatically
 
 Examples:
   secrets snapshots delete -p webapp-prod v2  # Via flag
-  secrets snapshots delete webapp-prod v2     # Legacy style`,
+  secrets snapshots delete webapp-prod v2     # Legacy style
+  secrets snapshots delete v2                # Auto-detect single profile`,
 	Args: cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
 		// Determine profile name and version from flag/args
 		var profileName, version string
 
-		if flagProfileName != "" {
-			// Priority 1: Use flag if provided
+		switch {
+		case flagProfileName != "":
 			profileName = flagProfileName
 			if len(args) < 1 {
 				managers := NewManagerContext(&types.CommandFlags{})
@@ -194,19 +190,14 @@ Examples:
 				os.Exit(1)
 			}
 			version = args[0]
-		} else if len(args) == 2 {
-			// Priority 2: Legacy positional arguments (backward compatibility)
+		case len(args) == 2:
 			profileName = args[0]
 			version = args[1]
-		} else if len(args) == 1 {
-			// Ambiguous: only one argument without flag
+		case len(args) == 1:
+			version = args[0]
+		default:
 			managers := NewManagerContext(&types.CommandFlags{})
-			managers.Logger.Error("profile name must be specified via -p/--profile-name flag or as first positional argument")
-			os.Exit(1)
-		} else {
-			// No arguments at all
-			managers := NewManagerContext(&types.CommandFlags{})
-			managers.Logger.Error("profile name and version are required")
+			managers.Logger.Error("version is required")
 			os.Exit(1)
 		}
 

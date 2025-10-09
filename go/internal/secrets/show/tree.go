@@ -24,30 +24,20 @@ func (s *service) Tree(profileName, environmentName, outputFormat string) error 
 		return fmt.Errorf("invalid output format '%s': must be 'ansi' or 'ascii'", outputFormat)
 	}
 
-	// Get secrets.yml path from config
-	secretsFilePath := s.config.GetSecretsFilePath()
+	// Resolve profile (auto-detect when possible)
+	resolvedProfile, err := s.profileResolver.Resolve(profileName)
+	if err != nil {
+		return err
+	}
+	profileName = resolvedProfile.Name
 
-	// Validate that profile and environment exist in secrets.yml
-	secretsConfig, errs := s.validator.ReadAndValidateSecretsYML(secretsFilePath)
-	if len(errs) > 0 {
-		return fmt.Errorf("invalid secrets.yml: %v", errs[0])
+	if resolvedProfile.Profile == nil {
+		return fmt.Errorf("profile '%s' is invalid in secrets.yml", profileName)
 	}
 
-	// Find the profile
-	var found bool
-	for _, profile := range secretsConfig.Profiles {
-		if profile.Metadata.Profile == profileName {
-			found = true
-			// Check if environment exists
-			if _, exists := profile.Environments[environmentName]; !exists {
-				return fmt.Errorf("environment '%s' does not exist in profile '%s'", environmentName, profileName)
-			}
-			break
-		}
-	}
-
-	if !found {
-		return fmt.Errorf("profile '%s' does not exist in secrets.yml", profileName)
+	environmentItems, exists := resolvedProfile.Profile.Environments[environmentName]
+	if !exists {
+		return fmt.Errorf("environment '%s' does not exist in profile '%s'", environmentName, profileName)
 	}
 
 	// Get configuration
@@ -79,7 +69,7 @@ func (s *service) Tree(profileName, environmentName, outputFormat string) error 
 	}
 
 	// Build tree structure
-	root, err := s.buildTree(secretsConfig, profileName, environmentName)
+	root, err := s.buildTree(profileName, environmentName, environmentItems)
 	if err != nil {
 		return err
 	}
@@ -91,32 +81,12 @@ func (s *service) Tree(profileName, environmentName, outputFormat string) error 
 }
 
 // buildTree builds the tree structure from secrets.yml and database
-func (s *service) buildTree(secretsConfig interface{}, profileName, environmentName string) (*TreeNode, error) {
+func (s *service) buildTree(profileName, environmentName string, environmentItems []validator.Item) (*TreeNode, error) {
 	// Get entries defined in secrets.yml for this environment
 	secretsYMLEntries := make(map[string]bool)
 
-	// Type assert to get the actual config structure
-	config, ok := secretsConfig.(*validator.SecretsConfig)
-	if !ok {
-		return nil, fmt.Errorf("invalid secrets config type")
-	}
-
-	// Find the profile and environment
-	var targetProfile *validator.Profile
-	for i := range config.Profiles {
-		if config.Profiles[i].Metadata.Profile == profileName {
-			targetProfile = &config.Profiles[i]
-			break
-		}
-	}
-
-	if targetProfile == nil {
-		return nil, fmt.Errorf("profile '%s' not found", profileName)
-	}
-
-	// Get all entries defined in secrets.yml for this environment
 	environmentNameCapitalized := capitalizeEnvironmentName(environmentName)
-	for _, item := range targetProfile.Environments[environmentName] {
+	for _, item := range environmentItems {
 		// Trim the environment prefix from the entry path
 		// Example: "/Production/Database/PostgreSQL" -> "Database/PostgreSQL"
 		relativePath := strings.TrimPrefix(item.Entry, fmt.Sprintf("/%s/", environmentNameCapitalized))

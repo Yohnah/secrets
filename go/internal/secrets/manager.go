@@ -7,6 +7,7 @@ import (
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/secrets/initialize"
+	"github.com/Yohnah/secrets/internal/secrets/profile"
 	"github.com/Yohnah/secrets/internal/secrets/show"
 	"github.com/Yohnah/secrets/internal/secrets/snapshots"
 	"github.com/Yohnah/secrets/internal/validator"
@@ -35,10 +36,12 @@ type manager struct {
 // NewManager creates a new SecretsManager instance (Facade Pattern)
 // The manager delegates operations to specialized services (subdominios)
 func NewManager(cfg config.Manager, log logger.Manager, prm prompt.Manager, kp keepass.Manager, out output.Manager, val validator.ValidatorManager) Manager {
+	resolver := profile.NewResolver(cfg, log, val)
+
 	return &manager{
 		initService:      initialize.NewService(cfg, log, prm, kp, val),
-		showService:      show.NewService(cfg, log, prm, kp, out, val),
-		snapshotsService: snapshots.NewService(cfg, log, prm, kp, out, val),
+		showService:      show.NewService(cfg, log, prm, kp, out, val, resolver),
+		snapshotsService: snapshots.NewService(cfg, log, prm, kp, out, val, resolver),
 	}
 }
 

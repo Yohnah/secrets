@@ -13,6 +13,7 @@ import (
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/secrets/common"
+	"github.com/Yohnah/secrets/internal/secrets/profile"
 	"github.com/Yohnah/secrets/internal/validator"
 )
 
@@ -25,23 +26,25 @@ type Service interface {
 }
 
 type service struct {
-	config    config.Manager
-	logger    logger.Manager
-	prompt    prompt.Manager
-	keepass   keepass.Manager
-	output    output.Manager
-	validator validator.ValidatorManager
+	config          config.Manager
+	logger          logger.Manager
+	prompt          prompt.Manager
+	keepass         keepass.Manager
+	output          output.Manager
+	validator       validator.ValidatorManager
+	profileResolver profile.Resolver
 }
 
 // NewService creates a new snapshots service instance
-func NewService(cfg config.Manager, log logger.Manager, prm prompt.Manager, kp keepass.Manager, out output.Manager, val validator.ValidatorManager) Service {
+func NewService(cfg config.Manager, log logger.Manager, prm prompt.Manager, kp keepass.Manager, out output.Manager, val validator.ValidatorManager, resolver profile.Resolver) Service {
 	return &service{
-		config:    cfg,
-		logger:    log,
-		prompt:    prm,
-		keepass:   kp,
-		output:    out,
-		validator: val,
+		config:          cfg,
+		logger:          log,
+		prompt:          prm,
+		keepass:         kp,
+		output:          out,
+		validator:       val,
+		profileResolver: resolver,
 	}
 }
 
@@ -64,26 +67,25 @@ type ProfileSnapshots struct {
 
 // List lists snapshots for a specific profile or all profiles
 func (s *service) List(profileName string) error {
-	// Step 1: Read secrets.yml and validate
-	secretsFilePath := s.config.GetSecretsFilePath()
-
-	secretsConfig, errs := s.validator.ReadAndValidateSecretsYML(secretsFilePath)
-	if len(errs) > 0 {
-		return fmt.Errorf("invalid secrets.yml: %v", errs[0])
-	}
-
-	// Step 2: Determine which profiles to list
+	// Step 1: Determine profiles to list using resolver
 	var profilesToList []string
+
 	if profileName == "all" {
-		for _, profile := range secretsConfig.Profiles {
+		config, err := s.profileResolver.LoadConfig()
+		if err != nil {
+			return err
+		}
+
+		for _, profile := range config.Profiles {
 			profilesToList = append(profilesToList, profile.Metadata.Profile)
 		}
 	} else {
-		// Validate that profile exists in secrets.yml
-		if err := common.ValidateProfileInSecretsYML(secretsFilePath, profileName, s.validator); err != nil {
+		resolvedProfile, err := s.profileResolver.Resolve(profileName)
+		if err != nil {
 			return err
 		}
-		profilesToList = append(profilesToList, profileName)
+
+		profilesToList = append(profilesToList, resolvedProfile.Name)
 	}
 
 	if len(profilesToList) == 0 {
@@ -298,11 +300,12 @@ func (s *service) structureSnapshotsData(profiles []ProfileSnapshots) map[string
 
 // New creates a new snapshot by cloning HEAD to v{current_version} and incrementing HEAD version
 func (s *service) New(profileName string) error {
-	// Step 1: Validate profile exists in secrets.yml
-	secretsFilePath := s.config.GetSecretsFilePath()
-	if err := common.ValidateProfileInSecretsYML(secretsFilePath, profileName, s.validator); err != nil {
+	// Step 1: Resolve profile (auto-detect when possible)
+	resolvedProfile, err := s.profileResolver.Resolve(profileName)
+	if err != nil {
 		return err
 	}
+	profileName = resolvedProfile.Name
 
 	// Step 2: Get configuration
 	cfg, err := s.config.GetConfig()
@@ -422,11 +425,12 @@ func (s *service) New(profileName string) error {
 // Restore restores a snapshot to HEAD
 // This method renames current HEAD to v{currentVersion}, then clones specified version to new HEAD
 func (s *service) Restore(profileName, version string) error {
-	// Step 1: Validate profile exists in secrets.yml
-	secretsFilePath := s.config.GetSecretsFilePath()
-	if err := common.ValidateProfileInSecretsYML(secretsFilePath, profileName, s.validator); err != nil {
+	// Step 1: Resolve profile (auto-detect when possible)
+	resolvedProfile, err := s.profileResolver.Resolve(profileName)
+	if err != nil {
 		return err
 	}
+	profileName = resolvedProfile.Name
 
 	// Step 2: Get configuration
 	cfg, err := s.config.GetConfig()
@@ -562,11 +566,12 @@ func (s *service) Delete(profileName, version string) error {
 		return fmt.Errorf("invalid version format: '%s'. Version must be v followed by a positive number (e.g., v1, v2)", version)
 	}
 
-	// Step 3: Validate profile exists in secrets.yml
-	secretsFilePath := s.config.GetSecretsFilePath()
-	if err := common.ValidateProfileInSecretsYML(secretsFilePath, profileName, s.validator); err != nil {
+	// Step 3: Resolve profile (auto-detect when possible)
+	resolvedProfile, err := s.profileResolver.Resolve(profileName)
+	if err != nil {
 		return err
 	}
+	profileName = resolvedProfile.Name
 
 	// Step 4: Get configuration
 	cfg, err := s.config.GetConfig()
