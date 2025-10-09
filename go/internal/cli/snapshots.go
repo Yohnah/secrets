@@ -21,14 +21,13 @@ var snapshotsCmd = &cobra.Command{
 
 // snapshotsListCmd lists all snapshots
 var snapshotsListCmd = &cobra.Command{
-	Use:   "list [profile_name|all]",
+	Use:   "list",
 	Short: "List snapshots",
 	Long: `List all snapshots for a specific profile or all profiles.
 
 Profile name can be specified via:
-  1. Flag: -p/--profile-name (e.g., -p webapp-prod)
+  1. Flag: -p/--profile-name (optional, defaults to "all")
   2. Positional argument (legacy, deprecated)
-  3. Default: "all" (shows all profiles)
 
 Examples:
   secrets snapshots list                 # List all snapshots
@@ -38,7 +37,7 @@ Examples:
 	Run: func(cmd *cobra.Command, args []string) {
 		// Determine profile name from flag or positional argument
 		var profileName string
-		
+
 		if flagProfileName != "" {
 			// Priority 1: Use flag if provided
 			profileName = flagProfileName
@@ -68,12 +67,12 @@ Examples:
 
 // snapshotsNewCmd creates a new snapshot
 var snapshotsNewCmd = &cobra.Command{
-	Use:   "new [profile_name]",
+	Use:   "new",
 	Short: "Create a new snapshot",
 	Long: `Create a new snapshot by cloning HEAD to v{current_version} and incrementing HEAD version.
 
 Profile name can be specified via:
-  1. Flag: -p/--profile-name (e.g., -p webapp-prod)
+  1. Flag: -p/--profile-name (required)
   2. Positional argument (legacy, deprecated)
 
 Examples:
@@ -83,7 +82,7 @@ Examples:
 	Run: func(cmd *cobra.Command, args []string) {
 		// Determine profile name from flag or positional argument
 		var profileName string
-		
+
 		if flagProfileName != "" {
 			// Priority 1: Use flag if provided
 			profileName = flagProfileName
@@ -113,12 +112,12 @@ Examples:
 
 // snapshotsRestoreCmd restores a snapshot to HEAD
 var snapshotsRestoreCmd = &cobra.Command{
-	Use:   "restore [profile_name] <version>",
+	Use:   "restore <version>",
 	Short: "Restore a snapshot to HEAD",
 	Long: `Restore a snapshot by renaming current HEAD to v{current_version} and cloning the specified version to new HEAD with incremented version.
 
 Profile name can be specified via:
-  1. Flag: -p/--profile-name (e.g., -p webapp-prod)
+  1. Flag: -p/--profile-name (required)
   2. Positional argument (legacy, deprecated)
 
 Examples:
@@ -128,7 +127,7 @@ Examples:
 	Run: func(cmd *cobra.Command, args []string) {
 		// Determine profile name and version from flag/args
 		var profileName, version string
-		
+
 		if flagProfileName != "" {
 			// Priority 1: Use flag if provided
 			profileName = flagProfileName
@@ -170,12 +169,12 @@ Examples:
 
 // snapshotsDeleteCmd deletes a specific snapshot version
 var snapshotsDeleteCmd = &cobra.Command{
-	Use:   "delete [profile_name] <version>",
+	Use:   "delete <version>",
 	Short: "Delete a snapshot version",
 	Long: `Delete a specific snapshot version from a profile. HEAD cannot be deleted. This operation is permanent.
 
 Profile name can be specified via:
-  1. Flag: -p/--profile-name (e.g., -p webapp-prod)
+  1. Flag: -p/--profile-name (required)
   2. Positional argument (legacy, deprecated)
 
 Examples:
@@ -185,7 +184,7 @@ Examples:
 	Run: func(cmd *cobra.Command, args []string) {
 		// Determine profile name and version from flag/args
 		var profileName, version string
-		
+
 		if flagProfileName != "" {
 			// Priority 1: Use flag if provided
 			profileName = flagProfileName

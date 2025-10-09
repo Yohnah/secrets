@@ -50,7 +50,7 @@ var showStatusCmd = &cobra.Command{
 
 // showTreeCmd represents the show tree command
 var showTreeCmd = &cobra.Command{
-	Use:   "tree [profile-name] <environment-name>",
+	Use:   "tree <environment-name>",
 	Short: "Show tree structure of secrets",
 	Long: `Display a tree structure of the secrets for a specific profile and environment.
 
@@ -62,7 +62,7 @@ The tree shows:
   ⚠ Entry exists in database but not defined in secrets.yml
 
 Profile name can be specified via:
-  1. Flag: -p/--profile-name
+  1. Flag: -p/--profile-name (required)
   2. Positional argument (legacy, deprecated)
 
 Examples:
@@ -75,7 +75,7 @@ Examples:
 
 // showProfilesCmd represents the show profiles command
 var showProfilesCmd = &cobra.Command{
-	Use:   "profiles [profile_name|all]",
+	Use:   "profiles",
 	Short: "Show profiles information from secrets.yml",
 	Long: `Display information about profiles and their environments defined in secrets.yml.
 
@@ -85,9 +85,8 @@ Shows for each profile:
 - Entry count (existing/total entries)
 
 Profile name can be specified via:
-  1. Flag: -p/--profile-name (e.g., -p webapp-prod)
+  1. Flag: -p/--profile-name (optional, defaults to "all")
   2. Positional argument (legacy, deprecated)
-  3. Default: "all" (shows all profiles)
 
 Examples:
   secrets show profiles                    # Show all profiles
@@ -171,7 +170,7 @@ func runShowTree(cmd *cobra.Command, args []string) error {
 
 	// Determine profile name from flag or positional argument
 	var profileName, environmentName string
-	
+
 	if flagProfileName != "" {
 		// Priority 1: Use flag if provided
 		profileName = flagProfileName
@@ -215,7 +214,7 @@ func runShowProfiles(cmd *cobra.Command, args []string) error {
 
 	// Determine profile name from flag or positional argument
 	var profileFilter string
-	
+
 	if flagProfileName != "" {
 		// Priority 1: Use flag if provided
 		profileFilter = flagProfileName
