@@ -15,4 +15,4 @@ environments:
       entry: "/Production/API"
       key: "Token"
 
-outputs: {}
+outputs: []

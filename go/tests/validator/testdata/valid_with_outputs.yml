@@ -15,24 +15,21 @@ environments:
       key: "Password"
 
 outputs:
-  dotenv:
-    - file: ".env.production"
-      environment: "production"
-    - file: ".env.staging"
-      environment: "staging"
-  
-  dotnet:
-    - file: "appsettings.Production.json"
-      environment: "production"
-  
-  shell:
-    - file: "set-env.bash"
-      environment: "production"
-      format: "bash"
-    - file: "set-env.fish"
-      environment: "staging"
-      format: "fish"
-  
-  terraform:
-    - file: "production.tfvars"
-      environment: "production"
+  - file: ".env.production"
+    environment: "production"
+    format: "dotenv"
+  - file: ".env.staging"
+    environment: "staging"
+    format: "dotenv"
+  - file: "appsettings.Production.json"
+    environment: "production"
+    format: "dotnet"
+  - file: "set-env.bash"
+    environment: "production"
+    format: "shell"
+  - file: "set-env.fish"
+    environment: "staging"
+    format: "shell"
+  - file: "production.tfvars"
+    environment: "production"
+    format: "terraform"

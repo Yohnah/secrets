@@ -9,10 +9,9 @@ environments:
       key: "Password"
 
 outputs:
-  dotenv:
-    - file: ".env"
-      environment: "production"
-  
-  dotnet:
-    - file: ".env"
-      environment: "production"
+  - file: ".env"
+    environment: "production"
+    format: "dotenv"
+  - file: ".env"
+    environment: "production"
+    format: "dotnet"

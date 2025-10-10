@@ -9,4 +9,4 @@ environments:
       entry: "Production/DB"
       key: "Password"
 
-outputs: {}
+outputs: []

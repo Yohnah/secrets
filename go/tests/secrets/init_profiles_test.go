@@ -262,7 +262,7 @@ environments:
       entry: "/Production/DB"
       key: "Password"
 
-outputs: {}`
+outputs: []`
 
 	secretsYMLPath := filepath.Join(tempDir, "secrets.yml")
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {
@@ -354,7 +354,7 @@ environments:
       entry: "/Production/API"
       key: "token"
 
-outputs: {}`
+outputs: []`
 
 	customSecretsPath := filepath.Join(customDir, "my-secrets.yml")
 	if err := os.WriteFile(customSecretsPath, []byte(secretsYMLContent), 0644); err != nil {
@@ -445,7 +445,7 @@ environments:
       entry: "/Dev/Local"
       key: "secret"
 
-outputs: {}`
+outputs: []`
 
 	secretsYMLPath := filepath.Join(tempDir, "secrets.yml")
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {
@@ -468,7 +468,7 @@ environments:
       entry: "/Prod/Other"
       key: "secret"
 
-outputs: {}`
+outputs: []`
 
 	otherSecretsPath := filepath.Join(otherDir, "other-secrets.yml")
 	if err := os.WriteFile(otherSecretsPath, []byte(otherSecretsContent), 0644); err != nil {
@@ -576,7 +576,7 @@ environments:
       type: "envvar"
       entry: "/Development/DB"
       key: "Password"
-outputs: {}
+outputs: []
 `
 	secretsYMLPath := filepath.Join(testDir, "secrets.yml")
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYML), 0644); err != nil {
@@ -727,7 +727,7 @@ environments:
       type: "envvar"
       entry: "/Staging/API"
       key: "token"
-outputs: {}
+outputs: []
 `
 	secretsYMLPath := filepath.Join(testDir, "secrets.yml")
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYML), 0644); err != nil {
@@ -830,7 +830,7 @@ environments:
       type: "envvar"
       entry: "/Staging/DB"
       key: "Password"
-outputs: {}
+outputs: []
 `
 	secretsYMLPath := filepath.Join(testDir, "secrets.yml")
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYML), 0644); err != nil {

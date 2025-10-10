@@ -1,5 +1,5 @@
 metadata:
-  profile: "test-invalid-shell-format"
+  profile: "test-invalid-format"
 
 environments:
   production:
@@ -9,7 +9,6 @@ environments:
       key: "Password"
 
 outputs:
-  shell:
-    - file: "set-env.sh"
-      environment: "production"
-      format: "invalid_format"
+  - file: "set-env.sh"
+    environment: "production"
+    format: "invalid_format"

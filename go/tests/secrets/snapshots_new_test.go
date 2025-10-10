@@ -31,7 +31,7 @@ environments:
       entry: "/Production/DB"
       key: "Password"
 
-outputs: {}`
+outputs: []`
 
 	secretsYMLPath := filepath.Join(tmpDir, "secrets.yml")
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {
@@ -168,7 +168,7 @@ environments:
       entry: "/Production/DB"
       key: "Password"
 
-outputs: {}`
+outputs: []`
 
 	secretsYMLPath := filepath.Join(tmpDir, "secrets.yml")
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {
@@ -225,7 +225,7 @@ environments:
       entry: "/Production/DB"
       key: "Password"
 
-outputs: {}
+outputs: []
 ---
 metadata:
   profile: "profile-not-in-db"
@@ -237,7 +237,7 @@ environments:
       entry: "/Production/API"
       key: "Token"
 
-outputs: {}`
+outputs: []`
 
 	secretsYMLPath := filepath.Join(tmpDir, "secrets.yml")
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {
@@ -324,7 +324,7 @@ environments:
       entry: "/Production/DB"
       key: "Password"
 
-outputs: {}`
+outputs: []`
 
 	secretsYMLPath := filepath.Join(tmpDir, "secrets.yml")
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {

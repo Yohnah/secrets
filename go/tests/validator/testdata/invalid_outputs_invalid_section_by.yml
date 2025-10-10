@@ -1,5 +1,5 @@
 metadata:
-  profile: "test-custom-output"
+  profile: "test-invalid-section-by"
 
 environments:
   production:
@@ -9,7 +9,7 @@ environments:
       key: "Password"
 
 outputs:
-  - file: "custom-output.txt"
+  - file: "config.toml"
     environment: "production"
-    format: "custom"
-    template: "testdata/templates/test.tpl"
+    format: "toml"
+    section_by: "invalid_option"

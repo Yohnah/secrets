@@ -41,7 +41,7 @@ environments:
       entry: "/Staging/Database/PostgreSQL"
       key: "Password"
 
-outputs: {}
+outputs: []
 ---
 metadata:
   profile: "webapp-development"
@@ -53,7 +53,7 @@ environments:
       entry: "/Development/Database/PostgreSQL"
       key: "Password"
 
-outputs: {}
+outputs: []
 ---
 metadata:
   profile: "mobile-backend"
@@ -65,7 +65,7 @@ environments:
       entry: "/Production/API/Token"
       key: "Token"
 
-outputs: {}`
+outputs: []`
 
 	secretsYMLPath := filepath.Join(tmpDir, "secrets.yml")
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {
@@ -124,7 +124,7 @@ environments:
       entry: "/Production/Database/PostgreSQL"
       key: "Password"
 
-outputs: {}
+outputs: []
 ---
 metadata:
   profile: "webapp-development"
@@ -136,7 +136,7 @@ environments:
       entry: "/Development/Database/PostgreSQL"
       key: "Password"
 
-outputs: {}`
+outputs: []`
 
 	secretsYMLPath := filepath.Join(tmpDir, "secrets.yml")
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {
@@ -195,7 +195,7 @@ environments:
       entry: "/Production/Database/PostgreSQL"
       key: "Password"
 
-outputs: {}`
+outputs: []`
 
 	secretsYMLPath := filepath.Join(tmpDir, "secrets.yml")
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {

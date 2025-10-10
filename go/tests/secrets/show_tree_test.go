@@ -43,7 +43,7 @@ environments:
       type: "envvar"
       entry: "/Development/API/External"
       key: "key"
-outputs: {}`
+outputs: []`
 
 	secretsPath := filepath.Join(tmpDir, "secrets.yml")
 	if err := os.WriteFile(secretsPath, []byte(secretsYML), 0644); err != nil {
@@ -96,7 +96,7 @@ environments:
       type: "envvar"
       entry: "/Production/App"
       key: "key"
-outputs: {}`
+outputs: []`
 
 	secretsPath := filepath.Join(tmpDir, "secrets.yml")
 	if err := os.WriteFile(secretsPath, []byte(secretsYML), 0644); err != nil {
@@ -147,7 +147,7 @@ environments:
       type: "envvar"
       entry: "/Test"
       key: "key"
-outputs: {}`
+outputs: []`
 
 	secretsPath := filepath.Join(tmpDir, "secrets.yml")
 	if err := os.WriteFile(secretsPath, []byte(secretsYML), 0644); err != nil {
@@ -202,7 +202,7 @@ environments:
       type: "envvar"
       entry: "/Test"
       key: "key"
-outputs: {}`
+outputs: []`
 
 	secretsPath := filepath.Join(tmpDir, "secrets.yml")
 	if err := os.WriteFile(secretsPath, []byte(secretsYML), 0644); err != nil {
@@ -257,7 +257,7 @@ environments:
       type: "envvar"
       entry: "/Test"
       key: "key"
-outputs: {}`
+outputs: []`
 
 	secretsPath := filepath.Join(tmpDir, "secrets.yml")
 	if err := os.WriteFile(secretsPath, []byte(secretsYML), 0644); err != nil {

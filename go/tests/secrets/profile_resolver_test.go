@@ -19,7 +19,7 @@ environments:
       type: "envvar"
       entry: "/Development/DB"
       key: "Password"
-outputs: {}`
+outputs: []`
 
 	validatorMgr := newMockValidatorManager(secretsContent)
 	configMgr := newMockConfigManager("/tmp/test-secrets.yml")
@@ -55,7 +55,7 @@ environments:
       type: "envvar"
       entry: "/Development/DB"
       key: "Password"
-outputs: {}
+outputs: []
 ---
 metadata:
   profile: "profile-two"
@@ -65,7 +65,7 @@ environments:
       type: "envvar"
       entry: "/Development/API"
       key: "Token"
-outputs: {}`
+outputs: []`
 
 	validatorMgr := newMockValidatorManager(secretsContent)
 	configMgr := newMockConfigManager("/tmp/test-secrets.yml")
@@ -93,7 +93,7 @@ environments:
       type: "envvar"
       entry: "/Development/DB"
       key: "Password"
-outputs: {}`
+outputs: []`
 
 	validatorMgr := newMockValidatorManager(secretsContent)
 	configMgr := newMockConfigManager("/tmp/test-secrets.yml")

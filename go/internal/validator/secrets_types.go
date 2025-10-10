@@ -18,23 +18,16 @@ type Metadata struct {
 	DefaultEnvironment string `yaml:"default_environment,omitempty"` // Deprecated, will be removed
 }
 
-// Outputs represents the outputs section
-type Outputs struct {
-	Dotenv        []OutputItem `yaml:"dotenv,omitempty"`
-	Dotnet        []OutputItem `yaml:"dotnet,omitempty"`
-	SpringBoot    []OutputItem `yaml:"spring_boot,omitempty"`
-	Terraform     []OutputItem `yaml:"terraform,omitempty"`
-	Shell         []ShellItem  `yaml:"shell,omitempty"`
-	Ansible       []OutputItem `yaml:"ansible,omitempty"`
-	DockerCompose []OutputItem `yaml:"docker_compose,omitempty"`
-	Kubernetes    []OutputItem `yaml:"kubernetes,omitempty"`
-	Custom        []CustomItem `yaml:"custom,omitempty"`
-}
+// Outputs represents the outputs section as a list of output items
+type Outputs []OutputItem
 
-// OutputItem represents a basic output item with file and environment
+// OutputItem represents a single output configuration
 type OutputItem struct {
 	File        string `yaml:"file"`
 	Environment string `yaml:"environment"`
+	Format      string `yaml:"format"`
+	SectionBy   string `yaml:"section_by,omitempty"` // Optional, defaults to "none"
+	Template    string `yaml:"template,omitempty"`   // Optional, used for custom format
 }
 
 // ShellItem represents a shell output item with additional format field

@@ -22,4 +22,4 @@ environments:
       entry: "/Staging/DB"
       key: "Password"
 
-outputs: {}
+outputs: []

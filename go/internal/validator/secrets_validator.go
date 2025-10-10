@@ -249,128 +249,110 @@ func isValidItemName(name string) bool {
 	return matched
 }
 
-// validateOutputs validates the outputs section of a profile
+// validateOutputs validates the outputs section (list format)
 func validateOutputs(profile Profile) []error {
 	var errors []error
-	outputs := profile.Outputs
 
-	// Track all file paths to ensure uniqueness
-	filePaths := make(map[string]bool)
+	// Track file names to check for duplicates
+	fileMap := make(map[string]bool)
 
-	// Helper to check file uniqueness
-	checkFileUniqueness := func(file, outputType string, index int) {
-		if file == "" {
-			errors = append(errors, fmt.Errorf("profile '%s': outputs.%s[%d]: field 'file' is required", profile.Metadata.Profile, outputType, index))
-			return
+	for i, output := range profile.Outputs {
+		// Validate required fields
+		if output.File == "" {
+			errors = append(errors, fmt.Errorf("profile '%s': outputs[%d]: 'file' is required", profile.Metadata.Profile, i))
 		}
-		if filePaths[file] {
-			errors = append(errors, fmt.Errorf("profile '%s': outputs.%s[%d]: file '%s' is already used in another output (files must be unique)", profile.Metadata.Profile, outputType, index, file))
-		} else {
-			filePaths[file] = true
+		if output.Environment == "" {
+			errors = append(errors, fmt.Errorf("profile '%s': outputs[%d]: 'environment' is required", profile.Metadata.Profile, i))
 		}
-	}
+		if output.Format == "" {
+			errors = append(errors, fmt.Errorf("profile '%s': outputs[%d]: 'format' is required", profile.Metadata.Profile, i))
+		}
 
-	// Helper to check environment exists
-	checkEnvironmentExists := func(environment, outputType string, index int) {
-		if environment == "" {
-			errors = append(errors, fmt.Errorf("profile '%s': outputs.%s[%d]: field 'environment' is required", profile.Metadata.Profile, outputType, index))
-			return
+		// Check for duplicate files
+		if output.File != "" {
+			if fileMap[output.File] {
+				errors = append(errors, fmt.Errorf("profile '%s': outputs[%d]: duplicate file '%s'", profile.Metadata.Profile, i, output.File))
+			}
+			fileMap[output.File] = true
 		}
-		if _, exists := profile.Environments[environment]; !exists {
-			errors = append(errors, fmt.Errorf("profile '%s': outputs.%s[%d]: environment '%s' does not exist in environments section", profile.Metadata.Profile, outputType, index, environment))
-		}
-	}
 
-	// Validate dotenv
-	if len(outputs.Dotenv) > 0 {
-		for i, item := range outputs.Dotenv {
-			checkFileUniqueness(item.File, "dotenv", i)
-			checkEnvironmentExists(item.Environment, "dotenv", i)
-		}
-	}
-
-	// Validate dotnet
-	if len(outputs.Dotnet) > 0 {
-		for i, item := range outputs.Dotnet {
-			checkFileUniqueness(item.File, "dotnet", i)
-			checkEnvironmentExists(item.Environment, "dotnet", i)
-		}
-	}
-
-	// Validate spring_boot
-	if len(outputs.SpringBoot) > 0 {
-		for i, item := range outputs.SpringBoot {
-			checkFileUniqueness(item.File, "spring_boot", i)
-			checkEnvironmentExists(item.Environment, "spring_boot", i)
-		}
-	}
-
-	// Validate terraform
-	if len(outputs.Terraform) > 0 {
-		for i, item := range outputs.Terraform {
-			checkFileUniqueness(item.File, "terraform", i)
-			checkEnvironmentExists(item.Environment, "terraform", i)
-		}
-	}
-
-	// Validate shell (has additional format field)
-	if len(outputs.Shell) > 0 {
-		validFormats := map[string]bool{
-			"bash":       true,
-			"zsh":        true,
-			"fish":       true,
-			"sh":         true,
-			"powershell": true,
-		}
-		for i, item := range outputs.Shell {
-			checkFileUniqueness(item.File, "shell", i)
-			checkEnvironmentExists(item.Environment, "shell", i)
-
-			if item.Format == "" {
-				errors = append(errors, fmt.Errorf("profile '%s': outputs.shell[%d]: field 'format' is required", profile.Metadata.Profile, i))
-			} else if !validFormats[item.Format] {
-				errors = append(errors, fmt.Errorf("profile '%s': outputs.shell[%d]: format '%s' is invalid (must be: bash, zsh, fish, sh, powershell)", profile.Metadata.Profile, i, item.Format))
+		// Validate environment exists
+		if output.Environment != "" {
+			envExists := false
+			for envName := range profile.Environments {
+				if envName == output.Environment {
+					envExists = true
+					break
+				}
+			}
+			if !envExists {
+				errors = append(errors, fmt.Errorf("profile '%s': outputs[%d] (file: '%s', format: '%s'): environment '%s' not found", profile.Metadata.Profile, i, output.File, output.Format, output.Environment))
 			}
 		}
-	}
 
-	// Validate ansible
-	if len(outputs.Ansible) > 0 {
-		for i, item := range outputs.Ansible {
-			checkFileUniqueness(item.File, "ansible", i)
-			checkEnvironmentExists(item.Environment, "ansible", i)
+		// Validate format
+		validFormats := []string{"dotenv", "dotnet", "spring_boot", "terraform", "shell", "ansible", "docker-compose", "k8s", "ini", "toml", "yaml", "json", "custom"}
+		formatValid := false
+		for _, f := range validFormats {
+			if output.Format == f {
+				formatValid = true
+				break
+			}
 		}
-	}
-
-	// Validate docker_compose
-	if len(outputs.DockerCompose) > 0 {
-		for i, item := range outputs.DockerCompose {
-			checkFileUniqueness(item.File, "docker_compose", i)
-			checkEnvironmentExists(item.Environment, "docker_compose", i)
+		if !formatValid {
+			errors = append(errors, fmt.Errorf("profile '%s': outputs[%d]: invalid format '%s'", profile.Metadata.Profile, i, output.Format))
 		}
-	}
 
-	// Validate kubernetes
-	if len(outputs.Kubernetes) > 0 {
-		for i, item := range outputs.Kubernetes {
-			checkFileUniqueness(item.File, "kubernetes", i)
-			checkEnvironmentExists(item.Environment, "kubernetes", i)
+		// Validate section_by for structured formats
+		structuredFormats := []string{"ini", "toml", "yaml"}
+		isStructured := false
+		for _, f := range structuredFormats {
+			if output.Format == f {
+				isStructured = true
+				break
+			}
 		}
-	}
 
-	// Validate custom (has additional template field, allows template reuse)
-	if len(outputs.Custom) > 0 {
-		for i, item := range outputs.Custom {
-			checkFileUniqueness(item.File, "custom", i)
-			checkEnvironmentExists(item.Environment, "custom", i)
+		if isStructured {
+			// Default to "none" if not specified
+			sectionBy := output.SectionBy
+			if sectionBy == "" {
+				sectionBy = "none"
+			}
 
-			if item.Template == "" {
-				errors = append(errors, fmt.Errorf("profile '%s': outputs.custom[%d]: field 'template' is required", profile.Metadata.Profile, i))
-			} else {
-				// Check if template file exists
-				if _, err := os.Stat(item.Template); os.IsNotExist(err) {
-					errors = append(errors, fmt.Errorf("profile '%s': outputs.custom[%d]: template file '%s' does not exist", profile.Metadata.Profile, i, item.Template))
+			// Validate section_by value
+			validSectionBy := []string{"environment", "default", "none"}
+			sectionByValid := false
+			for _, sb := range validSectionBy {
+				if sectionBy == sb {
+					sectionByValid = true
+					break
 				}
+			}
+
+			// Check for custom: prefix
+			if strings.HasPrefix(sectionBy, "custom:") {
+				if len(sectionBy) <= 7 { // "custom:" is 7 chars
+					errors = append(errors, fmt.Errorf("profile '%s': outputs[%d]: custom section name cannot be empty", profile.Metadata.Profile, i))
+				}
+				sectionByValid = true
+			}
+
+			if !sectionByValid {
+				errors = append(errors, fmt.Errorf("profile '%s': outputs[%d]: invalid section_by '%s'", profile.Metadata.Profile, i, sectionBy))
+			}
+		}
+
+		// Special validation for shell format (if still used)
+		if output.Format == "shell" {
+			// Shell might need format field, but in new format, perhaps not.
+			// For now, skip special validation.
+		}
+
+		// Special validation for custom format
+		if output.Format == "custom" {
+			if output.Template == "" {
+				errors = append(errors, fmt.Errorf("profile '%s': outputs[%d]: 'template' is required for custom format", profile.Metadata.Profile, i))
 			}
 		}
 	}

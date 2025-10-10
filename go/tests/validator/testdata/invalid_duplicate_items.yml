@@ -13,4 +13,4 @@ environments:
       entry: "/Production/DB"
       key: "Username"
 
-outputs: {}
+outputs: []

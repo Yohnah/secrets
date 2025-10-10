@@ -9,7 +9,7 @@ environments:
       entry: "/Production/DB"
       key: "Password"
 
-outputs: {}
+outputs: []
 
 ---
 metadata:
@@ -23,4 +23,4 @@ environments:
       entry: "/Development/DB"
       key: "Password"
 
-outputs: {}
+outputs: []

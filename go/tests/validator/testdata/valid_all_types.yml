@@ -20,4 +20,4 @@ environments:
       entry: "/Production/Level1/Level2/Entry"
       key: "Password"
 
-outputs: {}
+outputs: []

@@ -9,9 +9,8 @@ environments:
       key: "Password"
 
 outputs:
-  dotenv:
-    - file: ".env"
-  
-  shell:
-    - file: "set-env.bash"
-      environment: "production"
+  - file: ".env"
+    environment: "production"
+  - file: "set-env.bash"
+    environment: "production"
+    format: "shell"
