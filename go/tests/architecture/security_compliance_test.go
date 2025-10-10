@@ -211,3 +211,315 @@ func TestNoSensitiveDataInLogs(t *testing.T) {
 		t.Errorf("Found potential sensitive data logging:\n%s", strings.Join(violations, "\n"))
 	}
 }
+
+// TestCryptoRandUsage validates that crypto/rand is used instead of math/rand
+func TestCryptoRandUsage(t *testing.T) {
+	root, err := findModuleRoot()
+	if err != nil {
+		t.Fatalf("Failed to find module root: %v", err)
+	}
+
+	var violations []string
+	mathRandUsed := false
+	cryptoRandUsed := false
+
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip test files and vendor
+		if strings.HasSuffix(path, "_test.go") || strings.Contains(path, "/vendor/") {
+			return nil
+		}
+
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		fileContent := string(content)
+		lines := strings.Split(fileContent, "\n")
+
+		for i, line := range lines {
+			// Check for math/rand import
+			if strings.Contains(line, `"math/rand"`) && !strings.HasPrefix(strings.TrimSpace(line), "//") {
+				mathRandUsed = true
+				violations = append(violations, filepath.Base(path)+":"+string(rune(i+1))+": uses math/rand instead of crypto/rand")
+			}
+
+			// Check for crypto/rand usage
+			if strings.Contains(line, `"crypto/rand"`) || strings.Contains(line, "rand.Read") {
+				cryptoRandUsed = true
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to walk directory: %v", err)
+	}
+
+	if mathRandUsed {
+		t.Errorf("SECURITY VIOLATION: math/rand is used. Must use crypto/rand for security:\n%s", strings.Join(violations, "\n"))
+	}
+
+	if !cryptoRandUsed {
+		t.Errorf("WARNING: crypto/rand is not used anywhere in the codebase")
+	}
+}
+
+// TestPasswordMemoryCleanup validates that passwords are properly cleared from memory
+func TestPasswordMemoryCleanup(t *testing.T) {
+	root, err := findModuleRoot()
+	if err != nil {
+		t.Fatalf("Failed to find module root: %v", err)
+	}
+
+	var violations []string
+	clearMethodFound := false
+
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip test files and vendor
+		if strings.HasSuffix(path, "_test.go") || strings.Contains(path, "/vendor/") {
+			return nil
+		}
+
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		fileContent := string(content)
+		lines := strings.Split(fileContent, "\n")
+
+		for i, line := range lines {
+			// Look for Clear() method implementations
+			if strings.Contains(line, "func") && strings.Contains(line, "Clear()") {
+				clearMethodFound = true
+			}
+
+			// Check for password variables without defer Clear()
+			if strings.Contains(line, "securePassword") && strings.Contains(line, ":=") {
+				// Look ahead for defer Clear() call
+				foundDefer := false
+				for j := i; j < len(lines) && j < i+10; j++ {
+					if strings.Contains(lines[j], "defer") && strings.Contains(lines[j], ".Clear()") {
+						foundDefer = true
+						break
+					}
+				}
+				if !foundDefer && !strings.Contains(path, "types") {
+					violations = append(violations, filepath.Base(path)+":"+string(rune(i+1))+": securePassword without defer Clear()")
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to walk directory: %v", err)
+	}
+
+	if !clearMethodFound {
+		t.Errorf("WARNING: No Clear() methods found for memory cleanup")
+	}
+
+	if len(violations) > 0 {
+		t.Logf("INFO: Potential missing defer Clear() calls (may be false positives):\n%s", strings.Join(violations, "\n"))
+	}
+}
+
+// TestPathTraversalPrevention validates that path sanitization is implemented
+func TestPathTraversalPrevention(t *testing.T) {
+	root, err := findModuleRoot()
+	if err != nil {
+		t.Fatalf("Failed to find module root: %v", err)
+	}
+
+	sanitizePathFound := false
+	evalSymlinksUsed := false
+
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip test files and vendor
+		if strings.HasSuffix(path, "_test.go") || strings.Contains(path, "/vendor/") {
+			return nil
+		}
+
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		fileContent := string(content)
+
+		// Look for sanitizePath function
+		if strings.Contains(fileContent, "func sanitizePath") {
+			sanitizePathFound = true
+		}
+
+		// Look for EvalSymlinks usage
+		if strings.Contains(fileContent, "filepath.EvalSymlinks") {
+			evalSymlinksUsed = true
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to walk directory: %v", err)
+	}
+
+	if !sanitizePathFound {
+		t.Errorf("SECURITY VIOLATION: No sanitizePath function found - path traversal attacks possible")
+	}
+
+	if !evalSymlinksUsed {
+		t.Errorf("SECURITY VIOLATION: filepath.EvalSymlinks not used - symlink attacks possible")
+	}
+}
+
+// TestErrorMessageSanitization validates that sensitive data is not leaked in errors
+func TestErrorMessageSanitization(t *testing.T) {
+	root, err := findModuleRoot()
+	if err != nil {
+		t.Fatalf("Failed to find module root: %v", err)
+	}
+
+	var violations []string
+
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip test files and vendor
+		if strings.HasSuffix(path, "_test.go") || strings.Contains(path, "/vendor/") {
+			return nil
+		}
+
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		fileContent := string(content)
+		lines := strings.Split(fileContent, "\n")
+
+		for i, line := range lines {
+			// Check for error messages that might contain sensitive data
+			if strings.Contains(line, "fmt.Errorf") || strings.Contains(line, "errors.New") {
+				// Look for SecureValue.String() or SecurePassword.String() in error messages
+				if strings.Contains(line, ".String()") {
+					// Check if it's a secure type
+					if strings.Contains(line, "securePassword") || 
+					   strings.Contains(line, "secureValue") ||
+					   strings.Contains(line, "password.String()") {
+						violations = append(violations, filepath.Base(path)+":"+string(rune(i+1))+": Sensitive data in error message")
+					}
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to walk directory: %v", err)
+	}
+
+	if len(violations) > 0 {
+		t.Errorf("SECURITY VIOLATION: Sensitive data may be leaked in error messages:\n%s", strings.Join(violations, "\n"))
+	}
+}
+
+// TestCentralizedPasswordAccess validates that password access is centralized
+func TestCentralizedPasswordAccess(t *testing.T) {
+	root, err := findModuleRoot()
+	if err != nil {
+		t.Fatalf("Failed to find module root: %v", err)
+	}
+
+	var violations []string
+	getPasswordMethodFound := false
+
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip test files, vendor, and config manager itself
+		if strings.HasSuffix(path, "_test.go") || 
+		   strings.Contains(path, "/vendor/") ||
+		   strings.Contains(path, "/config/manager.go") {
+			return nil
+		}
+
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		fileContent := string(content)
+		lines := strings.Split(fileContent, "\n")
+
+		// Check for GetPassword method
+		if strings.Contains(fileContent, "func") && strings.Contains(fileContent, "GetPassword()") {
+			getPasswordMethodFound = true
+		}
+
+		for i, line := range lines {
+			// Check for direct os.Getenv("SECRETS_YOHNAH_PASSWORD") usage
+			if strings.Contains(line, `os.Getenv("SECRETS_YOHNAH_PASSWORD")`) {
+				// Make sure it's not in config manager or helpers
+				if !strings.Contains(path, "/config/") && !strings.Contains(path, "/common/helpers.go") {
+					violations = append(violations, filepath.Base(path)+":"+string(rune(i+1))+": Direct password env access")
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to walk directory: %v", err)
+	}
+
+	if !getPasswordMethodFound {
+		t.Errorf("WARNING: GetPassword() method not found - password access may not be centralized")
+	}
+
+	if len(violations) > 0 {
+		t.Errorf("SECURITY VIOLATION: Direct password environment variable access found:\n%s", strings.Join(violations, "\n"))
+	}
+}
