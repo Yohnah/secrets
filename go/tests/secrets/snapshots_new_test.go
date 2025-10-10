@@ -75,10 +75,11 @@ outputs: []`
 		t.Fatalf("Failed to open database: %v", err)
 	}
 
-	headDatetimeBefore, err := kpMgr.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "datetime")
+	headDatetimeBeforeSecure, err := kpMgr.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "datetime")
 	if err != nil {
 		t.Fatalf("Failed to read HEAD datetime before snapshot: %v", err)
 	}
+	defer headDatetimeBeforeSecure.Clear()
 
 	kpMgr.CloseWithoutSave()
 
@@ -121,32 +122,35 @@ outputs: []`
 	}
 
 	// Check HEAD version is now 2
-	versionStr, err := kpMgr.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "version")
+	versionSecure, err := kpMgr.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "version")
 	if err != nil {
 		t.Fatalf("Failed to read HEAD version: %v", err)
 	}
-	if versionStr != "2" {
-		t.Errorf("Expected HEAD version to be 2, got: %s", versionStr)
+	defer versionSecure.Clear()
+	if versionSecure.String() != "2" {
+		t.Errorf("Expected HEAD version to be 2, got: %s", versionSecure.String())
 	}
 
 	// CRITICAL: Verify HEAD datetime did NOT change
-	headDatetimeAfter, err := kpMgr.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "datetime")
+	headDatetimeAfterSecure, err := kpMgr.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "datetime")
 	if err != nil {
 		t.Fatalf("Failed to read HEAD datetime after snapshot: %v", err)
 	}
-	if headDatetimeBefore != headDatetimeAfter {
-		t.Errorf("HEAD datetime should NOT change. Before: %s, After: %s", headDatetimeBefore, headDatetimeAfter)
+	defer headDatetimeAfterSecure.Clear()
+	if headDatetimeBeforeSecure.String() != headDatetimeAfterSecure.String() {
+		t.Errorf("HEAD datetime should NOT change. Before: %s, After: %s", headDatetimeBeforeSecure.String(), headDatetimeAfterSecure.String())
 	}
 
 	// CRITICAL: Verify v1 datetime WAS updated (different from HEAD's original)
-	v1Datetime, err := kpMgr.GetTreeGroupEntryField("test-profile", "v1", "metadata", "datetime")
+	v1DatetimeSecure, err := kpMgr.GetTreeGroupEntryField("test-profile", "v1", "metadata", "datetime")
 	if err != nil {
 		t.Fatalf("Failed to read v1 datetime: %v", err)
 	}
+	defer v1DatetimeSecure.Clear()
 	// v1 datetime should be updated to snapshot creation time
 	// It should be different from the original HEAD datetime (unless they happen at exact same millisecond, unlikely)
 	// For this test, we just verify it's a valid ISO 8601 datetime and exists
-	if v1Datetime == "" {
+	if v1DatetimeSecure.String() == "" {
 		t.Errorf("v1 datetime should not be empty")
 	}
 }
@@ -413,11 +417,12 @@ outputs: []`
 	}
 
 	// Check HEAD version is now 4
-	versionStr, err := kpMgr.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "version")
+	versionSecure, err := kpMgr.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "version")
 	if err != nil {
 		t.Fatalf("Failed to read HEAD version: %v", err)
 	}
-	if versionStr != "4" {
-		t.Errorf("Expected HEAD version to be 4, got: %s", versionStr)
+	defer versionSecure.Clear()
+	if versionSecure.String() != "4" {
+		t.Errorf("Expected HEAD version to be 4, got: %s", versionSecure.String())
 	}
 }

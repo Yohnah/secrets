@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Yohnah/secrets/internal/config"
+	"github.com/Yohnah/secrets/internal/secrets/common"
 	"github.com/Yohnah/secrets/internal/validator"
 	"github.com/tobischo/gokeepasslib/v3"
 	"gopkg.in/yaml.v3"
@@ -39,9 +40,6 @@ type mockKeePassManager struct {
 }
 
 func newMockKeePassManager() *mockKeePassManager {
-	// Reset global state for each test
-	mockExpectedPassword = ""
-
 	return &mockKeePassManager{
 		profiles:        make(map[string]bool),
 		treeGroups:      make(map[string][]string),
@@ -287,12 +285,12 @@ func (m *mockKeePassManager) ListProfileTreeGroups(profileName string) ([]string
 	return []string{}, nil
 }
 
-func (m *mockKeePassManager) GetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName string) (string, error) {
+func (m *mockKeePassManager) GetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName string) (*common.SecureValue, error) {
 	key := profileName + "/" + treeGroup + "/" + entryPath + "/" + fieldName
 	if value, ok := m.treeGroupFields[key]; ok {
-		return value, nil
+		return common.NewSecureValue(value), nil
 	}
-	return "", nil
+	return nil, nil
 }
 
 func (m *mockKeePassManager) CloneTreeGroup(profileName, sourceTreeGroup, targetTreeGroup string) error {

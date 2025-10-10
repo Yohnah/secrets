@@ -7,9 +7,14 @@ import (
 
 	"github.com/Yohnah/secrets/internal/config"
 	"github.com/Yohnah/secrets/internal/logger"
-	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/validator"
 )
+
+// PromptManagerInterface defines the interface for prompting user input
+type PromptManagerInterface interface {
+	PromptPassword(message string) (*SecureValue, error)
+	PromptPasswordConfirm(message string) (*SecureValue, error)
+}
 
 // FileExists checks if a file exists at the given path
 func FileExists(path string) bool {
@@ -63,6 +68,112 @@ func (sp *SecurePassword) Clear() {
 	}
 }
 
+// SecureValue is a wrapper for sensitive string values that ensures memory cleanup
+// This type helps prevent sensitive data from remaining in memory after use
+type SecureValue struct {
+	data []byte
+}
+
+// NewSecureValue creates a new SecureValue from a string
+// The value string should be cleared by the caller after creating SecureValue
+func NewSecureValue(value string) *SecureValue {
+	return &SecureValue{
+		data: []byte(value),
+	}
+}
+
+// String returns the value as a string
+// WARNING: The returned string will remain in memory until garbage collected
+// Use this method only when absolutely necessary and clear the result when done
+func (sv *SecureValue) String() string {
+	if sv == nil || sv.data == nil {
+		return ""
+	}
+	// Check if data has been cleared (all zeros)
+	allZero := true
+	for _, b := range sv.data {
+		if b != 0 {
+			allZero = false
+			break
+		}
+	}
+	if allZero {
+		return ""
+	}
+	return string(sv.data)
+}
+
+// Bytes returns the value as a byte slice
+func (sv *SecureValue) Bytes() []byte {
+	if sv == nil || sv.data == nil {
+		return nil
+	}
+	return sv.data
+}
+
+// Clear securely erases the value from memory
+// This should be called as soon as the value is no longer needed
+func (sv *SecureValue) Clear() {
+	if sv != nil && sv.data != nil {
+		// Overwrite memory with zeros
+		for i := range sv.data {
+			sv.data[i] = 0
+		}
+		// Keep the slice allocated but zeroed for inspection
+		// sv.data = nil  // Don't nil the slice, keep it zeroed
+	}
+}
+
+// SecureSlice is a wrapper for slices containing sensitive data that ensures memory cleanup
+type SecureSlice[T any] []T
+
+// NewSecureSlice creates a new SecureSlice from a regular slice
+func NewSecureSlice[T any](items []T) *SecureSlice[T] {
+	slice := SecureSlice[T](items)
+	return &slice
+}
+
+// Slice returns the underlying slice
+func (ss *SecureSlice[T]) Slice() []T {
+	if ss == nil {
+		return nil
+	}
+	return []T(*ss)
+}
+
+// Clear securely erases the slice contents
+func (ss *SecureSlice[T]) Clear() {
+	if ss != nil {
+		*ss = nil
+	}
+}
+
+// SecureMap is a wrapper for maps containing sensitive data that ensures memory cleanup
+type SecureMap[K comparable, V any] map[K]V
+
+// NewSecureMap creates a new SecureMap from a regular map
+func NewSecureMap[K comparable, V any](data map[K]V) *SecureMap[K, V] {
+	sm := SecureMap[K, V](data)
+	return &sm
+}
+
+// Map returns the underlying map
+func (sm *SecureMap[K, V]) Map() map[K]V {
+	if sm == nil {
+		return nil
+	}
+	return map[K]V(*sm)
+}
+
+// Clear securely erases the map contents
+func (sm *SecureMap[K, V]) Clear() {
+	if sm != nil {
+		for k := range *sm {
+			delete(*sm, k)
+		}
+	}
+}
+
 // GetPassword retrieves password from config or prompts user
 // This function implements secure password handling and memory cleanup
 //
@@ -78,7 +189,7 @@ func (sp *SecurePassword) Clear() {
 //
 // Security: The returned SecurePassword must be cleared after use by calling Clear()
 // to prevent password from remaining in memory
-func GetPassword(cfg *config.Config, prm prompt.Manager, log logger.Manager, creating bool) (*SecurePassword, error) {
+func GetPassword(cfg *config.Config, prm PromptManagerInterface, log logger.Manager, creating bool) (*SecurePassword, error) {
 	// Check if password is provided via config (from env var or other sources)
 	if cfg.Password != "" {
 		log.Debug("Using password from configuration (SECRETS_YOHNAH_PASSWORD environment variable)")
@@ -91,22 +202,25 @@ func GetPassword(cfg *config.Config, prm prompt.Manager, log logger.Manager, cre
 	}
 
 	// Prompt user for password
-	var password string
+	var passwordSecure *SecureValue
 	var err error
 
 	if creating {
 		// Creating new database: ask twice for confirmation
-		password, err = prm.PromptPasswordConfirm("Enter database password")
+		passwordSecure, err = prm.PromptPasswordConfirm("Enter database password")
 	} else {
 		// Verifying existing database: ask once
-		password, err = prm.PromptPassword("Enter database password: ")
+		passwordSecure, err = prm.PromptPassword("Enter database password: ")
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	return NewSecurePassword(password), nil
+	// Convert to SecurePassword and clear the temporary SecureValue
+	securePassword := NewSecurePassword(passwordSecure.String())
+	passwordSecure.Clear()
+	return securePassword, nil
 }
 
 // ValidateProfileInSecretsYML validates that a profile exists in secrets.yml

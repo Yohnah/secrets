@@ -197,23 +197,25 @@ func (s *service) readSnapshotMetadata(profileName, treeGroup string) (SnapshotI
 	}
 
 	// Read version field from metadata entry
-	_, err := s.keepass.GetTreeGroupEntryField(profileName, treeGroup, "metadata", "version")
+	versionSecure, err := s.keepass.GetTreeGroupEntryField(profileName, treeGroup, "metadata", "version")
 	if err != nil {
 		return snapshot, fmt.Errorf("failed to read version: %w", err)
 	}
+	defer versionSecure.Clear()
 
 	// For versions like v1, v2, use the tree group name as version
 	// The version field in metadata is the incremental number
 	snapshot.Version = treeGroup // Read datetime field from metadata entry
-	datetimeStr, err := s.keepass.GetTreeGroupEntryField(profileName, treeGroup, "metadata", "datetime")
+	datetimeSecure, err := s.keepass.GetTreeGroupEntryField(profileName, treeGroup, "metadata", "datetime")
 	if err != nil {
 		return snapshot, fmt.Errorf("failed to read datetime: %w", err)
 	}
+	defer datetimeSecure.Clear()
 
 	// Parse datetime (ISO 8601 format)
-	datetime, err := time.Parse(time.RFC3339, datetimeStr)
+	datetime, err := time.Parse(time.RFC3339, datetimeSecure.String())
 	if err != nil {
-		return snapshot, fmt.Errorf("failed to parse datetime '%s': %w", datetimeStr, err)
+		return snapshot, fmt.Errorf("failed to parse datetime '%s': %w", datetimeSecure.String(), err)
 	}
 	snapshot.DateTime = datetime
 
@@ -354,14 +356,15 @@ func (s *service) New(profileName string) error {
 	}
 
 	// Step 7: Read HEAD metadata to get current version
-	versionStr, err := s.keepass.GetTreeGroupEntryField(profileName, "HEAD", "metadata", "version")
+	versionSecure, err := s.keepass.GetTreeGroupEntryField(profileName, "HEAD", "metadata", "version")
 	if err != nil {
 		return fmt.Errorf("error: HEAD metadata is invalid. Failed to read version field: %w. Please check your database", err)
 	}
+	defer versionSecure.Clear()
 
-	currentVersion, err := strconv.Atoi(versionStr)
+	currentVersion, err := strconv.Atoi(versionSecure.String())
 	if err != nil {
-		return fmt.Errorf("error: HEAD metadata is invalid. Version field '%s' is not a valid number: %w. Please check your database", versionStr, err)
+		return fmt.Errorf("error: HEAD metadata is invalid. Version field '%s' is not a valid number: %w. Please check your database", versionSecure.String(), err)
 	}
 
 	if currentVersion < 1 {
@@ -369,14 +372,15 @@ func (s *service) New(profileName string) error {
 	}
 
 	// Step 7: Read HEAD datetime to validate it exists and is valid ISO 8601
-	datetimeStr, err := s.keepass.GetTreeGroupEntryField(profileName, "HEAD", "metadata", "datetime")
+	datetimeSecure, err := s.keepass.GetTreeGroupEntryField(profileName, "HEAD", "metadata", "datetime")
 	if err != nil {
 		return fmt.Errorf("error: HEAD metadata is invalid. Failed to read datetime field: %w. Please check your database", err)
 	}
+	defer datetimeSecure.Clear()
 
-	_, err = time.Parse(time.RFC3339, datetimeStr)
+	_, err = time.Parse(time.RFC3339, datetimeSecure.String())
 	if err != nil {
-		return fmt.Errorf("error: HEAD metadata is invalid. Datetime field '%s' is not valid ISO 8601 format: %w. Please check your database", datetimeStr, err)
+		return fmt.Errorf("error: HEAD metadata is invalid. Datetime field '%s' is not valid ISO 8601 format: %w. Please check your database", datetimeSecure.String(), err)
 	}
 
 	// Step 8: Check if v{currentVersion} already exists (should not happen, but validate)
@@ -488,15 +492,16 @@ func (s *service) Restore(profileName, version string) error {
 	}
 
 	// Step 8: Read current HEAD version from metadata
-	currentVersionStr, err := s.keepass.GetTreeGroupEntryField(profileName, "HEAD", "metadata", "version")
+	currentVersionSecure, err := s.keepass.GetTreeGroupEntryField(profileName, "HEAD", "metadata", "version")
 	if err != nil {
 		return fmt.Errorf("error: HEAD metadata is invalid. Failed to read version field: %w. Please check your database", err)
 	}
+	defer currentVersionSecure.Clear()
 
 	// Convert version string to integer
-	currentVersion, err := strconv.Atoi(currentVersionStr)
+	currentVersion, err := strconv.Atoi(currentVersionSecure.String())
 	if err != nil {
-		return fmt.Errorf("error: HEAD metadata version is invalid (not a number): %s. Please check your database", currentVersionStr)
+		return fmt.Errorf("error: HEAD metadata version is invalid (not a number): %s. Please check your database", currentVersionSecure.String())
 	}
 
 	// Step 9: Rename current HEAD to v{currentVersion}

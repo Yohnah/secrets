@@ -81,9 +81,14 @@ outputs: []`
 	}
 
 	// Verify that new HEAD has version 4
-	newVersion, _ := mockKP.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "version")
-	if newVersion != "4" {
-		t.Errorf("Expected new HEAD version to be 4, got %s", newVersion)
+	newVersionSecure, _ := mockKP.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "version")
+	if newVersionSecure == nil {
+		t.Errorf("Expected version to exist")
+	} else {
+		defer newVersionSecure.Clear()
+		if newVersionSecure.String() != "4" {
+			t.Errorf("Expected new HEAD version to be 4, got %s", newVersionSecure.String())
+		}
 	}
 
 	// Verify SaveAndClose was called
@@ -259,10 +264,11 @@ outputs: []`
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validatorMgr)
 
 	// Get HEAD version before restore (should be 6)
-	headVersionBefore, _ := mockKP.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "version")
-	if headVersionBefore != "6" {
-		t.Fatalf("Expected HEAD version to be 6 before restore, got %s", headVersionBefore)
+	headVersionBeforeSecure, _ := mockKP.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "version")
+	if headVersionBeforeSecure == nil || headVersionBeforeSecure.String() != "6" {
+		t.Fatalf("Expected HEAD version to be 6 before restore, got %s", headVersionBeforeSecure.String())
 	}
+	defer headVersionBeforeSecure.Clear()
 
 	// Restore v2
 	err := secretsMgr.SnapshotsRestore("test-profile", "v2")
@@ -277,9 +283,10 @@ outputs: []`
 	}
 
 	// Verify new HEAD version is 7
-	newVersion, _ := mockKP.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "version")
+	newVersionSecure, _ := mockKP.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "version")
 	expectedVersion := strconv.Itoa(7)
-	if newVersion != expectedVersion {
-		t.Errorf("Expected new HEAD version to be %s, got %s", expectedVersion, newVersion)
+	if newVersionSecure == nil || newVersionSecure.String() != expectedVersion {
+		t.Errorf("Expected new HEAD version to be %s, got %s", expectedVersion, newVersionSecure.String())
 	}
+	defer newVersionSecure.Clear()
 }

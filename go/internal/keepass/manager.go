@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Yohnah/secrets/internal/secrets/common"
 	"github.com/tobischo/gokeepasslib/v3"
 )
 
@@ -46,7 +47,7 @@ type Manager interface {
 
 	// Snapshots operations (require open session)
 	ListProfileTreeGroups(profileName string) ([]string, error)
-	GetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName string) (string, error)
+	GetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName string) (*common.SecureValue, error)
 	CloneTreeGroup(profileName, sourceTreeGroup, targetTreeGroup string) error
 	SetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName, value string) error
 	TreeGroupExists(profileName, treeGroup string) (bool, error)
@@ -1891,46 +1892,46 @@ func (m *manager) ListProfileTreeGroups(profileName string) ([]string, error) {
 // treeGroup: the tree group name (e.g., "HEAD", "v1", "v2")
 // entryPath: path to the entry (e.g., "metadata" or "/env/path/to/entry")
 // fieldName: the field name to retrieve
-func (m *manager) GetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName string) (string, error) {
+func (m *manager) GetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName string) (*common.SecureValue, error) {
 	// Validate session
 	if m.db == nil {
-		return "", fmt.Errorf("database not open")
+		return nil, fmt.Errorf("database not open")
 	}
 
 	// Validate input
 	if profileName == "" {
-		return "", fmt.Errorf("profile name cannot be empty")
+		return nil, fmt.Errorf("profile name cannot be empty")
 	}
 	if treeGroup == "" {
-		return "", fmt.Errorf("tree group name cannot be empty")
+		return nil, fmt.Errorf("tree group name cannot be empty")
 	}
 	if entryPath == "" {
-		return "", fmt.Errorf("entry path cannot be empty")
+		return nil, fmt.Errorf("entry path cannot be empty")
 	}
 	if fieldName == "" {
-		return "", fmt.Errorf("field name cannot be empty")
+		return nil, fmt.Errorf("field name cannot be empty")
 	}
 
 	// Find profile group
 	if len(m.db.Content.Root.Groups) == 0 {
-		return "", fmt.Errorf("no groups in database")
+		return nil, fmt.Errorf("no groups in database")
 	}
 
 	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
 	if err != nil {
-		return "", fmt.Errorf("profile '%s' not found: %w", profileName, err)
+		return nil, fmt.Errorf("profile '%s' not found: %w", profileName, err)
 	}
 
 	// Find tree group (HEAD, v1, v2, etc.)
 	treeGroupObj, err := findGroupByName(profileGroup, treeGroup)
 	if err != nil {
-		return "", fmt.Errorf("tree group '%s' not found in profile '%s': %w", treeGroup, profileName, err)
+		return nil, fmt.Errorf("tree group '%s' not found in profile '%s': %w", treeGroup, profileName, err)
 	}
 
 	// Find entry by path
 	entry, err := findEntryByPath(treeGroupObj, entryPath)
 	if err != nil {
-		return "", fmt.Errorf("entry '%s' not found in tree group '%s': %w", entryPath, treeGroup, err)
+		return nil, fmt.Errorf("entry '%s' not found in tree group '%s': %w", entryPath, treeGroup, err)
 	}
 
 	// Find field in entry
@@ -1940,17 +1941,17 @@ func (m *manager) GetTreeGroupEntryField(profileName, treeGroup, entryPath, fiel
 		if isStandard {
 			// Case-insensitive comparison for standard fields
 			if strings.ToLower(value.Key) == strings.ToLower(fieldName) {
-				return value.Value.Content, nil
+				return common.NewSecureValue(value.Value.Content), nil
 			}
 		} else {
 			// Case-sensitive comparison for custom fields
 			if value.Key == fieldName {
-				return value.Value.Content, nil
+				return common.NewSecureValue(value.Value.Content), nil
 			}
 		}
 	}
 
-	return "", fmt.Errorf("field '%s' not found in entry '%s'", fieldName, entryPath)
+	return nil, fmt.Errorf("field '%s' not found in entry '%s'", fieldName, entryPath)
 }
 
 // CloneTreeGroup clones a source tree group to a new tree group within the same profile

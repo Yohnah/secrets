@@ -65,7 +65,8 @@ func (s *service) Status() error {
 				if err != nil {
 					accessError = fmt.Sprintf("failed to get password: %v", err)
 				} else {
-					password = pwd
+					password = pwd.String()
+					pwd.Clear()
 				}
 			}
 		}

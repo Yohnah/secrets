@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Yohnah/secrets/internal/secrets/common"
 	"golang.org/x/term"
 )
 
@@ -13,8 +14,8 @@ import (
 type Manager interface {
 	Confirm(message string) (bool, error)
 	ConfirmWithDefault(message string, defaultYes bool) (bool, error)
-	PromptPassword(message string) (string, error)
-	PromptPasswordConfirm(message string) (string, error)
+	PromptPassword(message string) (*common.SecureValue, error)
+	PromptPasswordConfirm(message string) (*common.SecureValue, error)
 }
 
 type manager struct {
@@ -60,38 +61,42 @@ func (m *manager) ConfirmWithDefault(message string, defaultYes bool) (bool, err
 }
 
 // PromptPassword asks user for password without echoing input
-func (m *manager) PromptPassword(message string) (string, error) {
+func (m *manager) PromptPassword(message string) (*common.SecureValue, error) {
 	fmt.Fprint(os.Stderr, message)
 
 	password, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Fprintln(os.Stderr) // New line after password input
 
 	if err != nil {
-		return "", fmt.Errorf("failed to read password: %w", err)
+		return nil, fmt.Errorf("failed to read password: %w", err)
 	}
 
-	return string(password), nil
+	return common.NewSecureValue(string(password)), nil
 }
 
 // PromptPasswordConfirm asks user for password twice to confirm
 // Returns error if passwords don't match
-func (m *manager) PromptPasswordConfirm(message string) (string, error) {
+func (m *manager) PromptPasswordConfirm(message string) (*common.SecureValue, error) {
 	// First prompt
 	password1, err := m.PromptPassword(message + " (first time): ")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Second prompt
 	password2, err := m.PromptPassword(message + " (confirm): ")
 	if err != nil {
-		return "", err
+		password1.Clear() // Clean up on error
+		return nil, err
 	}
 
 	// Verify passwords match
-	if password1 != password2 {
-		return "", fmt.Errorf("passwords do not match")
+	if password1.String() != password2.String() {
+		password1.Clear()
+		password2.Clear()
+		return nil, fmt.Errorf("passwords do not match")
 	}
 
+	password2.Clear() // Clean up the second password
 	return password1, nil
 }
