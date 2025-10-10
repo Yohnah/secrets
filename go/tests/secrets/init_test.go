@@ -31,7 +31,7 @@ func setupTestDir(t *testing.T) string {
 // setupTestPassword sets up the password environment variable for tests
 // and ensures it's cleaned up after the test completes
 func setupTestPassword(t *testing.T) {
-	testPassword := "test-password-123"
+	testPassword := "TestPassword123!"
 	os.Setenv("SECRETS_YOHNAH_PASSWORD", testPassword)
 	t.Cleanup(func() {
 		os.Unsetenv("SECRETS_YOHNAH_PASSWORD")

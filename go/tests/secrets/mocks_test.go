@@ -57,7 +57,7 @@ func (m *mockKeePassManager) Open(dbPath, keyfilePath, password string) error {
 		// Fall back to environment variable
 		expectedPassword = os.Getenv("SECRETS_YOHNAH_PASSWORD")
 		if expectedPassword == "" {
-			expectedPassword = "test-password-123" // fallback
+			expectedPassword = "TestPassword123!" // fallback
 		}
 	}
 	if password != expectedPassword {
@@ -510,6 +510,18 @@ func (m *mockConfigManager) ShouldIgnoreConfigFile() bool {
 
 func (m *mockConfigManager) ShouldIgnoreGitProject() bool {
 	return true
+}
+
+func (m *mockConfigManager) GetPassword() (string, error) {
+	return "TestPassword123!", nil
+}
+
+func (m *mockConfigManager) IsNoInteractive() bool {
+	return false
+}
+
+func (m *mockConfigManager) GenerateSecurePassword() string {
+	return "TestPassword123!"
 }
 
 // mockValidatorManager is a mock implementation of validator.ValidatorManager for testing

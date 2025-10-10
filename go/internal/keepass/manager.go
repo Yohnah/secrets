@@ -60,13 +60,24 @@ type manager struct {
 	db          *gokeepasslib.Database
 	dbPath      string
 	keyfilePath string
-	password    string
+	password    []byte // Changed from string to []byte for secure cleanup
 }
 
 // NewManager creates a new instance of the KeePass Manager
 func NewManager() Manager {
 	return &manager{
 		db: nil,
+	}
+}
+
+// clearPassword securely overwrites password in memory
+func (m *manager) clearPassword() {
+	if m.password != nil {
+		// Overwrite with zeros before releasing
+		for i := range m.password {
+			m.password[i] = 0
+		}
+		m.password = nil
 	}
 }
 
@@ -129,7 +140,7 @@ func (m *manager) Open(dbPath, keyfilePath, password string) error {
 	m.db = db
 	m.dbPath = sanitizedDBPath
 	m.keyfilePath = sanitizedKeyfilePath
-	m.password = password
+	m.password = []byte(password) // Convert string to []byte for secure cleanup
 
 	return nil
 }
@@ -147,18 +158,18 @@ func (m *manager) SaveAndClose() error {
 		m.db = nil
 		m.dbPath = ""
 		m.keyfilePath = ""
-		m.password = ""
+		m.clearPassword()
 		return fmt.Errorf("failed to lock database: %w", err)
 	}
 
-	// Open file for writing
-	file, err := os.Create(m.dbPath)
+	// Open file for writing with secure permissions
+	file, err := os.OpenFile(m.dbPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		// Clear session even on error
 		m.db = nil
 		m.dbPath = ""
 		m.keyfilePath = ""
-		m.password = ""
+		m.clearPassword()
 		return fmt.Errorf("failed to open database file for writing: %w", err)
 	}
 	defer file.Close()
@@ -171,7 +182,7 @@ func (m *manager) SaveAndClose() error {
 		m.db = nil
 		m.dbPath = ""
 		m.keyfilePath = ""
-		m.password = ""
+		m.clearPassword()
 		return fmt.Errorf("failed to encode database: %w", err)
 	}
 
@@ -179,7 +190,7 @@ func (m *manager) SaveAndClose() error {
 	m.db = nil
 	m.dbPath = ""
 	m.keyfilePath = ""
-	m.password = ""
+	m.clearPassword()
 
 	return nil
 }
@@ -194,7 +205,7 @@ func (m *manager) CloseWithoutSave() error {
 	m.db = nil
 	m.dbPath = ""
 	m.keyfilePath = ""
-	m.password = ""
+	m.clearPassword()
 
 	return nil
 }
@@ -227,6 +238,49 @@ func sanitizePath(path string) (string, error) {
 	// Additional check: ensure the path doesn't start with .. after cleaning
 	if strings.HasPrefix(cleanPath, "..") {
 		return "", fmt.Errorf("path traversal detected")
+	}
+
+	// Validate symlinks: ensure the path doesn't traverse outside intended directory
+	// Get absolute path to evaluate symlinks
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	// Evaluate symlinks (resolve to final target)
+	evalPath, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		// If symlink doesn't exist yet, that's OK (file creation case)
+		// Check if it's because the file doesn't exist
+		if os.IsNotExist(err) {
+			// For non-existent paths, check parent directory instead
+			parentDir := filepath.Dir(absPath)
+			if parentDir != "" && parentDir != "." {
+				evalParent, err := filepath.EvalSymlinks(parentDir)
+				if err != nil && !os.IsNotExist(err) {
+					return "", fmt.Errorf("failed to evaluate parent directory symlinks: %w", err)
+				}
+				// Reconstruct path with evaluated parent
+				if evalParent != "" {
+					evalPath = filepath.Join(evalParent, filepath.Base(absPath))
+				} else {
+					evalPath = absPath
+				}
+			} else {
+				evalPath = absPath
+			}
+		} else {
+			return "", fmt.Errorf("failed to evaluate symlinks: %w", err)
+		}
+	}
+
+	// Additional security: ensure resolved path doesn't escape to dangerous locations
+	// This prevents symlink attacks pointing to /etc/passwd, /root/, etc.
+	if strings.HasPrefix(evalPath, "/etc/") ||
+		strings.HasPrefix(evalPath, "/root/") ||
+		strings.HasPrefix(evalPath, "/sys/") ||
+		strings.HasPrefix(evalPath, "/proc/") {
+		return "", fmt.Errorf("path resolves to forbidden system directory")
 	}
 
 	return cleanPath, nil

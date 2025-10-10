@@ -42,13 +42,14 @@ func (s *service) Tree(profileName, environmentName, outputFormat string) error 
 	}
 
 	// Get configuration
-	cfg, err := s.config.GetConfig()
+	// Get configuration (not used for password, but kept for consistency)
+	_, err = s.config.GetConfig()
 	if err != nil {
 		return fmt.Errorf("failed to get configuration: %w", err)
 	}
 
 	// Get password (secure)
-	securePassword, err := common.GetPassword(cfg, s.prompt, s.logger, false)
+	securePassword, err := common.GetPassword(s.config, s.prompt, s.logger, false)
 	if err != nil {
 		return err
 	}

@@ -76,7 +76,7 @@ deps:
 .PHONY: tests
 tests: ## Run all tests with verbose output and colors
 	@echo "Running all tests..."
-	cd $(GO_DIR) && richgo test -v ./...
+	cd $(GO_DIR) && go test ./...
 	@echo "All tests completed successfully"
 
 .PHONY: clean

@@ -22,7 +22,7 @@ func TestCreateProfile(t *testing.T) {
 	// Create temporary database and keyfile paths
 	dbPath := filepath.Join(tempDir, "test.kdbx")
 	keyfilePath := filepath.Join(tempDir, "test.key")
-	password := "testpassword123"
+	password := "TestPassword123!"
 
 	// Create KeePassManager
 	keepassManager := newMockKeePassManager()
@@ -138,7 +138,7 @@ func TestCreateProfileIdempotent(t *testing.T) {
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "test.kdbx")
 	keyfilePath := filepath.Join(tempDir, "test.key")
-	password := "testpassword123"
+	password := "TestPassword123!"
 
 	keepassManager := newMockKeePassManager()
 
@@ -197,7 +197,7 @@ func TestProfileExists(t *testing.T) {
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "test.kdbx")
 	keyfilePath := filepath.Join(tempDir, "test.key")
-	password := "testpassword123"
+	password := "TestPassword123!"
 
 	keepassManager := newMockKeePassManager()
 
@@ -270,7 +270,7 @@ outputs: []`
 	}
 
 	// Set password env var
-	os.Setenv("SECRETS_YOHNAH_PASSWORD", "testpassword123")
+	os.Setenv("SECRETS_YOHNAH_PASSWORD", "TestPassword123!")
 	defer os.Unsetenv("SECRETS_YOHNAH_PASSWORD")
 
 	// Create paths
@@ -310,7 +310,7 @@ outputs: []`
 	}
 
 	// Verify: Profile was created
-	err = keepassMgr.Open(dbPath, keyfilePath, "testpassword123")
+	err = keepassMgr.Open(dbPath, keyfilePath, "TestPassword123!")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
@@ -362,7 +362,7 @@ outputs: []`
 	}
 
 	// Set password env var
-	os.Setenv("SECRETS_YOHNAH_PASSWORD", "testpassword123")
+	os.Setenv("SECRETS_YOHNAH_PASSWORD", "TestPassword123!")
 	defer os.Unsetenv("SECRETS_YOHNAH_PASSWORD")
 
 	// Create paths
@@ -402,7 +402,7 @@ outputs: []`
 	}
 
 	// Verify: Profile was created from custom location
-	err = keepassMgr.Open(dbPath, keyfilePath, "testpassword123")
+	err = keepassMgr.Open(dbPath, keyfilePath, "TestPassword123!")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
@@ -476,7 +476,7 @@ outputs: []`
 	}
 
 	// Set password env var
-	os.Setenv("SECRETS_YOHNAH_PASSWORD", "testpassword123")
+	os.Setenv("SECRETS_YOHNAH_PASSWORD", "TestPassword123!")
 	defer os.Unsetenv("SECRETS_YOHNAH_PASSWORD")
 
 	// Create paths
@@ -516,7 +516,7 @@ outputs: []`
 	}
 
 	// Verify: Profile from current directory was loaded
-	err = keepassMgr.Open(dbPath, keyfilePath, "testpassword123")
+	err = keepassMgr.Open(dbPath, keyfilePath, "TestPassword123!")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}

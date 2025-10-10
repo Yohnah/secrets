@@ -214,7 +214,7 @@ func (s *service) Init() error {
 		}
 
 		// Get password (1 time for verification) - secure
-		securePassword, err := common.GetPassword(cfg, s.prompt, s.logger, false)
+		securePassword, err := common.GetPassword(s.config, s.prompt, s.logger, false)
 		if err != nil {
 			return err
 		}
@@ -292,7 +292,7 @@ func (s *service) Init() error {
 	s.logger.Info("Creating new database and keyfile...")
 
 	// Get password (2 times for creation - confirmation) - secure
-	securePassword, err := common.GetPassword(cfg, s.prompt, s.logger, true)
+	securePassword, err := common.GetPassword(s.config, s.prompt, s.logger, true)
 	if err != nil {
 		return err
 	}

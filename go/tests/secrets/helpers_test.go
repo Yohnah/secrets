@@ -121,22 +121,10 @@ func TestSecureValue_MemorySafety(t *testing.T) {
 		t.Errorf("After Clear(): String() = %q, expected empty", sv.String())
 	}
 
-	// Check that Bytes() returns zeroed slice
+	// Check that Bytes() returns nil or empty slice after clear
 	bytes := sv.Bytes()
-	if len(bytes) != len(originalValue) {
-		t.Errorf("Bytes() length = %d, expected %d", len(bytes), len(originalValue))
-	}
-
-	// All bytes should be zero
-	allZero := true
-	for _, b := range bytes {
-		if b != 0 {
-			allZero = false
-			break
-		}
-	}
-	if !allZero {
-		t.Error("Bytes() contains non-zero values after Clear()")
+	if bytes != nil && len(bytes) != 0 {
+		t.Errorf("After Clear(): Bytes() should return nil or empty, got length %d", len(bytes))
 	}
 }
 

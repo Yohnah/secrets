@@ -1,11 +1,14 @@
 package common
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/Yohnah/secrets/internal/config"
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/validator"
 )
@@ -14,6 +17,12 @@ import (
 type PromptManagerInterface interface {
 	PromptPassword(message string) (*SecureValue, error)
 	PromptPasswordConfirm(message string) (*SecureValue, error)
+}
+
+// PasswordProvider defines the interface for obtaining passwords
+type PasswordProvider interface {
+	GetPassword() (string, error)
+	IsNoInteractive() bool
 }
 
 // FileExists checks if a file exists at the given path
@@ -71,7 +80,10 @@ func (sp *SecurePassword) Clear() {
 // SecureValue is a wrapper for sensitive string values that ensures memory cleanup
 // This type helps prevent sensitive data from remaining in memory after use
 type SecureValue struct {
-	data []byte
+	data        []byte
+	encrypted   []byte
+	isEncrypted bool
+	key         []byte
 }
 
 // NewSecureValue creates a new SecureValue from a string
@@ -86,7 +98,20 @@ func NewSecureValue(value string) *SecureValue {
 // WARNING: The returned string will remain in memory until garbage collected
 // Use this method only when absolutely necessary and clear the result when done
 func (sv *SecureValue) String() string {
-	if sv == nil || sv.data == nil {
+	if sv == nil {
+		return ""
+	}
+
+	// If encrypted, decrypt first
+	if sv.isEncrypted && sv.encrypted != nil {
+		decrypted, err := sv.decrypt()
+		if err != nil {
+			return ""
+		}
+		return string(decrypted)
+	}
+
+	if sv.data == nil {
 		return ""
 	}
 	// Check if data has been cleared (all zeros)
@@ -103,25 +128,140 @@ func (sv *SecureValue) String() string {
 	return string(sv.data)
 }
 
-// Bytes returns the value as a byte slice
+// Bytes returns a copy of the value as a byte slice
 func (sv *SecureValue) Bytes() []byte {
-	if sv == nil || sv.data == nil {
+	if sv == nil {
 		return nil
 	}
-	return sv.data
+
+	// If encrypted, decrypt first
+	if sv.isEncrypted && sv.encrypted != nil {
+		decrypted, err := sv.decrypt()
+		if err != nil {
+			return nil
+		}
+		return decrypted
+	}
+
+	if sv.data == nil {
+		return nil
+	}
+	// Return a copy to prevent external modifications
+	cpy := make([]byte, len(sv.data))
+	copy(cpy, sv.data)
+	return cpy
 }
 
 // Clear securely erases the value from memory
 // This should be called as soon as the value is no longer needed
 func (sv *SecureValue) Clear() {
-	if sv != nil && sv.data != nil {
-		// Overwrite memory with zeros
-		for i := range sv.data {
-			sv.data[i] = 0
+	if sv != nil {
+		if sv.data != nil {
+			// Overwrite memory with zeros
+			for i := range sv.data {
+				sv.data[i] = 0
+			}
+			sv.data = nil
 		}
-		// Keep the slice allocated but zeroed for inspection
-		// sv.data = nil  // Don't nil the slice, keep it zeroed
+		if sv.encrypted != nil {
+			// Overwrite encrypted data with zeros
+			for i := range sv.encrypted {
+				sv.encrypted[i] = 0
+			}
+			sv.encrypted = nil
+		}
+		if sv.key != nil {
+			// Overwrite key with zeros
+			for i := range sv.key {
+				sv.key[i] = 0
+			}
+			sv.key = nil
+		}
+		sv.isEncrypted = false
 	}
+}
+
+// Encrypt encrypts the SecureValue data using AES-GCM with a derived key
+func (sv *SecureValue) Encrypt(password string) error {
+	if sv == nil || sv.data == nil || sv.isEncrypted {
+		return nil // Already encrypted or no data
+	}
+
+	// Derive key from password using SHA-256
+	hash := sha256.Sum256([]byte(password))
+	key := hash[:]
+
+	// Create AES cipher
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	// Create GCM mode
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	// Generate nonce
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return fmt.Errorf("failed to generate nonce: %w", err)
+	}
+
+	// Encrypt data
+	encrypted := gcm.Seal(nonce, nonce, sv.data, nil)
+
+	// Store encrypted data and key
+	sv.encrypted = make([]byte, len(encrypted))
+	copy(sv.encrypted, encrypted)
+	sv.key = make([]byte, len(key))
+	copy(sv.key, key)
+	sv.isEncrypted = true
+
+	// Clear plaintext data
+	for i := range sv.data {
+		sv.data[i] = 0
+	}
+	sv.data = nil
+
+	return nil
+}
+
+// decrypt decrypts the SecureValue data
+func (sv *SecureValue) decrypt() ([]byte, error) {
+	if !sv.isEncrypted || sv.encrypted == nil || sv.key == nil {
+		return nil, fmt.Errorf("data is not encrypted")
+	}
+
+	// Create AES cipher
+	block, err := aes.NewCipher(sv.key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	// Create GCM mode
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(sv.encrypted) < nonceSize {
+		return nil, fmt.Errorf("encrypted data too short")
+	}
+
+	// Extract nonce and ciphertext
+	nonce := sv.encrypted[:nonceSize]
+	ciphertext := sv.encrypted[nonceSize:]
+
+	// Decrypt data
+	decrypted, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt: %w", err)
+	}
+
+	return decrypted, nil
 }
 
 // SecureSlice is a wrapper for slices containing sensitive data that ensures memory cleanup
@@ -174,14 +314,13 @@ func (sm *SecureMap[K, V]) Clear() {
 	}
 }
 
-// GetPassword retrieves password from config or prompts user
-// This function implements secure password handling and memory cleanup
+// GetPassword obtains a password from various sources with proper security handling
 //
 // Parameters:
-//   - cfg: Configuration with Password and NoInteractive fields
-//   - prm: PromptManager for interactive password input
-//   - log: LoggerManager for debug messages
-//   - creating: If true, prompts twice for confirmation (new password)
+//   - provider: PasswordProvider interface for obtaining passwords
+//   - prm: PromptManagerInterface for user interaction
+//   - log: LoggerManager for logging operations
+//   - creating: Whether this is for database creation (affects messaging)
 //
 // Returns:
 //   - *SecurePassword: Password wrapped in secure container (caller must call Clear() when done)
@@ -189,37 +328,41 @@ func (sm *SecureMap[K, V]) Clear() {
 //
 // Security: The returned SecurePassword must be cleared after use by calling Clear()
 // to prevent password from remaining in memory
-func GetPassword(cfg *config.Config, prm PromptManagerInterface, log logger.Manager, creating bool) (*SecurePassword, error) {
-	// Check if password is provided via config (from env var or other sources)
-	if cfg.Password != "" {
+func GetPassword(provider interface {
+	GetPassword() (string, error)
+	IsNoInteractive() bool
+}, prm PromptManagerInterface, log logger.Manager, creating bool) (*SecurePassword, error) {
+	// Try to get password from provider (env var, etc.)
+	password, err := provider.GetPassword()
+	if err == nil && password != "" {
 		log.Debug("Using password from configuration (SECRETS_YOHNAH_PASSWORD environment variable)")
-		return NewSecurePassword(cfg.Password), nil
+		return NewSecurePassword(password), nil
 	}
 
 	// If in non-interactive mode and no password provided, fail
-	if cfg.NoInteractive {
+	if provider.IsNoInteractive() {
 		return nil, fmt.Errorf("password required. Set SECRETS_YOHNAH_PASSWORD environment variable or remove -f flag")
 	}
 
 	// Prompt user for password
-	var passwordSecure *SecureValue
-	var err error
+	var promptedPassword *SecureValue
+	var promptErr error
 
 	if creating {
 		// Creating new database: ask twice for confirmation
-		passwordSecure, err = prm.PromptPasswordConfirm("Enter database password")
+		promptedPassword, promptErr = prm.PromptPasswordConfirm("Enter database password")
 	} else {
 		// Verifying existing database: ask once
-		passwordSecure, err = prm.PromptPassword("Enter database password: ")
+		promptedPassword, promptErr = prm.PromptPassword("Enter database password: ")
 	}
 
-	if err != nil {
-		return nil, err
+	if promptErr != nil {
+		return nil, promptErr
 	}
 
 	// Convert to SecurePassword and clear the temporary SecureValue
-	securePassword := NewSecurePassword(passwordSecure.String())
-	passwordSecure.Clear()
+	securePassword := NewSecurePassword(promptedPassword.String())
+	promptedPassword.Clear()
 	return securePassword, nil
 }
 

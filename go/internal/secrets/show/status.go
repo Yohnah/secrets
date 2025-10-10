@@ -55,9 +55,10 @@ func (s *service) Status() error {
 	var accessError string
 	var db *gokeepasslib.Database // Keep reference for validation later
 	if dbExists && keyfileExists {
-		password := cfg.Password
-		if password == "" {
-			if cfg.NoInteractive {
+		password, err := s.config.GetPassword()
+		if err != nil {
+			// If GetPassword failed and we're in no-interactive mode, report error
+			if s.config.IsNoInteractive() {
 				accessError = "password required (use SECRETS_YOHNAH_PASSWORD environment variable)"
 			} else {
 				// Ask for password
@@ -250,11 +251,6 @@ func (s *service) Status() error {
 	// Pass structured data + format to OutputManager
 	if err := s.output.Output(statusData, format); err != nil {
 		return fmt.Errorf("failed to output status: %w", err)
-	}
-
-	// Return error if database is not accessible
-	if !accessible && dbExists {
-		return fmt.Errorf("database is not accessible: %s", accessError)
 	}
 
 	return nil

@@ -68,9 +68,12 @@ outputs: []`
 	// Read HEAD datetime before creating snapshot
 	dbPath := configMgr.GetDatabasePath()
 	keyfilePath := configMgr.GetKeyfilePath()
-	cfg, _ := configMgr.GetConfig()
+	password, err := configMgr.GetPassword()
+	if err != nil {
+		t.Fatalf("Failed to get password: %v", err)
+	}
 
-	err = kpMgr.Open(dbPath, keyfilePath, cfg.Password)
+	err = kpMgr.Open(dbPath, keyfilePath, password)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
@@ -91,7 +94,7 @@ outputs: []`
 
 	// Verify v1 was created and HEAD is at version 2
 	// Open database to verify
-	err = kpMgr.Open(dbPath, keyfilePath, cfg.Password)
+	err = kpMgr.Open(dbPath, keyfilePath, password)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
@@ -278,9 +281,12 @@ outputs: []`
 	// Open database and manually delete profile-not-in-db to simulate scenario
 	dbPath := configMgr.GetDatabasePath()
 	keyfilePath := configMgr.GetKeyfilePath()
-	cfg, _ := configMgr.GetConfig()
+	password, err := configMgr.GetPassword()
+	if err != nil {
+		t.Fatalf("Failed to get password: %v", err)
+	}
 
-	err = kpMgr.Open(dbPath, keyfilePath, cfg.Password)
+	err = kpMgr.Open(dbPath, keyfilePath, password)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
@@ -383,9 +389,12 @@ outputs: []`
 	// Verify all snapshots were created
 	dbPath := configMgr.GetDatabasePath()
 	keyfilePath := configMgr.GetKeyfilePath()
-	cfg, _ := configMgr.GetConfig()
+	password, err := configMgr.GetPassword()
+	if err != nil {
+		t.Fatalf("Failed to get password: %v", err)
+	}
 
-	err = kpMgr.Open(dbPath, keyfilePath, cfg.Password)
+	err = kpMgr.Open(dbPath, keyfilePath, password)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}

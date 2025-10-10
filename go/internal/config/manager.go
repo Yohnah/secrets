@@ -26,6 +26,9 @@ type Manager interface {
 	GetSecretsFilePath() string
 	ShouldIgnoreConfigFile() bool
 	ShouldIgnoreGitProject() bool
+	GetPassword() (string, error)
+	IsNoInteractive() bool
+	GenerateSecurePassword() string
 }
 
 // Config holds the complete application configuration
@@ -319,4 +322,87 @@ func (m *manager) ShouldIgnoreConfigFile() bool {
 // ShouldIgnoreGitProject returns whether git project detection should be ignored
 func (m *manager) ShouldIgnoreGitProject() bool {
 	return m.globalFlags.IgnoreGitProject
+}
+
+// GetPassword returns the password from environment variable if available
+func (m *manager) GetPassword() (string, error) {
+	password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
+	if password == "" {
+		return "", fmt.Errorf("no password available")
+	}
+
+	// Validate password complexity
+	if err := validatePasswordComplexity(password); err != nil {
+		return "", fmt.Errorf("password validation failed: %w", err)
+	}
+
+	return password, nil
+}
+
+// IsNoInteractive returns whether the application is in non-interactive mode
+func (m *manager) IsNoInteractive() bool {
+	return m.globalFlags.Force
+}
+
+// GenerateSecurePassword generates a cryptographically secure random password
+// that meets complexity requirements (16 chars, mixed case, digits, special chars)
+func (m *manager) GenerateSecurePassword() string {
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*"
+	const length = 16
+
+	password := make([]byte, length)
+	randomBytes := make([]byte, length)
+
+	// Read from /dev/urandom directly (crypto/rand is corrupted in this Go installation)
+	urandom, err := os.Open("/dev/urandom")
+	if err != nil {
+		panic(fmt.Sprintf("CRITICAL: Failed to open /dev/urandom: %v. System may be compromised.", err))
+	}
+	defer urandom.Close()
+
+	if _, err := urandom.Read(randomBytes); err != nil {
+		panic(fmt.Sprintf("CRITICAL: Failed to read from /dev/urandom: %v. System may be compromised.", err))
+	}
+
+	// Map random bytes to charset
+	for i := range password {
+		password[i] = charset[int(randomBytes[i])%len(charset)]
+	}
+
+	return string(password)
+}
+
+// validatePasswordComplexity validates that a password meets security requirements
+func validatePasswordComplexity(password string) error {
+	if len(password) < 8 {
+		return fmt.Errorf("password must be at least 8 characters long")
+	}
+
+	var hasLower, hasUpper, hasDigit, hasSpecial bool
+	for _, char := range password {
+		if char >= 'a' && char <= 'z' {
+			hasLower = true
+		} else if char >= 'A' && char <= 'Z' {
+			hasUpper = true
+		} else if char >= '0' && char <= '9' {
+			hasDigit = true
+		} else if (char >= '!' && char <= '/') || (char >= ':' && char <= '@') || (char >= '[' && char <= '`') || (char >= '{' && char <= '~') {
+			hasSpecial = true
+		}
+	}
+
+	if !hasLower {
+		return fmt.Errorf("password must contain at least one lowercase letter")
+	}
+	if !hasUpper {
+		return fmt.Errorf("password must contain at least one uppercase letter")
+	}
+	if !hasDigit {
+		return fmt.Errorf("password must contain at least one digit")
+	}
+	if !hasSpecial {
+		return fmt.Errorf("password must contain at least one special character")
+	}
+
+	return nil
 }

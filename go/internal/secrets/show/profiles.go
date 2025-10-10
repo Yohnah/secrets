@@ -65,7 +65,7 @@ func (s *service) Profiles(profileFilter string) error {
 	}
 
 	// Step 4: Get password (secure)
-	securePassword, err := common.GetPassword(cfg, s.prompt, s.logger, false)
+	securePassword, err := common.GetPassword(s.config, s.prompt, s.logger, false)
 	if err != nil {
 		return err
 	}
