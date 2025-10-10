@@ -42,7 +42,7 @@ func (m *manager) ConfirmWithDefault(message string, defaultYes bool) (bool, err
 		prompt = fmt.Sprintf("%s (y/N): ", message)
 	}
 
-	fmt.Print(prompt)
+	fmt.Fprint(os.Stderr, prompt)
 
 	response, err := m.reader.ReadString('\n')
 	if err != nil {
@@ -61,10 +61,10 @@ func (m *manager) ConfirmWithDefault(message string, defaultYes bool) (bool, err
 
 // PromptPassword asks user for password without echoing input
 func (m *manager) PromptPassword(message string) (string, error) {
-	fmt.Print(message)
+	fmt.Fprint(os.Stderr, message)
 
 	password, err := term.ReadPassword(int(os.Stdin.Fd()))
-	fmt.Println() // New line after password input
+	fmt.Fprintln(os.Stderr) // New line after password input
 
 	if err != nil {
 		return "", fmt.Errorf("failed to read password: %w", err)
