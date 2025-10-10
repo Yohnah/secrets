@@ -438,9 +438,9 @@ func TestErrorMessageSanitization(t *testing.T) {
 				// Look for SecureValue.String() or SecurePassword.String() in error messages
 				if strings.Contains(line, ".String()") {
 					// Check if it's a secure type
-					if strings.Contains(line, "securePassword") || 
-					   strings.Contains(line, "secureValue") ||
-					   strings.Contains(line, "password.String()") {
+					if strings.Contains(line, "securePassword") ||
+						strings.Contains(line, "secureValue") ||
+						strings.Contains(line, "password.String()") {
 						violations = append(violations, filepath.Base(path)+":"+string(rune(i+1))+": Sensitive data in error message")
 					}
 				}
@@ -475,9 +475,9 @@ func TestCentralizedPasswordAccess(t *testing.T) {
 		}
 
 		// Skip test files, vendor, and config manager itself
-		if strings.HasSuffix(path, "_test.go") || 
-		   strings.Contains(path, "/vendor/") ||
-		   strings.Contains(path, "/config/manager.go") {
+		if strings.HasSuffix(path, "_test.go") ||
+			strings.Contains(path, "/vendor/") ||
+			strings.Contains(path, "/config/manager.go") {
 			return nil
 		}
 
