@@ -76,8 +76,17 @@ deps:
 .PHONY: tests
 tests: ## Run all tests with verbose output and colors
 	@echo "Running all tests..."
-	cd $(GO_DIR) && go test ./...
-	@echo "All tests completed successfully"
+	@cd $(GO_DIR) && go test -v ./... | sed \
+		-e 's/^=== RUN.*/\x1b[36m&\x1b[0m/' \
+		-e 's/^--- PASS.*/\x1b[32m&\x1b[0m/' \
+		-e 's/^--- FAIL.*/\x1b[31m&\x1b[0m/' \
+		-e 's/^PASS$$/\x1b[32;1m&\x1b[0m/' \
+		-e 's/^FAIL.*/\x1b[31;1m&\x1b[0m/' \
+		-e 's/^ok .*/\x1b[32m&\x1b[0m/' \
+		-e 's/^\?.*\[no test files\]/\x1b[90m&\x1b[0m/' \
+		|| (printf "\033[31m✗ Tests failed\033[0m\n" && exit 1)
+	@echo ""
+	@printf "\033[32;1m✓ All tests completed successfully\033[0m\n"
 
 .PHONY: clean
 clean: ## Clean test artifacts, temporary files and binaries
