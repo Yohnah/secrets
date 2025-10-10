@@ -118,6 +118,17 @@ func (m *mockKeePassManager) CreateDatabase(dbPath, keyfilePath, password, rootG
 	// Set the expected password for this database path
 	mockPasswordsByDB[dbPath] = password
 
+	// Initialize database structure with the custom root group name
+	m.db = &gokeepasslib.Database{
+		Content: &gokeepasslib.DBContent{
+			Root: &gokeepasslib.RootData{
+				Groups: []gokeepasslib.Group{
+					{Name: rootGroupName, Groups: []gokeepasslib.Group{}},
+				},
+			},
+		},
+	}
+
 	// Create dummy database file
 	file, err := os.Create(dbPath)
 	if err != nil {

@@ -82,6 +82,7 @@ func TestAllTestsUseMocks(t *testing.T) {
 			"init_test.go",
 			"init_database_test.go",
 			"init_profiles_test.go",
+			"setup_test.go",
 			"status_test.go",
 			"show_profiles_test.go",
 			"show_tree_test.go",
