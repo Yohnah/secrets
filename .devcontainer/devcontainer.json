@@ -43,6 +43,9 @@
             ]
         }
     },
+    "containerEnv": {
+        "workspaceFolder": "/workspaces/secrets"
+    },
     "remoteUser": "vscode",
     "postCreateCommand": "/usr/local/bin/fix-go-permissions && /usr/local/bin/setup-go-tools && go version && echo 'Go DevContainer ready with tools configured.'",
     "postStartCommand": "/usr/local/bin/fix-go-permissions"

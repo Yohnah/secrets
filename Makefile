@@ -53,23 +53,18 @@ default: help ## Show help (default target)
 
 # Build the application
 .PHONY: build
-build: deps ## Build the secrets binary for current platform
+build: install-deps ## Build the secrets binary for current platform
 	@echo "Building $(APP_NAME) for current platform..."
 	@mkdir -p $(BIN_DIR)
 	cd $(GO_DIR) && $(GOBUILD) $(BUILD_FLAGS) -o ../$(BIN_DIR)/$(APP_NAME) $(SRC_DIR)
 	@echo "Binary built successfully: $(BIN_DIR)/$(APP_NAME)"
 
 # Install dependencies
-.PHONY: deps
-deps: 
+.PHONY: install-deps
+install-deps: 
 	@echo "Installing Go dependencies..."
 	cd $(GO_DIR) && $(GOMOD) download
 	cd $(GO_DIR) && $(GOMOD) tidy
-	@echo "Installing development tools..."
-	@which richgo >/dev/null 2>&1 || (echo "Installing richgo..." && $(GOCMD) install github.com/kyoh86/richgo@latest)
-	@if [ -f "$$HOME/go/bin/richgo" ] && [ ! -f "/usr/local/bin/richgo" ]; then \
-		sudo ln -sf $$HOME/go/bin/richgo /usr/local/bin/richgo; \
-	fi
 	@echo "Dependencies installed successfully"
 
 # Run tests with verbose output for debugging and colored output

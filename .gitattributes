@@ -1,0 +1,35 @@
+# .gitattributes para el proyecto "secrets" (Go)
+# Normaliza finales de línea automáticamente
+* text=auto
+
+# Archivos de texto explícitos
+*.md text
+*.txt text
+*.yml text
+*.yaml text
+*.json text
+Makefile text
+LICENSE text
+CHANGELOG.md text
+README.md text
+
+# Archivos de Go
+*.go text
+go.mod text
+go.sum text
+
+# Binarios (ejecutables en bin/)
+bin/* binary
+
+# Archivos en tools/ (mezcla, pero trata como texto si son scripts)
+tools/*.py text
+tools/*.go text
+
+# Archivos de configuración
+.gitignore text
+.gitattributes text
+
+# Si hay imágenes o PDFs en docs/ o .github/
+*.png binary
+*.jpg binary
+*.pdf binary
