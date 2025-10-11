@@ -17,6 +17,7 @@ import (
 // This is the facade that coordinates between subdominios
 type Manager interface {
 	Init() error
+	Setup() error
 	Status() error
 	ShowTemplate() error
 	ShowTree(profileName, environmentName, outputFormat string) error
@@ -49,6 +50,12 @@ func NewManager(cfg config.Manager, log logger.Manager, prm prompt.Manager, kp k
 // The service will pull configuration from ConfigMgr
 func (m *manager) Init() error {
 	return m.initService.Init()
+}
+
+// Setup delegates to the initialization service
+// Creates infrastructure only (no profile loading)
+func (m *manager) Setup() error {
+	return m.initService.Setup()
 }
 
 // Status delegates to the show service

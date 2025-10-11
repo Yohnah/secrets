@@ -21,6 +21,7 @@ const defaultDatabaseName = "SECRETS YOHNAH"
 // Service defines the interface for initialization operations
 type Service interface {
 	Init() error
+	Setup() error
 }
 
 type service struct {
@@ -348,6 +349,191 @@ func (s *service) Init() error {
 	return nil
 }
 
+// Setup implements the infrastructure setup logic (without profile loading)
+// Creates directory structure, config.yml, keyfile, and empty database
+// Does NOT load profiles from secrets.yml (that's what Init does)
+func (s *service) Setup() error {
+	// Step 1: PULL configuration from ConfigManager
+	cfg, err := s.config.GetConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get configuration: %w", err)
+	}
+
+	// Step 2: DECISION - Check NoCreateDatabase from processed config
+	noCreateDatabase := cfg.NoCreateDatabase
+
+	s.logger.Debug("Starting setup process (infrastructure only)...")
+	if noCreateDatabase {
+		s.logger.Debug("NoCreateDatabase: true (from processed configuration)")
+	}
+
+	// Step 3: DECISION - Ask for confirmation if not in force mode
+	if !cfg.NoInteractive {
+		confirmed, err := s.prompt.Confirm("Are you sure you want to continue?")
+		if err != nil {
+			return fmt.Errorf("failed to get confirmation: %w", err)
+		}
+		if !confirmed {
+			s.logger.Info("Operation cancelled by user")
+			return nil
+		}
+	}
+
+	// Step 4: Determine setup directory using new precedence logic
+	secretsDir, isHome, err := s.determineSetupDirectory()
+	if err != nil {
+		return err
+	}
+
+	// Step 5: Create setup directory
+	if err := os.MkdirAll(secretsDir, 0700); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", secretsDir, err)
+	}
+	s.logger.Debug(fmt.Sprintf("Created directory: %s", secretsDir))
+
+	// Step 6: Add to .gitignore if NOT in home and NOT ignoring git
+	if !isHome && !s.config.ShouldIgnoreGitProject() {
+		gitRoot, err := s.findGitRoot()
+		if err == nil {
+			if err := s.addToGitignore(gitRoot); err != nil {
+				s.logger.Error(fmt.Sprintf("Failed to add .secrets_yohnah to .gitignore: %v", err))
+				s.logger.Info("Please manually add .secrets_yohnah to your .gitignore file")
+			}
+		}
+	}
+
+	// Step 7: Handle --no-create-database flag
+	if noCreateDatabase {
+		s.logger.Debug("Skipping database and keyfile creation")
+
+		// Create config.yml with no_create_database: true (only if it doesn't exist)
+		configPath := filepath.Join(secretsDir, "config.yml")
+		if err := s.config.CreateDefaultConfigWithNoCreate(configPath, true); err != nil {
+			return fmt.Errorf("failed to create config file: %w", err)
+		}
+
+		s.logger.Success("✓ Setup complete!")
+		s.logger.Info(fmt.Sprintf("Created: %s", secretsDir))
+		s.logger.Info("Database: not created (no_create_database active)")
+		s.logger.Info("Keyfile: not created (no_create_database active)")
+
+		return nil
+	}
+
+	// Step 8: Prepare database and keyfile paths
+	configPath := filepath.Join(secretsDir, "config.yml")
+	dbPath := filepath.Join(secretsDir, "secrets.kdbx")
+	keyfilePath := filepath.Join(secretsDir, "secrets.keyfile")
+
+	// Step 9: Verify existence of database and keyfile
+	dbExists := common.FileExists(dbPath)
+	keyExists := common.FileExists(keyfilePath)
+
+	s.logger.Debug(fmt.Sprintf("Database exists: %v at %s", dbExists, dbPath))
+	s.logger.Debug(fmt.Sprintf("Keyfile exists: %v at %s", keyExists, keyfilePath))
+
+	// Step 10: Validate consistency (both must exist or both must not exist)
+	if dbExists && !keyExists {
+		return fmt.Errorf("error: Database exists but keyfile is missing.\nDatabase: %s (exists)\nKeyfile: %s (missing)\n\nPlease either:\n  1. Restore the keyfile\n  2. Remove the database to start fresh\n  3. Specify correct paths with --database and --keyfile", dbPath, keyfilePath)
+	}
+	if !dbExists && keyExists {
+		return fmt.Errorf("error: Keyfile exists but database is missing.\nDatabase: %s (missing)\nKeyfile: %s (exists)\n\nPlease either:\n  1. Restore the database\n  2. Remove the keyfile to start fresh\n  3. Specify correct paths with --database and --keyfile", dbPath, keyfilePath)
+	}
+
+	// Step 11: Handle existing database and keyfile
+	if dbExists && keyExists {
+		s.logger.Info("Database and keyfile already exist.")
+		s.logger.Success("✓ Setup already completed!")
+		s.logger.Info(fmt.Sprintf("Database: %s", dbPath))
+		s.logger.Info(fmt.Sprintf("Keyfile: %s", keyfilePath))
+
+		// NOTE: Setup does NOT verify database access or load profiles
+		// Setup only ensures the infrastructure exists
+		// Use 'init' command if you need to verify access or load profiles
+
+		return nil
+	}
+
+	// Step 12: Ask user if they want to create the database (only if not in no-interactive mode)
+	if !cfg.NoInteractive {
+		confirmed, err := s.prompt.ConfirmWithDefault("Do you want to create the database?", true)
+		if err != nil {
+			return fmt.Errorf("failed to get confirmation: %w", err)
+		}
+		if !confirmed {
+			// User declined database creation - create config.yml with no_create_database: true
+			s.logger.Debug("User declined database creation")
+
+			// Create config.yml with no_create_database: true
+			if err := s.config.CreateDefaultConfigWithNoCreate(configPath, true); err != nil {
+				return fmt.Errorf("failed to create config file: %w", err)
+			}
+
+			s.logger.Success("✓ Setup complete!")
+			s.logger.Info(fmt.Sprintf("Created: %s", secretsDir))
+			s.logger.Info("Database: not created (user declined)")
+			s.logger.Info("Keyfile: not created (user declined)")
+			s.logger.Info("Note: no_create_database is now active in config.yml")
+
+			return nil
+		}
+	}
+
+	// Step 13: Create new database and keyfile
+	s.logger.Info("Creating new database and keyfile...")
+
+	// Get password (2 times for creation - confirmation) - secure
+	securePassword, err := common.GetPassword(s.config, s.prompt, s.logger, true)
+	if err != nil {
+		return err
+	}
+	defer securePassword.Clear() // Ensure password is cleared from memory
+
+	// Generate keyfile
+	s.logger.Debug("Generating cryptographically secure keyfile...")
+	if err := s.keepass.GenerateKeyfile(keyfilePath); err != nil {
+		return fmt.Errorf("failed to generate keyfile: %w", err)
+	}
+	s.logger.Debug(fmt.Sprintf("Keyfile created: %s", keyfilePath))
+
+	// Create database
+	s.logger.Debug("Creating KeePass database in KDBX4 format...")
+
+	// Determine root group name
+	rootGroupName := cfg.DatabaseName
+	if rootGroupName == "" {
+		// Use git repo name or default
+		rootGroupName = s.getGitRepoName()
+	}
+	s.logger.Debug(fmt.Sprintf("Using root group name: %s", rootGroupName))
+
+	if err := s.keepass.CreateDatabase(dbPath, keyfilePath, securePassword.String(), rootGroupName); err != nil {
+		return fmt.Errorf("failed to create database: %w", err)
+	}
+	s.logger.Debug(fmt.Sprintf("Database created: %s", dbPath))
+
+	// Create config.yml (only if --ignore-config-file is NOT active)
+	if !s.config.ShouldIgnoreConfigFile() {
+		if err := s.config.CreateDefaultConfig(configPath); err != nil {
+			return fmt.Errorf("failed to create config file: %w", err)
+		}
+		s.logger.Debug("Created config.yml")
+	} else {
+		s.logger.Info("Skipping config file creation (--ignore-config-file active)")
+	}
+
+	// NOTE: Setup does NOT load profiles from secrets.yml
+	// That's the responsibility of the 'init' command
+
+	// Step 14: Show success
+	s.logger.Success("✓ Setup complete!")
+	s.logger.Info(fmt.Sprintf("Created: %s", secretsDir))
+	s.logger.Info(fmt.Sprintf("Database: %s", dbPath))
+	s.logger.Info(fmt.Sprintf("Keyfile: %s", keyfilePath))
+
+	return nil
+}
+
 // getGitRepoName gets the full repository name from git remote origin URL
 // Returns defaultDatabaseName as fallback if not in git repo or parsing fails
 func (s *service) getGitRepoName() string {
@@ -388,6 +574,127 @@ func (s *service) getGitRepoName() string {
 	}
 
 	return defaultDatabaseName // Fallback if parsing fails
+}
+
+// determineSetupDirectory determines where to create the setup directory
+// based on flags and existing directories.
+//
+// Precedence logic:
+// 1. If --setup-dir-in-home flag is set -> use Home directory
+// 2. If --force-recreate and .secrets_yohnah exists -> delete it and use project
+// 3. If .secrets_yohnah exists in project -> use project
+// 4. If nothing exists -> ask user (or use project default if -f mode)
+//
+// NOTE: Home directory existence is NOT checked unless --setup-dir-in-home flag is explicitly set.
+// The default behavior is to create in the project directory.
+func (s *service) determineSetupDirectory() (string, bool, error) {
+	// Step 1: Check --setup-dir-in-home flag
+	if s.config.ShouldUseHomeDirectory() {
+		homeDir, err := common.GetHomeSecretsDirectory()
+		if err != nil {
+			return "", false, fmt.Errorf("failed to get home directory: %w", err)
+		}
+		s.logger.Debug(fmt.Sprintf("Using home directory (--setup-dir-in-home): %s", homeDir))
+		return homeDir, true, nil
+	}
+
+	// Get project directory (Git root or current directory)
+	var projectDir string
+	var err error
+	if s.config.ShouldIgnoreGitProject() {
+		projectDir, err = os.Getwd()
+		if err != nil {
+			return "", false, fmt.Errorf("failed to get current directory: %w", err)
+		}
+	} else {
+		projectDir, err = s.findGitRoot()
+		if err != nil {
+			return "", false, fmt.Errorf("not in a git repository. Use --ignore-git-project to create in current directory: %w", err)
+		}
+	}
+
+	projectSecretsDir := filepath.Join(projectDir, ".secrets_yohnah")
+
+	// Get configuration to check ForceRecreate
+	cfg, err := s.config.GetConfig()
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get configuration: %w", err)
+	}
+
+	// Step 2: Handle --force-recreate
+	// If --force-recreate is set, it means user wants to create in project
+	// regardless of whether home directory exists
+	if cfg.ForceRecreate && common.DirectoryExists(projectSecretsDir) {
+		s.logger.Info(fmt.Sprintf("Deleting existing directory: %s", projectSecretsDir))
+		if err := os.RemoveAll(projectSecretsDir); err != nil {
+			return "", false, fmt.Errorf("failed to delete existing directory: %w", err)
+		}
+		// After deletion, will create in project
+	}
+
+	// Step 3: Check if .secrets_yohnah exists in project
+	if common.DirectoryExists(projectSecretsDir) {
+		s.logger.Debug(fmt.Sprintf("Found existing project directory: %s", projectSecretsDir))
+		return projectSecretsDir, false, nil
+	}
+
+	// Step 4: Nothing exists - ask user or use project default
+	// NOTE: We do NOT check for home directory existence here.
+	// Home directory is only used if explicitly requested via --setup-dir-in-home flag.
+	// Default behavior is to create in project directory.
+	if cfg.NoInteractive {
+		// Use project directory by default in non-interactive mode
+		s.logger.Debug(fmt.Sprintf("Using project directory (default in -f mode): %s", projectSecretsDir))
+		return projectSecretsDir, false, nil
+	}
+
+	// Ask user where to create the setup directory
+	homeDir, err := common.GetHomeSecretsDirectory()
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get home directory: %w", err)
+	}
+	return s.promptForSetupDirectory(projectSecretsDir, homeDir)
+}
+
+// promptForSetupDirectory asks the user where to create the setup directory
+func (s *service) promptForSetupDirectory(projectDir, homeDir string) (string, bool, error) {
+	s.logger.Info("")
+	s.logger.Info("Where do you want to create the setup directory?")
+
+	// Determine description based on --ignore-git-project flag
+	projectDescription := "Project Git"
+	if s.config.ShouldIgnoreGitProject() {
+		projectDescription = "Current Directory"
+	}
+
+	s.logger.Info(fmt.Sprintf("1) %s (%s) [default]", projectDescription, projectDir))
+	s.logger.Info(fmt.Sprintf("2) Home (%s)", homeDir))
+
+	// Use fmt.Scanln to read user input
+	s.logger.Info("") // Empty line before prompt
+	// NOTE: Using fmt.Scan here is acceptable as it's for user input, not output
+	// The prompt message is shown via LoggerManager above
+	var choice string
+	_, err := fmt.Scanln(&choice)
+	if err != nil && err.Error() != "unexpected newline" {
+		return "", false, fmt.Errorf("failed to get user input: %w", err)
+	}
+
+	// Trim whitespace
+	choice = strings.TrimSpace(choice)
+
+	// Default to option 1 if empty
+	if choice == "" || choice == "1" {
+		s.logger.Debug(fmt.Sprintf("User selected project directory: %s", projectDir))
+		return projectDir, false, nil
+	}
+
+	if choice == "2" {
+		s.logger.Debug(fmt.Sprintf("User selected home directory: %s", homeDir))
+		return homeDir, true, nil
+	}
+
+	return "", false, fmt.Errorf("invalid choice: %s (expected 1 or 2)", choice)
 }
 
 // findGitRoot searches for the git repository root starting from current directory

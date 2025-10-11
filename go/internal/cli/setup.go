@@ -11,6 +11,7 @@ var (
 	setupFlagForceRecreate    bool
 	setupFlagNoCreateDatabase bool
 	setupFlagDatabaseName     string
+	setupFlagSetupDirInHome   bool
 )
 
 var setupCmd = &cobra.Command{
@@ -31,6 +32,7 @@ Use 'secrets init' if you only want to create the directory structure.`,
 			ForceRecreate:    setupFlagForceRecreate,
 			NoCreateDatabase: setupFlagNoCreateDatabase,
 			DatabaseName:     setupFlagDatabaseName,
+			SetupDirInHome:   setupFlagSetupDirInHome,
 		}
 
 		// Create manager context with captured flags
@@ -38,8 +40,8 @@ Use 'secrets init' if you only want to create the directory structure.`,
 
 		// Execute business logic (delegate all decisions to CORE)
 		// SecretsManager will pull processed config from ConfigMgr
-		// Setup uses the same Init() method since it has the same logic
-		if err := managers.Secrets.Init(); err != nil {
+		// Setup only creates infrastructure (no profile loading)
+		if err := managers.Secrets.Setup(); err != nil {
 			managers.Logger.Error(err.Error())
 			os.Exit(1)
 		}
@@ -51,6 +53,7 @@ func init() {
 	setupCmd.Flags().BoolVar(&setupFlagForceRecreate, "force-recreate", false, "Delete existing database and keyfile, then create new ones")
 	setupCmd.Flags().BoolVar(&setupFlagNoCreateDatabase, "no-create-database", false, "Skip database and keyfile creation (only creates .secrets_yohnah directory and config.yml)")
 	setupCmd.Flags().StringVar(&setupFlagDatabaseName, "database-name", "", "Custom name for the root group in the KeePass database (defaults to git repo name or 'Secrets')")
+	setupCmd.Flags().BoolVar(&setupFlagSetupDirInHome, "setup-dir-in-home", false, "Create setup directory in home (~/.yohnah/secrets) instead of project directory")
 
 	// Add command to root
 	rootCmd.AddCommand(setupCmd)

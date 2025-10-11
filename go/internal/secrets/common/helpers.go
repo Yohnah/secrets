@@ -397,3 +397,22 @@ func ValidateProfileInSecretsYML(secretsFilePath, profileName string, val valida
 	// Profile not found
 	return fmt.Errorf("error: Profile '%s' does not exist in secrets.yml. Please check your configuration", profileName)
 }
+
+// GetHomeSecretsDirectory returns the home directory path for secrets setup
+// Returns ~/.yohnah/secrets (cross-platform compatible)
+func GetHomeSecretsDirectory() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+	return filepath.Join(homeDir, ".yohnah", "secrets"), nil
+}
+
+// DirectoryExists checks if a directory exists at the given path
+func DirectoryExists(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
+}

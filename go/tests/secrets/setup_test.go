@@ -365,3 +365,343 @@ func TestSetupWithIgnoreGitProject(t *testing.T) {
 		t.Errorf(".secrets_yohnah directory was not created")
 	}
 }
+
+// TestSetupWithSetupDirInHome validates --setup-dir-in-home flag
+func TestSetupWithSetupDirInHome(t *testing.T) {
+	// Create temporary home directory for testing
+	tmpHome := setupTestDir(t)
+	defer os.RemoveAll(tmpHome)
+
+	// Set HOME environment variable to temp directory
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpHome)
+	defer os.Setenv("HOME", originalHome)
+
+	// Create temp project directory
+	tmpProject := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpProject)
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpProject)
+
+	flags := &types.GlobalFlags{
+		Force: true, // Non-interactive mode
+	}
+	cmdFlags := &types.CommandFlags{
+		SetupDirInHome: true, // Use home directory
+	}
+
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(flags, cmdFlags, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+
+	// Execute setup
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup with --setup-dir-in-home failed: %v", err)
+	}
+
+	// Verify directory was created in HOME, not in project
+	homeSecretsDir := filepath.Join(tmpHome, ".yohnah", "secrets")
+	if _, err := os.Stat(homeSecretsDir); os.IsNotExist(err) {
+		t.Errorf("Home secrets directory was not created at %s", homeSecretsDir)
+	}
+
+	// Verify project directory was NOT created
+	projectSecretsDir := filepath.Join(tmpProject, ".secrets_yohnah")
+	if _, err := os.Stat(projectSecretsDir); err == nil {
+		t.Errorf("Project secrets directory should not have been created")
+	}
+
+	// Verify files exist in home directory
+	configPath := filepath.Join(homeSecretsDir, "config.yml")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Errorf("config.yml was not created in home directory")
+	}
+
+	dbPath := filepath.Join(homeSecretsDir, "secrets.kdbx")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		t.Errorf("database was not created in home directory")
+	}
+
+	keyfilePath := filepath.Join(homeSecretsDir, "secrets.keyfile")
+	if _, err := os.Stat(keyfilePath); os.IsNotExist(err) {
+		t.Errorf("keyfile was not created in home directory")
+	}
+}
+
+// TestSetupPrevalenceProjectExists validates that existing project directory takes precedence
+func TestSetupPrevalenceProjectExists(t *testing.T) {
+	// Create temporary home directory with existing setup
+	tmpHome := setupTestDir(t)
+	defer os.RemoveAll(tmpHome)
+
+	// Set HOME environment variable
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpHome)
+	defer os.Setenv("HOME", originalHome)
+
+	// Create existing home directory
+	homeSecretsDir := filepath.Join(tmpHome, ".yohnah", "secrets")
+	os.MkdirAll(homeSecretsDir, 0700)
+
+	// Create temp project directory with existing .secrets_yohnah
+	tmpProject := setupTestDir(t)
+	setupTestPassword(t)
+	initGitRepo(t, tmpProject)
+	projectSecretsDir := filepath.Join(tmpProject, ".secrets_yohnah")
+	os.MkdirAll(projectSecretsDir, 0700)
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpProject)
+
+	flags := &types.GlobalFlags{
+		Force: true,
+	}
+
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	mockKeePass := newMockKeePassManager()
+
+	// Pre-create database and keyfile in project directory
+	dbPath := filepath.Join(projectSecretsDir, "secrets.kdbx")
+	keyfilePath := filepath.Join(projectSecretsDir, "secrets.keyfile")
+	mockKeePass.GenerateKeyfile(keyfilePath)
+	mockKeePass.CreateDatabase(dbPath, keyfilePath, "test123", "Test")
+
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKeePass, output.NewManager(), validator.NewManager())
+
+	// Execute setup - should detect existing project directory
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
+	// Verify it used the project directory (both should exist but project takes precedence)
+	if _, err := os.Stat(projectSecretsDir); os.IsNotExist(err) {
+		t.Errorf("Project secrets directory should exist")
+	}
+}
+
+// TestSetupDefaultsToProjectNotHome validates that project directory is used by default (even when home exists)
+func TestSetupDefaultsToProjectNotHome(t *testing.T) {
+	// Create temporary home directory with existing setup
+	tmpHome := setupTestDir(t)
+	defer os.RemoveAll(tmpHome)
+
+	// Set HOME environment variable
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpHome)
+	defer os.Setenv("HOME", originalHome)
+
+	// Create existing home directory with database
+	homeSecretsDir := filepath.Join(tmpHome, ".yohnah", "secrets")
+	os.MkdirAll(homeSecretsDir, 0700)
+
+	setupTestPassword(t)
+
+	// Pre-create database and keyfile in home directory
+	mockKeePass := newMockKeePassManager()
+	dbPath := filepath.Join(homeSecretsDir, "secrets.kdbx")
+	keyfilePath := filepath.Join(homeSecretsDir, "secrets.keyfile")
+	mockKeePass.GenerateKeyfile(keyfilePath)
+	mockKeePass.CreateDatabase(dbPath, keyfilePath, "test123", "Test")
+
+	// Create temp project directory WITHOUT .secrets_yohnah
+	tmpProject := setupTestDir(t)
+	initGitRepo(t, tmpProject)
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpProject)
+
+	flags := &types.GlobalFlags{
+		Force: true, // Non-interactive mode
+	}
+
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKeePass, output.NewManager(), validator.NewManager())
+
+	// Execute setup - should create in project directory by default (NOT use existing home)
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
+	// Verify it created in project directory (default behavior)
+	projectSecretsDir := filepath.Join(tmpProject, ".secrets_yohnah")
+	if _, err := os.Stat(projectSecretsDir); os.IsNotExist(err) {
+		t.Errorf("Project secrets directory should have been created (default behavior)")
+	}
+
+	// Verify both directories exist (coexistence is allowed)
+	if _, err := os.Stat(homeSecretsDir); os.IsNotExist(err) {
+		t.Errorf("Home secrets directory should still exist")
+	}
+}
+
+// TestSetupForceRecreateOnlyAffectsProject validates that --force-recreate only deletes project directory
+func TestSetupForceRecreateOnlyAffectsProject(t *testing.T) {
+	// Create temporary home directory with existing setup
+	tmpHome := setupTestDir(t)
+	defer os.RemoveAll(tmpHome)
+
+	// Set HOME environment variable
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpHome)
+	defer os.Setenv("HOME", originalHome)
+
+	// Create existing home directory
+	homeSecretsDir := filepath.Join(tmpHome, ".yohnah", "secrets")
+	os.MkdirAll(homeSecretsDir, 0700)
+
+	setupTestPassword(t)
+
+	// Pre-create database and keyfile in home directory
+	mockKeePass := newMockKeePassManager()
+	homeDbPath := filepath.Join(homeSecretsDir, "secrets.kdbx")
+	homeKeyfilePath := filepath.Join(homeSecretsDir, "secrets.keyfile")
+	mockKeePass.GenerateKeyfile(homeKeyfilePath)
+	mockKeePass.CreateDatabase(homeDbPath, homeKeyfilePath, "test123", "Test")
+
+	// Create marker file in home directory to verify it's not touched
+	markerFile := filepath.Join(homeSecretsDir, "marker.txt")
+	os.WriteFile(markerFile, []byte("do not delete"), 0600)
+
+	// Create temp project directory with existing .secrets_yohnah
+	tmpProject := setupTestDir(t)
+	initGitRepo(t, tmpProject)
+	projectSecretsDir := filepath.Join(tmpProject, ".secrets_yohnah")
+	os.MkdirAll(projectSecretsDir, 0700)
+
+	// Create marker file in project directory to verify it IS deleted
+	projectMarker := filepath.Join(projectSecretsDir, "project_marker.txt")
+	os.WriteFile(projectMarker, []byte("should be deleted"), 0600)
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpProject)
+
+	flags := &types.GlobalFlags{
+		Force: true,
+	}
+	cmdFlags := &types.CommandFlags{
+		ForceRecreate: true, // Should delete project directory only
+	}
+
+	validatorMgr := validator.NewManager()
+	configMgr := config.NewManager(flags, cmdFlags, validatorMgr)
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKeePass, output.NewManager(), validator.NewManager())
+
+	// Execute setup with --force-recreate
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
+	// Verify home directory still exists and marker file is intact
+	if _, err := os.Stat(markerFile); os.IsNotExist(err) {
+		t.Errorf("Home directory marker file should NOT have been deleted")
+	}
+
+	// Verify project marker file was deleted (directory was recreated)
+	if _, err := os.Stat(projectMarker); err == nil {
+		t.Errorf("Project directory marker file SHOULD have been deleted")
+	}
+
+	// Verify new project directory was created
+	if _, err := os.Stat(projectSecretsDir); os.IsNotExist(err) {
+		t.Errorf("Project secrets directory should have been recreated")
+	}
+}
+
+// TestSetupBothDirectoriesCanCoexist validates that both directories can exist simultaneously
+func TestSetupBothDirectoriesCanCoexist(t *testing.T) {
+	// Create temporary home directory
+	tmpHome := setupTestDir(t)
+	defer os.RemoveAll(tmpHome)
+
+	// Set HOME environment variable
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpHome)
+	defer os.Setenv("HOME", originalHome)
+
+	setupTestPassword(t)
+
+	// Create temp project directory
+	tmpProject1 := setupTestDir(t)
+	initGitRepo(t, tmpProject1)
+
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpProject1)
+
+	mockKeePass := newMockKeePassManager()
+	validatorMgr := validator.NewManager()
+	loggerMgr := logger.NewManager(false)
+	promptMgr := prompt.NewManager()
+
+	// First create in project (when home doesn't exist yet)
+	flags1 := &types.GlobalFlags{
+		Force: true,
+	}
+
+	configMgr1 := config.NewManager(flags1, &types.CommandFlags{}, validatorMgr)
+	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr, promptMgr, mockKeePass, output.NewManager(), validator.NewManager())
+
+	err := secretsMgr1.Setup()
+	if err != nil {
+		t.Fatalf("Setup in project failed: %v", err)
+	}
+
+	// Then create in home
+	flags2 := &types.GlobalFlags{
+		Force: true,
+	}
+	cmdFlags2 := &types.CommandFlags{
+		SetupDirInHome: true,
+	}
+
+	configMgr2 := config.NewManager(flags2, cmdFlags2, validatorMgr)
+	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr, promptMgr, mockKeePass, output.NewManager(), validator.NewManager())
+
+	err = secretsMgr2.Setup()
+	if err != nil {
+		t.Fatalf("Setup in home failed: %v", err)
+	}
+
+	// Verify both directories exist
+	homeSecretsDir := filepath.Join(tmpHome, ".yohnah", "secrets")
+	if _, err := os.Stat(homeSecretsDir); os.IsNotExist(err) {
+		t.Errorf("Home secrets directory should exist")
+	}
+
+	projectSecretsDir := filepath.Join(tmpProject1, ".secrets_yohnah")
+	if _, err := os.Stat(projectSecretsDir); os.IsNotExist(err) {
+		t.Errorf("Project secrets directory should exist")
+	}
+
+	// Verify files in both directories
+	homeDb := filepath.Join(homeSecretsDir, "secrets.kdbx")
+	projectDb := filepath.Join(projectSecretsDir, "secrets.kdbx")
+
+	if _, err := os.Stat(homeDb); os.IsNotExist(err) {
+		t.Errorf("Home database should exist")
+	}
+
+	if _, err := os.Stat(projectDb); os.IsNotExist(err) {
+		t.Errorf("Project database should exist")
+	}
+}

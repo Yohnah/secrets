@@ -26,6 +26,7 @@ type Manager interface {
 	GetSecretsFilePath() string
 	ShouldIgnoreConfigFile() bool
 	ShouldIgnoreGitProject() bool
+	ShouldUseHomeDirectory() bool
 	GetPassword() (string, error)
 	IsNoInteractive() bool
 	GenerateSecurePassword() string
@@ -324,6 +325,14 @@ func (m *manager) ShouldIgnoreGitProject() bool {
 	return m.globalFlags.IgnoreGitProject
 }
 
+// ShouldUseHomeDirectory returns whether setup directory should be in home
+func (m *manager) ShouldUseHomeDirectory() bool {
+	if m.commandFlags == nil {
+		return false
+	}
+	return m.commandFlags.SetupDirInHome
+}
+
 // GetPassword returns the password from environment variable if available
 func (m *manager) GetPassword() (string, error) {
 	password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
@@ -331,11 +340,8 @@ func (m *manager) GetPassword() (string, error) {
 		return "", fmt.Errorf("no password available")
 	}
 
-	// Validate password complexity
-	if err := validatePasswordComplexity(password); err != nil {
-		return "", fmt.Errorf("password validation failed: %w", err)
-	}
-
+	// Password complexity validation is delegated to KeePass
+	// KeePass will enforce its own security policies
 	return password, nil
 }
 
@@ -370,39 +376,4 @@ func (m *manager) GenerateSecurePassword() string {
 	}
 
 	return string(password)
-}
-
-// validatePasswordComplexity validates that a password meets security requirements
-func validatePasswordComplexity(password string) error {
-	if len(password) < 8 {
-		return fmt.Errorf("password must be at least 8 characters long")
-	}
-
-	var hasLower, hasUpper, hasDigit, hasSpecial bool
-	for _, char := range password {
-		if char >= 'a' && char <= 'z' {
-			hasLower = true
-		} else if char >= 'A' && char <= 'Z' {
-			hasUpper = true
-		} else if char >= '0' && char <= '9' {
-			hasDigit = true
-		} else if (char >= '!' && char <= '/') || (char >= ':' && char <= '@') || (char >= '[' && char <= '`') || (char >= '{' && char <= '~') {
-			hasSpecial = true
-		}
-	}
-
-	if !hasLower {
-		return fmt.Errorf("password must contain at least one lowercase letter")
-	}
-	if !hasUpper {
-		return fmt.Errorf("password must contain at least one uppercase letter")
-	}
-	if !hasDigit {
-		return fmt.Errorf("password must contain at least one digit")
-	}
-	if !hasSpecial {
-		return fmt.Errorf("password must contain at least one special character")
-	}
-
-	return nil
 }

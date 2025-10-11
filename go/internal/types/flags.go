@@ -22,6 +22,9 @@ type CommandFlags struct {
 	NoCreateDatabase bool
 	DatabaseName     string
 
+	// Setup command flags
+	SetupDirInHome bool
+
 	// Show template command flags
 	Minimal bool
 

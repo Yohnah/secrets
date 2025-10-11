@@ -523,6 +523,10 @@ func (m *mockConfigManager) ShouldIgnoreGitProject() bool {
 	return true
 }
 
+func (m *mockConfigManager) ShouldUseHomeDirectory() bool {
+	return false
+}
+
 func (m *mockConfigManager) GetPassword() (string, error) {
 	return "TestPassword123!", nil
 }
