@@ -65,11 +65,16 @@ install-deps:
 	@echo "Installing Go dependencies..."
 	cd $(GO_DIR) && $(GOMOD) download
 	cd $(GO_DIR) && $(GOMOD) tidy
+	@echo "Installing govulncheck..."
+	go install golang.org/x/vuln/cmd/govulncheck@latest
+	@echo "Configuring Git hooks..."
+	git config core.hooksPath .githooks
+	chmod +x .githooks/*
 	@echo "Dependencies installed successfully"
 
 # Run tests with verbose output for debugging and colored output
 .PHONY: tests
-tests: ## Run all tests with verbose output and colors
+tests: install-deps ## Run all tests with verbose output and colors
 	@echo "Running all tests..."
 	@cd $(GO_DIR) && go test -v ./... | sed \
 		-e 's/^=== RUN.*/\x1b[36m&\x1b[0m/' \
@@ -80,8 +85,21 @@ tests: ## Run all tests with verbose output and colors
 		-e 's/^ok .*/\x1b[32m&\x1b[0m/' \
 		-e 's/^\?.*\[no test files\]/\x1b[90m&\x1b[0m/' \
 		|| (printf "\033[31m✗ Tests failed\033[0m\n" && exit 1)
+	@echo "Running go vet..."
+	@cd $(GO_DIR) && go vet ./...
 	@echo ""
-	@printf "\033[32;1m✓ All tests completed successfully\033[0m\n"
+	@printf "\033[32;1m✓ All tests and vet checks completed successfully\033[0m\n"
+
+.PHONY: security-check
+security-check: install-deps ## Run security checks (vulnerability scanning)
+	@echo "Running security checks..."
+	@if command -v govulncheck &> /dev/null; then \
+		cd $(GO_DIR) && govulncheck ./...; \
+		echo "Security checks completed"; \
+	else \
+		echo "govulncheck not installed. Run 'make install-deps' to install it."; \
+		exit 1; \
+	fi
 
 .PHONY: clean
 clean: ## Clean test artifacts, temporary files and binaries
@@ -93,7 +111,7 @@ clean: ## Clean test artifacts, temporary files and binaries
 
 # Build for all platforms
 .PHONY: build-all
-build-all: deps ## Build binaries for all supported platforms
+build-all: install-deps ## Build binaries for all supported platforms
 	@echo "Building $(APP_NAME) for all platforms..."
 	@mkdir -p $(DIST_DIR)
 	@for platform in $(PLATFORMS); do \
