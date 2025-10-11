@@ -3,30 +3,16 @@ package cli
 import (
 	"os"
 
-	"github.com/Yohnah/secrets/internal/types"
 	"github.com/spf13/cobra"
-)
-
-var (
-	flagForceRecreate    bool
-	flagNoCreateDatabase bool
-	flagDatabaseName     string
 )
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize a new KeePass database",
-	Long:  `Initialize a new KeePass database with the required structure for secrets management.`,
+	Short: "Load profiles from secrets.yml into the database",
+	Long:  `Load profiles from secrets.yml into an existing KeePass database. Run 'secrets setup' first to create the infrastructure.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// CliMgr captures ALL command-specific flags and feeds them to ConfigMgr
-		commandFlags := &types.CommandFlags{
-			ForceRecreate:    flagForceRecreate,
-			NoCreateDatabase: flagNoCreateDatabase,
-			DatabaseName:     flagDatabaseName,
-		}
-
-		// Create manager context with captured flags
-		managers := NewManagerContext(commandFlags)
+		// CliMgr creates manager context (no local flags for init)
+		managers := NewManagerContext(nil)
 
 		// Execute business logic (delegate all decisions to CORE)
 		// SecretsManager will pull processed config from ConfigMgr
@@ -38,10 +24,8 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
-	// Add local flags specific to init command
-	initCmd.Flags().BoolVar(&flagForceRecreate, "force-recreate", false, "Delete existing database and keyfile, then create new ones")
-	initCmd.Flags().BoolVar(&flagNoCreateDatabase, "no-create-database", false, "Skip database and keyfile creation (only creates .secrets_yohnah directory and config.yml)")
-	initCmd.Flags().StringVar(&flagDatabaseName, "database-name", "", "Custom name for the root group in the KeePass database (defaults to git repo name or 'Secrets')")
+	// No local flags for init command - only uses global flags
+	// Infrastructure creation is handled by 'setup' command
 
 	// Add command to root
 	rootCmd.AddCommand(initCmd)

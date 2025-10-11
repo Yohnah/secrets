@@ -34,8 +34,8 @@ func TestSetupCreatesAllFiles(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
-	// Execute setup (uses Init() method)
-	err := secretsMgr.Init()
+	// Execute setup
+	err := secretsMgr.Setup()
 	if err != nil {
 		t.Fatalf("Setup failed: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestSetupWithCustomDatabaseName(t *testing.T) {
 	keepassMgr := newMockKeePassManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, output.NewManager(), validator.NewManager())
 
-	err := secretsMgr.Init()
+	err := secretsMgr.Setup()
 	if err != nil {
 		t.Fatalf("Setup with custom database name failed: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestSetupFailsIfDirectoryExistsWithoutForce(t *testing.T) {
 	promptMgr1 := prompt.NewManager()
 	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
-	err := secretsMgr1.Init()
+	err := secretsMgr1.Setup()
 	if err != nil {
 		t.Fatalf("First setup failed: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestSetupFailsIfDirectoryExistsWithoutForce(t *testing.T) {
 	promptMgr2 := prompt.NewManager()
 	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
-	err = secretsMgr2.Init()
+	err = secretsMgr2.Setup()
 	if err == nil {
 		t.Errorf("Second setup should have failed without force flag")
 	}
@@ -187,7 +187,7 @@ func TestSetupWithForceRecreate(t *testing.T) {
 	promptMgr1 := prompt.NewManager()
 	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
-	err := secretsMgr1.Init()
+	err := secretsMgr1.Setup()
 	if err != nil {
 		t.Fatalf("First setup failed: %v", err)
 	}
@@ -271,7 +271,7 @@ func TestSetupWithNoCreateDatabase(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
-	err := secretsMgr.Init()
+	err := secretsMgr.Setup()
 	if err != nil {
 		t.Fatalf("Setup with no-create-database failed: %v", err)
 	}
@@ -321,7 +321,7 @@ func TestSetupWithGlobalFlagVerbose(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
-	err := secretsMgr.Init()
+	err := secretsMgr.Setup()
 	if err != nil {
 		t.Fatalf("Setup with verbose flag failed: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestSetupWithIgnoreGitProject(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
-	err := secretsMgr.Init()
+	err := secretsMgr.Setup()
 	if err != nil {
 		t.Fatalf("Setup with ignore-git-project failed: %v", err)
 	}

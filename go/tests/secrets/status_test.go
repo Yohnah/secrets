@@ -57,8 +57,14 @@ func TestStatus_WithValidDatabase(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validator.NewManager())
 
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
 	// Initialize first
-	err := secretsMgr.Init()
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -137,8 +143,14 @@ func TestStatus_WithIgnoreConfigFile(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validator.NewManager())
 
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
 	// Initialize first
-	err := secretsMgr.Init()
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -167,21 +179,19 @@ func TestStatus_WithCustomPaths(t *testing.T) {
 	defer os.Chdir(originalDir)
 	os.Chdir(tmpDir)
 
-	// Setup custom paths
+	// Create custom paths
 	customDir := filepath.Join(tmpDir, "custom")
-	dbPath := filepath.Join(customDir, "my-database.kdbx")
-	keyfilePath := filepath.Join(customDir, "my-keyfile.key")
-
-	// Create custom directory
 	if err := os.MkdirAll(customDir, 0755); err != nil {
 		t.Fatalf("Failed to create custom directory: %v", err)
 	}
+	dbPath := filepath.Join(customDir, "my-database.kdbx")
+	keyfilePath := filepath.Join(customDir, "my-keyfile")
 
-	// Setup managers with custom paths
+	// Setup managers
 	flags := &types.GlobalFlags{
-		Force:    true,
 		Database: dbPath,
 		Keyfile:  keyfilePath,
+		Force:    true,
 	}
 
 	validatorMgr := validator.NewManager()
@@ -190,8 +200,14 @@ func TestStatus_WithCustomPaths(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
 	// Initialize first
-	err := secretsMgr.Init()
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed with custom paths: %v", err)
 	}
@@ -232,8 +248,14 @@ func TestStatus_WithWrongPassword(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
 	// Initialize with correct password
-	err := secretsMgr.Init()
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -269,8 +291,14 @@ func TestStatus_AfterInit(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
 	// Initialize
-	err := secretsMgr.Init()
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}

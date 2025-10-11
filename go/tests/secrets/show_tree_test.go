@@ -61,8 +61,14 @@ outputs: []`
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
 	// Initialize database
-	err := secretsMgr.Init()
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -113,7 +119,14 @@ outputs: []`
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
-	err := secretsMgr.Init()
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
+	// Initialize database
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -164,7 +177,14 @@ outputs: []`
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
-	err := secretsMgr.Init()
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
+	// Initialize database
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -219,7 +239,14 @@ outputs: []`
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
-	err := secretsMgr.Init()
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
+	// Initialize database
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -274,7 +301,14 @@ outputs: []`
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
 
-	err := secretsMgr.Init()
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
+	// Initialize database
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}

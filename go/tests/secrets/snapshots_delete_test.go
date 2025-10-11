@@ -197,8 +197,14 @@ outputs: []`
 	kpMgr := newMockKeePassManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), validatorMgr)
 
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
 	// Initialize database with profile
-	err := secretsMgr.Init()
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -255,8 +261,14 @@ outputs: []`
 	kpMgr := newMockKeePassManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), validatorMgr)
 
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
 	// Initialize database with profile
-	err := secretsMgr.Init()
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}

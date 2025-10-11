@@ -59,8 +59,14 @@ outputs: []`
 	kpMgr := newMockKeePassManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), validatorMgr)
 
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
 	// Initialize database with profile
-	err := secretsMgr.Init()
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -202,8 +208,14 @@ outputs: []`
 	promptMgr := prompt.NewManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validatorMgr)
 
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
 	// Initialize database
-	err := secretsMgr.Init()
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -272,8 +284,14 @@ outputs: []`
 	kpMgr := newMockKeePassManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), validatorMgr)
 
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
 	// Initialize database (only profile-in-db will be created)
-	err := secretsMgr.Init()
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -362,8 +380,14 @@ outputs: []`
 	kpMgr := newMockKeePassManager()
 	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), validatorMgr)
 
+	// Setup infrastructure first
+	err := secretsMgr.Setup()
+	if err != nil {
+		t.Fatalf("Setup failed: %v", err)
+	}
+
 	// Initialize database
-	err := secretsMgr.Init()
+	err = secretsMgr.Init()
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}

@@ -46,123 +46,34 @@ func NewService(cfg config.Manager, log logger.Manager, prm prompt.Manager, kp k
 // Init implements the full initialization logic
 // Pulls configuration from ConfigManager (which already processed precedence)
 func (s *service) Init() error {
-	// Step 1: PULL configuration from ConfigManager
-	// ConfigManager has already processed: FLAGS > CONFIG.YML > ENV VARS > DEFAULTS
-	cfg, err := s.config.GetConfig()
-	if err != nil {
-		return fmt.Errorf("failed to get configuration: %w", err)
-	}
+	// Init command now ONLY loads profiles from secrets.yml into an existing database
+	// Infrastructure creation (directories, database, keyfile) is handled by 'setup' command
 
-	// Step 2: DECISION - Check NoCreateDatabase from processed config
-	noCreateDatabase := cfg.NoCreateDatabase
+	s.logger.Debug("Starting profile loading process...")
 
-	s.logger.Debug("Starting initialization process...")
-	if noCreateDatabase {
-		s.logger.Debug("NoCreateDatabase: true (from processed configuration)")
-	}
-
-	// Step 3: DECISION - Ask for confirmation if not in force mode
-	if !cfg.NoInteractive {
-		confirmed, err := s.prompt.Confirm("Are you sure you want to continue?")
-		if err != nil {
-			return fmt.Errorf("failed to get confirmation: %w", err)
-		}
-		if !confirmed {
-			s.logger.Info("Operation cancelled by user")
-			return nil
-		}
-	}
-
-	// Step 3b: DECISION - Check if no_create_database is active (flag or config)
-	if noCreateDatabase {
-		s.logger.Debug("Skipping database and keyfile creation")
-
-		// Still need to create .secrets_yohnah directory and config.yml
-		var targetDir string
-		var err error
-
-		if s.config.ShouldIgnoreGitProject() {
-			targetDir, err = os.Getwd()
-			if err != nil {
-				return fmt.Errorf("failed to get current directory: %w", err)
-			}
-		} else {
-			targetDir, err = s.findGitRoot()
-			if err != nil {
-				return fmt.Errorf("not in a git repository. Use --ignore-git-project to create in current directory: %w", err)
-			}
-		}
-
-		// Create .secrets_yohnah directory
-		secretsDir := filepath.Join(targetDir, ".secrets_yohnah")
-		if err := os.MkdirAll(secretsDir, 0700); err != nil {
-			return fmt.Errorf("failed to create directory %s: %w", secretsDir, err)
-		}
-
-		// Add .secrets_yohnah to .gitignore if in a git repository
-		if !s.config.ShouldIgnoreGitProject() {
-			if err := s.addToGitignore(targetDir); err != nil {
-				s.logger.Error(fmt.Sprintf("Failed to add .secrets_yohnah to .gitignore: %v", err))
-				s.logger.Info("Please manually add .secrets_yohnah to your .gitignore file")
-			}
-		}
-
-		// Create config.yml with no_create_database: true (only if it doesn't exist)
-		configPath := filepath.Join(secretsDir, "config.yml")
-		if err := s.config.CreateDefaultConfigWithNoCreate(configPath, true); err != nil {
-			return fmt.Errorf("failed to create config file: %w", err)
-		}
-
-		s.logger.Success("✓ Initialization complete!")
-		s.logger.Info(fmt.Sprintf("Created: %s", secretsDir))
-		s.logger.Info("Database: not created (no_create_database active)")
-		s.logger.Info("Keyfile: not created (no_create_database active)")
-
-		return nil
-	}
-
-	// Step 4: DECISION - Determine target directory for .secrets_yohnah
+	// Step 1: Determine target directory to find secrets.yml
 	var targetDir string
+	var err error
+
 	if s.config.ShouldIgnoreGitProject() {
-		// Use current working directory
 		targetDir, err = os.Getwd()
 		if err != nil {
 			return fmt.Errorf("failed to get current directory: %w", err)
 		}
-		s.logger.Debug(fmt.Sprintf("Using current directory (--ignore-git-project): %s", targetDir))
+		s.logger.Debug(fmt.Sprintf("Using current directory: %s", targetDir))
 	} else {
-		// Find git root
 		targetDir, err = s.findGitRoot()
 		if err != nil {
-			return fmt.Errorf("not in a git repository. Use --ignore-git-project to create in current directory: %w", err)
+			return fmt.Errorf("not in a git repository. Use --ignore-git-project to work in current directory: %w", err)
 		}
 		s.logger.Debug(fmt.Sprintf("Found git repository root: %s", targetDir))
 	}
 
-	// Step 6: Create .secrets_yohnah directory
-	secretsDir := filepath.Join(targetDir, ".secrets_yohnah")
-	if err := os.MkdirAll(secretsDir, 0700); err != nil {
-		return fmt.Errorf("failed to create directory %s: %w", secretsDir, err)
-	}
-	s.logger.Debug(fmt.Sprintf("Created directory: %s", secretsDir))
-
-	// Step 6.1: Add .secrets_yohnah to .gitignore if in a git repository
-	if !s.config.ShouldIgnoreGitProject() {
-		if err := s.addToGitignore(targetDir); err != nil {
-			s.logger.Error(fmt.Sprintf("Failed to add .secrets_yohnah to .gitignore: %v", err))
-			s.logger.Info("Please manually add .secrets_yohnah to your .gitignore file")
-		}
-	}
-
-	// Step 7: Will create config.yml later (after knowing if user wants database or not)
-	configPath := filepath.Join(secretsDir, "config.yml")
-
-	// Step 8: Handle --force-recreate flag
-	// Convert relative paths to absolute paths based on targetDir
+	// Step 2: Get database and keyfile paths from configuration
 	dbPath := s.config.GetDatabasePath()
 	keyfilePath := s.config.GetKeyfilePath()
 
-	// If paths are relative, make them absolute relative to targetDir
+	// Convert relative paths to absolute paths based on targetDir
 	if !filepath.IsAbs(dbPath) {
 		dbPath = filepath.Join(targetDir, dbPath)
 	}
@@ -170,182 +81,52 @@ func (s *service) Init() error {
 		keyfilePath = filepath.Join(targetDir, keyfilePath)
 	}
 
-	if cfg.ForceRecreate {
-		s.logger.Info("Force recreate mode: deleting existing database and keyfile...")
+	s.logger.Debug(fmt.Sprintf("Database path: %s", dbPath))
+	s.logger.Debug(fmt.Sprintf("Keyfile path: %s", keyfilePath))
 
-		// Delete database if exists
-		if _, err := os.Stat(dbPath); err == nil {
-			if err := os.Remove(dbPath); err != nil {
-				return fmt.Errorf("failed to remove existing database: %w", err)
-			}
-			s.logger.Debug(fmt.Sprintf("Deleted existing database: %s", dbPath))
-		}
-
-		// Delete keyfile if exists
-		if _, err := os.Stat(keyfilePath); err == nil {
-			if err := os.Remove(keyfilePath); err != nil {
-				return fmt.Errorf("failed to remove existing keyfile: %w", err)
-			}
-			s.logger.Debug(fmt.Sprintf("Deleted existing keyfile: %s", keyfilePath))
-		}
-	}
-
-	// Step 9: Verify existence of database and keyfile
+	// Step 3: Verify database and keyfile exist
 	dbExists := common.FileExists(dbPath)
 	keyExists := common.FileExists(keyfilePath)
 
-	s.logger.Debug(fmt.Sprintf("Database exists: %v at %s", dbExists, dbPath))
-	s.logger.Debug(fmt.Sprintf("Keyfile exists: %v at %s", keyExists, keyfilePath))
-
-	// Step 10: Validate consistency (both must exist or both must not exist)
-	if dbExists && !keyExists {
-		return fmt.Errorf("error: Database exists but keyfile is missing.\nDatabase: %s (exists)\nKeyfile: %s (missing)\n\nPlease either:\n  1. Restore the keyfile\n  2. Remove the database to start fresh\n  3. Specify correct paths with --database and --keyfile", dbPath, keyfilePath)
-	}
-	if !dbExists && keyExists {
-		return fmt.Errorf("error: Keyfile exists but database is missing.\nDatabase: %s (missing)\nKeyfile: %s (exists)\n\nPlease either:\n  1. Restore the database\n  2. Remove the keyfile to start fresh\n  3. Specify correct paths with --database and --keyfile", dbPath, keyfilePath)
+	if !dbExists || !keyExists {
+		return fmt.Errorf("infrastructure not found. Please run 'secrets setup' first to create the database and keyfile.\n\nExpected locations:\n  Database: %s (exists: %v)\n  Keyfile: %s (exists: %v)", dbPath, dbExists, keyfilePath, keyExists)
 	}
 
-	// Step 11: Handle existing database (verify access)
-	if dbExists && keyExists {
-		s.logger.Info("Database and keyfile already exist. Verifying access...")
+	// Step 4: Get password and open database
+	s.logger.Info("Opening database...")
 
-		// Ensure no previous session is open
-		if s.keepass.IsOpen() {
-			s.keepass.CloseWithoutSave()
-		}
-
-		// Get password (1 time for verification) - secure
-		securePassword, err := common.GetPassword(s.config, s.prompt, s.logger, false)
-		if err != nil {
-			return err
-		}
-		defer securePassword.Clear() // Ensure password is cleared from memory
-
-		// Try to open database to verify access
-		if err := s.keepass.Open(dbPath, keyfilePath, securePassword.String()); err != nil {
-			return fmt.Errorf("failed to open existing database: %w\n\nPlease verify your password and keyfile are correct", err)
-		}
-		// Close immediately after verification without saving
-		if err := s.keepass.CloseWithoutSave(); err != nil {
-			s.logger.Error(fmt.Sprintf("Failed to close database: %v", err))
-		}
-
-		s.logger.Success("✓ Database access verified!")
-		s.logger.Info(fmt.Sprintf("Database: %s", dbPath))
-		s.logger.Info(fmt.Sprintf("Keyfile: %s", keyfilePath))
-
-		// Step 11.1: Load profiles from secrets.yml (if exists)
-		if err := s.loadProfilesFromSecretsYML(dbPath, keyfilePath, securePassword.String(), targetDir); err != nil {
-			// Don't fail if secrets.yml doesn't exist or has issues
-			s.logger.Info(fmt.Sprintf("Note: Could not load profiles from secrets.yml: %v", err))
-		}
-
-		return nil
+	// Ensure no previous session is open
+	if s.keepass.IsOpen() {
+		s.keepass.CloseWithoutSave()
 	}
 
-	// Step 11b: Ask user if they want to create the database (only if not in no-interactive mode)
-	if !cfg.NoInteractive {
-		confirmed, err := s.prompt.ConfirmWithDefault("Do you want to create the database?", true)
-		if err != nil {
-			return fmt.Errorf("failed to get confirmation: %w", err)
-		}
-		if !confirmed {
-			// User declined database creation - create config.yml with no_create_database: true
-			s.logger.Debug("User declined database creation")
-
-			// Determine target directory
-			var targetDir string
-			if s.config.ShouldIgnoreGitProject() {
-				targetDir, err = os.Getwd()
-				if err != nil {
-					return fmt.Errorf("failed to get current directory: %w", err)
-				}
-			} else {
-				targetDir, err = s.findGitRoot()
-				if err != nil {
-					return fmt.Errorf("not in a git repository. Use --ignore-git-project to create in current directory: %w", err)
-				}
-			}
-
-			// Create .secrets_yohnah directory
-			secretsDir := filepath.Join(targetDir, ".secrets_yohnah")
-			if err := os.MkdirAll(secretsDir, 0700); err != nil {
-				return fmt.Errorf("failed to create directory %s: %w", secretsDir, err)
-			}
-
-			// Create config.yml with no_create_database: true
-			configPath := filepath.Join(secretsDir, "config.yml")
-			if err := s.config.CreateDefaultConfigWithNoCreate(configPath, true); err != nil {
-				return fmt.Errorf("failed to create config file: %w", err)
-			}
-
-			s.logger.Success("✓ Initialization complete!")
-			s.logger.Info(fmt.Sprintf("Created: %s", secretsDir))
-			s.logger.Info("Database: not created (user declined)")
-			s.logger.Info("Keyfile: not created (user declined)")
-			s.logger.Info("Note: no_create_database is now active in config.yml")
-
-			return nil
-		}
-	}
-
-	// Step 12: Create new database and keyfile
-	s.logger.Info("Creating new database and keyfile...")
-
-	// Get password (2 times for creation - confirmation) - secure
-	securePassword, err := common.GetPassword(s.config, s.prompt, s.logger, true)
+	// Get password (1 time for verification) - secure
+	securePassword, err := common.GetPassword(s.config, s.prompt, s.logger, false)
 	if err != nil {
 		return err
 	}
 	defer securePassword.Clear() // Ensure password is cleared from memory
 
-	// Generate keyfile
-	s.logger.Debug("Generating cryptographically secure keyfile...")
-	if err := s.keepass.GenerateKeyfile(keyfilePath); err != nil {
-		return fmt.Errorf("failed to generate keyfile: %w", err)
+	// Try to open database
+	if err := s.keepass.Open(dbPath, keyfilePath, securePassword.String()); err != nil {
+		return fmt.Errorf("failed to open database: %w\n\nPlease verify your password and keyfile are correct", err)
 	}
-	s.logger.Debug(fmt.Sprintf("Keyfile created: %s", keyfilePath))
-
-	// Create database
-	s.logger.Debug("Creating KeePass database in KDBX4 format...")
-
-	// Determine root group name
-	rootGroupName := cfg.DatabaseName
-	if rootGroupName == "" {
-		// Use git repo name or default
-		rootGroupName = s.getGitRepoName()
-	}
-	s.logger.Debug(fmt.Sprintf("Using root group name: %s", rootGroupName))
-
-	if err := s.keepass.CreateDatabase(dbPath, keyfilePath, securePassword.String(), rootGroupName); err != nil {
-		return fmt.Errorf("failed to create database: %w", err)
-	}
-	s.logger.Debug(fmt.Sprintf("Database created: %s", dbPath))
-
-	// Create config.yml (only if --ignore-config-file is NOT active)
-	if !s.config.ShouldIgnoreConfigFile() {
-		if err := s.config.CreateDefaultConfig(configPath); err != nil {
-			return fmt.Errorf("failed to create config file: %w", err)
+	defer func() {
+		if s.keepass.IsOpen() {
+			if err := s.keepass.CloseWithoutSave(); err != nil {
+				s.logger.Error(fmt.Sprintf("Failed to close database: %v", err))
+			}
 		}
-		s.logger.Debug("Created config.yml")
-	} else {
-		s.logger.Info("Skipping config file creation (--ignore-config-file active)")
-	}
+	}()
 
-	// Step 14: Load profiles from secrets.yml (if exists)
+	s.logger.Success("✓ Database opened successfully!")
+
+	// Step 5: Load profiles from secrets.yml
 	if err := s.loadProfilesFromSecretsYML(dbPath, keyfilePath, securePassword.String(), targetDir); err != nil {
-		// Don't fail the entire init if secrets.yml doesn't exist or has issues
-		// Just log a warning
-		s.logger.Info(fmt.Sprintf("Note: Could not load profiles from secrets.yml: %v", err))
-		s.logger.Info("You can create secrets.yml later and run 'secrets init' again to load profiles")
+		return fmt.Errorf("failed to load profiles from secrets.yml: %w", err)
 	}
 
-	// Step 15: Show success
-	s.logger.Success("✓ Initialization complete!")
-	s.logger.Info(fmt.Sprintf("Created: %s", secretsDir))
-	s.logger.Info(fmt.Sprintf("Database: %s", dbPath))
-	s.logger.Info(fmt.Sprintf("Keyfile: %s", keyfilePath))
-
+	s.logger.Success("✓ Profile loading complete!")
 	return nil
 }
 
@@ -385,6 +166,22 @@ func (s *service) Setup() error {
 		return err
 	}
 
+	// Step 4.5: Determine target directory for resolving relative paths (same as Init)
+	var targetDir string
+	if s.config.ShouldIgnoreGitProject() {
+		targetDir, err = os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get current directory: %w", err)
+		}
+		s.logger.Debug(fmt.Sprintf("Using current directory for path resolution: %s", targetDir))
+	} else {
+		targetDir, err = s.findGitRoot()
+		if err != nil {
+			return fmt.Errorf("not in a git repository. Use --ignore-git-project to work in current directory: %w", err)
+		}
+		s.logger.Debug(fmt.Sprintf("Found git repository root for path resolution: %s", targetDir))
+	}
+
 	// Step 5: Create setup directory
 	if err := os.MkdirAll(secretsDir, 0700); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", secretsDir, err)
@@ -420,10 +217,18 @@ func (s *service) Setup() error {
 		return nil
 	}
 
-	// Step 8: Prepare database and keyfile paths
+	// Step 8: Prepare database and keyfile paths using config paths
 	configPath := filepath.Join(secretsDir, "config.yml")
-	dbPath := filepath.Join(secretsDir, "secrets.kdbx")
-	keyfilePath := filepath.Join(secretsDir, "secrets.keyfile")
+	dbPath := s.config.GetDatabasePath()
+	keyfilePath := s.config.GetKeyfilePath()
+
+	// Convert relative paths to absolute paths based on secretsDir
+	if !filepath.IsAbs(dbPath) {
+		dbPath = filepath.Join(secretsDir, filepath.Base(dbPath))
+	}
+	if !filepath.IsAbs(keyfilePath) {
+		keyfilePath = filepath.Join(secretsDir, filepath.Base(keyfilePath))
+	}
 
 	// Step 9: Verify existence of database and keyfile
 	dbExists := common.FileExists(dbPath)
