@@ -1,11 +1,20 @@
 package cli
 
 import (
+	"fmt"
+	"os"
+	"runtime"
+
 	"github.com/Yohnah/secrets/internal/types"
 	"github.com/spf13/cobra"
 )
 
 var (
+	// Build-time injected variables
+	Version   = "v0.1.0-dev+unknown"
+	BuildTime = "unknown"
+	GitCommit = "unknown"
+
 	// Global flags
 	flagVerbose      bool
 	flagForce        bool
@@ -28,12 +37,15 @@ Examples:
   # Show help
   secrets --help
 
+  # Show version
+  secrets --version
+
   # Initialize a new database
   secrets init
 
   # Show template
   secrets show template`,
-	Version: "0.1.0",
+	Version: Version,
 }
 
 // Execute runs the root command
@@ -43,7 +55,7 @@ func Execute() error {
 
 func init() {
 	// Global flags available to all commands
-	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "Enable verbose output")
+	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "V", false, "Enable verbose output")
 	rootCmd.PersistentFlags().BoolVarP(&flagForce, "force", "f", false, "Force operation without confirmation (non-interactive mode)")
 	rootCmd.PersistentFlags().StringVarP(&flagProfileName, "profile-name", "p", "", "Profile name (alternative to positional argument)")
 	rootCmd.PersistentFlags().StringVar(&flagDatabase, "database", ".secrets_yohnah/secrets.kdbx", "Path to KeePass database file")
@@ -52,6 +64,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&flagSecretsFile, "secrets-file", "s", "", "Path to secrets.yml file (default: auto-detect from git root or current directory)")
 	rootCmd.PersistentFlags().BoolVar(&flagIgnoreConfig, "ignore-config-file", false, "Ignore configuration file")
 	rootCmd.PersistentFlags().BoolVar(&flagIgnoreGit, "ignore-git-project", false, "Ignore git project root detection (create in current directory)")
+
+	// Version flag
+	rootCmd.Flags().BoolP("version", "v", false, "Show version information")
 
 	// Custom help template to show environment variables prominently
 	// Root command: Shows only "Global Flags" (all PersistentFlags)
@@ -90,6 +105,29 @@ Environment Variables:
 Configuration Precedence:
   FLAGS > CONFIG.YML > ENV VARS > DEFAULTS
 `)
+
+	// Configure version template
+	rootCmd.SetVersionTemplate(fmt.Sprintf(
+		"Secrets by Yohnah %s\n"+
+			"Commit: %s\n"+
+			"Built: %s\n"+
+			"Go version: %s\n"+
+			"Platform: %s/%s\n",
+		Version,
+		GitCommit,
+		BuildTime,
+		runtime.Version(),
+		runtime.GOOS,
+		runtime.GOARCH,
+	))
+
+	// Handle -v flag for version
+	rootCmd.PreRun = func(cmd *cobra.Command, args []string) {
+		if version, _ := cmd.Flags().GetBool("version"); version {
+			cmd.Println(cmd.VersionTemplate())
+			os.Exit(0)
+		}
+	}
 }
 
 // GetGlobalFlags returns all global flag values as a struct

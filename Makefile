@@ -7,15 +7,16 @@ GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null | grep -E '^v[0
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 GIT_DIRTY := $(shell git diff --quiet 2>/dev/null || echo "-dirty")
 BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+BUILD_DATE_SHORT := $(shell date -u '+%Y%m%d%H%M%S')
 
-# Version logic (following semantic versioning):
-# - If on exact semantic version git tag: use tag (e.g., v1.2.3)
-# - If development: use v0.1.0-dev+YYYYMMDD.commit
+# Version logic (following semantic versioning with build metadata):
+# - If on exact semantic version git tag: use tag+builddate (e.g., v1.2.3+20251011)
+# - If development: use v0.1.0-dev+builddate.commit
 # - If dirty: add -dirty suffix
 ifdef GIT_TAG
-    VERSION := $(GIT_TAG)$(GIT_DIRTY)
+    VERSION := $(GIT_TAG)+$(BUILD_DATE_SHORT)$(GIT_DIRTY)
 else
-    VERSION := v0.1.0-dev+$(shell date -u '+%Y%m%d').$(GIT_COMMIT)$(GIT_DIRTY)
+    VERSION := v0.1.0-dev+$(BUILD_DATE_SHORT).$(GIT_COMMIT)$(GIT_DIRTY)
 endif
 
 # Go parameters
@@ -27,7 +28,7 @@ GOGET := $(GOCMD) get
 GOMOD := $(GOCMD) mod
 
 # Build flags
-LDFLAGS := -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)' -X 'main.GitCommit=$(GIT_COMMIT)'
+LDFLAGS := -X 'github.com/Yohnah/secrets/internal/cli.Version=$(VERSION)' -X 'github.com/Yohnah/secrets/internal/cli.BuildTime=$(BUILD_TIME)' -X 'github.com/Yohnah/secrets/internal/cli.GitCommit=$(GIT_COMMIT)'
 BUILD_FLAGS := -ldflags "$(LDFLAGS)" -trimpath
 
 # Directorios
@@ -67,6 +68,8 @@ install-deps:
 	cd $(GO_DIR) && $(GOMOD) tidy
 	@echo "Installing govulncheck..."
 	go install golang.org/x/vuln/cmd/govulncheck@latest
+	@echo "Installing tparse..."
+	go install github.com/mfridman/tparse@latest
 	@echo "Configuring Git hooks..."
 	git config core.hooksPath .githooks
 	chmod +x .githooks/*
@@ -76,15 +79,7 @@ install-deps:
 .PHONY: tests
 tests: install-deps ## Run all tests with verbose output and colors
 	@echo "Running all tests..."
-	@cd $(GO_DIR) && go test -v ./... | sed \
-		-e 's/^=== RUN.*/\x1b[36m&\x1b[0m/' \
-		-e 's/^--- PASS.*/\x1b[32m&\x1b[0m/' \
-		-e 's/^--- FAIL.*/\x1b[31m&\x1b[0m/' \
-		-e 's/^PASS$$/\x1b[32;1m&\x1b[0m/' \
-		-e 's/^FAIL.*/\x1b[31;1m&\x1b[0m/' \
-		-e 's/^ok .*/\x1b[32m&\x1b[0m/' \
-		-e 's/^\?.*\[no test files\]/\x1b[90m&\x1b[0m/' \
-		|| (printf "\033[31m✗ Tests failed\033[0m\n" && exit 1)
+	@cd $(GO_DIR) && set -o pipefail && go test -json ./... | tparse -all
 	@echo "Running go vet..."
 	@cd $(GO_DIR) && go vet ./...
 	@echo ""

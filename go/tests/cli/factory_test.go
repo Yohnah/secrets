@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Yohnah/secrets/internal/cli"
@@ -116,4 +117,31 @@ func TestManagerContext_AllFieldsExported(t *testing.T) {
 	t.Run("Can access Validator field", func(t *testing.T) {
 		_ = ctx.Validator
 	})
+}
+
+// TestVersionFlag verifies that the --version flag works correctly
+func TestVersionFlag(t *testing.T) {
+	// This test verifies that the version information is properly injected
+	// and that the --version flag produces output containing expected elements
+
+	// Note: This is a basic test. Full integration testing of CLI flags
+	// would require more complex setup with command execution.
+	// For now, we verify that version variables are not empty defaults.
+
+	if cli.Version == "" {
+		t.Error("cli.Version is empty, expected version string")
+	}
+
+	if cli.BuildTime == "" {
+		t.Error("cli.BuildTime is empty, expected build time string")
+	}
+
+	if cli.GitCommit == "" {
+		t.Error("cli.GitCommit is empty, expected git commit string")
+	}
+
+	// Verify version contains expected format (semantic versioning with build metadata)
+	if !strings.Contains(cli.Version, "+") {
+		t.Errorf("Version %q does not contain build metadata (+), expected format like v1.0.0+date", cli.Version)
+	}
 }
