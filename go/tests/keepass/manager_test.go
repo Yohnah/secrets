@@ -107,7 +107,7 @@ func TestEntryExists(t *testing.T) {
 		{
 			name:      "entry with environment prefix",
 			entryPath: "/testenv/testentry",
-			expected:  true,
+			expected:  false, // Changed: no longer removes environment prefix
 		},
 		{
 			name:      "nested non-existing entry",

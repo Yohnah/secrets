@@ -810,7 +810,7 @@ func (s *service) createKeys(profileName string, profile validator.Profile) (int
 		// Group items by entry path
 		itemsByEntry := make(map[string][]validator.Item)
 		for _, item := range envData {
-			// Normalize entry path (remove environment prefix if present)
+			// Use entry path exactly as specified in secrets.yml (only remove leading slash)
 			entryPath := item.Entry
 
 			// Remove leading slash if present
@@ -818,13 +818,8 @@ func (s *service) createKeys(profileName string, profile validator.Profile) (int
 				entryPath = entryPath[1:]
 			}
 
-			// Remove environment prefix from path if present (case-insensitive)
-			envPrefix := envName + "/"
-			if len(entryPath) >= len(envPrefix) {
-				if strings.EqualFold(entryPath[:len(envPrefix)], envPrefix) {
-					entryPath = entryPath[len(envPrefix):]
-				}
-			}
+			// NOTE: Do NOT remove any prefix - the path in secrets.yml is the exact structure
+			// that should exist under the environment in KeePass
 
 			itemsByEntry[entryPath] = append(itemsByEntry[entryPath], item)
 		}
@@ -994,7 +989,7 @@ func (s *service) createEntries(profileName string, profile validator.Profile) (
 		// Collect unique entry paths from all items in this environment
 		uniquePaths := make(map[string]bool)
 		for _, item := range envData {
-			// Normalize entry path (remove environment prefix if present)
+			// Use entry path exactly as specified in secrets.yml (only remove leading slash)
 			entryPath := item.Entry
 
 			// Remove leading slash if present
@@ -1002,13 +997,8 @@ func (s *service) createEntries(profileName string, profile validator.Profile) (
 				entryPath = entryPath[1:]
 			}
 
-			// Remove environment prefix from path if present (case-insensitive)
-			envPrefix := envName + "/"
-			if len(entryPath) >= len(envPrefix) {
-				if strings.EqualFold(entryPath[:len(envPrefix)], envPrefix) {
-					entryPath = entryPath[len(envPrefix):]
-				}
-			}
+			// NOTE: Do NOT remove any prefix - the path in secrets.yml is the exact structure
+			// that should be created under the environment in KeePass
 
 			uniquePaths[entryPath] = true
 		}

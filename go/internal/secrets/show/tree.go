@@ -3,7 +3,6 @@ package show
 import (
 	"fmt"
 	"strings"
-	"unicode"
 
 	"github.com/Yohnah/secrets/internal/secrets/common"
 	"github.com/Yohnah/secrets/internal/validator"
@@ -86,18 +85,20 @@ func (s *service) buildTree(profileName, environmentName string, environmentItem
 	secretsYMLEntries := make(map[string]bool)
 	secretsYMLKeys := make(map[string]map[string]bool) // entryPath -> map of keys
 
-	environmentNameCapitalized := capitalizeEnvironmentName(environmentName)
 	for _, item := range environmentItems {
-		// Trim the environment prefix from the entry path
-		// Example: "/Production/Database/PostgreSQL" -> "Database/PostgreSQL"
-		relativePath := strings.TrimPrefix(item.Entry, fmt.Sprintf("/%s/", environmentNameCapitalized))
-		secretsYMLEntries[relativePath] = true
+		// Use entry path exactly as specified in secrets.yml (only remove leading slash)
+		entryPath := item.Entry
+		if len(entryPath) > 0 && entryPath[0] == '/' {
+			entryPath = entryPath[1:]
+		}
+
+		secretsYMLEntries[entryPath] = true
 
 		// Add key to the entry's key map
-		if secretsYMLKeys[relativePath] == nil {
-			secretsYMLKeys[relativePath] = make(map[string]bool)
+		if secretsYMLKeys[entryPath] == nil {
+			secretsYMLKeys[entryPath] = make(map[string]bool)
 		}
-		secretsYMLKeys[relativePath][item.Key] = true
+		secretsYMLKeys[entryPath][item.Key] = true
 	}
 
 	// Get all entries from database
@@ -120,9 +121,9 @@ func (s *service) buildTree(profileName, environmentName string, environmentItem
 		Children: []*TreeNode{},
 	}
 
-	// Build environment node (use capitalized name for display)
+	// Build environment node (use exact name from secrets.yml)
 	envNode := &TreeNode{
-		Name:     environmentNameCapitalized,
+		Name:     environmentName,
 		IsEntry:  false,
 		Status:   "exists",
 		Children: []*TreeNode{},
@@ -295,23 +296,6 @@ func (s *service) renderTree(root *TreeNode, outputFormat string) error {
 	}
 
 	return s.output.Output(payload, "tree")
-}
-
-// capitalizeEnvironmentName capitalizes the first letter of each word in the environment name
-// This replaces the deprecated strings.Title function
-func capitalizeEnvironmentName(name string) string {
-	if name == "" {
-		return name
-	}
-
-	// Convert to lowercase first
-	name = strings.ToLower(name)
-
-	// Capitalize first letter
-	runes := []rune(name)
-	runes[0] = unicode.ToUpper(runes[0])
-
-	return string(runes)
 }
 
 // serializeTreeNode converts a TreeNode into a map compatible with the output manager

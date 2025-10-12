@@ -745,13 +745,7 @@ func (m *manager) CreateEntry(profileName, envName, entryPath string) error {
 		entryPath = entryPath[1:]
 	}
 
-	// Remove environment prefix from path if present (case-insensitive)
-	envPrefix := envName + "/"
-	if len(entryPath) >= len(envPrefix) {
-		if strings.EqualFold(entryPath[:len(envPrefix)], envPrefix) {
-			entryPath = entryPath[len(envPrefix):]
-		}
-	}
+	// NOTE: Do NOT remove environment prefix - use path exactly as in secrets.yml
 
 	// Split path into components
 	if entryPath == "" {
@@ -878,13 +872,7 @@ func (m *manager) EntryExists(profileName, envName, entryPath string) (bool, err
 		entryPath = entryPath[1:]
 	}
 
-	// Remove environment prefix from path if present (case-insensitive)
-	envPrefix := envName + "/"
-	if len(entryPath) >= len(envPrefix) {
-		if strings.EqualFold(entryPath[:len(envPrefix)], envPrefix) {
-			entryPath = entryPath[len(envPrefix):]
-		}
-	}
+	// NOTE: Do NOT remove environment prefix - use path exactly as in secrets.yml
 
 	// Split path into components
 	if entryPath == "" {
@@ -1200,14 +1188,7 @@ func (m *manager) GetFieldsByEnvironmentEntry(profileName, envName, entryPath st
 		entryPath = entryPath[1:]
 	}
 
-	// Remove environment prefix from path if present (case-insensitive)
-	envPrefix := envName + "/"
-	if len(entryPath) >= len(envPrefix) {
-		if strings.EqualFold(entryPath[:len(envPrefix)], envPrefix) {
-			entryPath = entryPath[len(envPrefix):]
-		}
-	}
-
+	// NOTE: Do NOT remove environment prefix - use path exactly as in secrets.yml
 	// Split path into components
 	if entryPath == "" {
 		return nil, fmt.Errorf("entry path cannot be empty")
@@ -1359,14 +1340,7 @@ func (m *manager) GetAllFieldsByEnvironmentEntry(profileName, envName, entryPath
 		entryPath = entryPath[1:]
 	}
 
-	// Remove environment prefix from path if present (case-insensitive)
-	envPrefix := envName + "/"
-	if len(entryPath) >= len(envPrefix) {
-		if strings.EqualFold(entryPath[:len(envPrefix)], envPrefix) {
-			entryPath = entryPath[len(envPrefix):]
-		}
-	}
-
+	// NOTE: Do NOT remove environment prefix - use path exactly as in secrets.yml
 	// Split path into components
 	if entryPath == "" {
 		return nil, fmt.Errorf("entry path cannot be empty")
