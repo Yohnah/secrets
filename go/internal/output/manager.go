@@ -125,6 +125,8 @@ func (m *manager) outputTable(data interface{}) error {
 			return m.renderSnapshotsList(statusData, displayMeta)
 		case "profiles_list":
 			return m.renderProfilesList(statusData, displayMeta)
+		case "synced_data_list":
+			return m.renderSyncedDataList(statusData, displayMeta)
 		}
 	}
 
@@ -793,6 +795,94 @@ func (m *manager) renderProfilesList(data map[string]interface{}, displayMeta ma
 		}
 
 		fmt.Println()
+	}
+
+	return nil
+}
+
+// renderSyncedDataList renders synced data list in table format
+func (m *manager) renderSyncedDataList(data map[string]interface{}, displayMeta map[string]interface{}) error {
+	// Print title if present
+	if title, ok := displayMeta["title"].(string); ok {
+		fmt.Println()
+		fmt.Println(title)
+		fmt.Println(m.repeatString("=", len(title)))
+		fmt.Println()
+	}
+
+	// Get items data
+	itemsRaw := data["items"]
+	if itemsRaw == nil {
+		fmt.Println("No items to display")
+		return nil
+	}
+
+	// Try to convert to []interface{}
+	itemsData, ok := itemsRaw.([]interface{})
+	if !ok {
+		// Try to convert to []map[string]interface{}
+		if itemsSlice, ok2 := itemsRaw.([]map[string]interface{}); ok2 {
+			// Convert to []interface{}
+			itemsData = make([]interface{}, len(itemsSlice))
+			for i, item := range itemsSlice {
+				itemsData[i] = item
+			}
+		} else {
+			// Unknown type, fallback to JSON
+			return m.outputJSON(data)
+		}
+	}
+
+	if len(itemsData) == 0 {
+		fmt.Println("No items to display")
+		return nil
+	}
+
+	// Find maximum lengths for each column
+	maxName := len("NAME")
+	maxStatus := len("STATUS")
+	maxIssue := len("ISSUE")
+
+	for _, itemRaw := range itemsData {
+		itemMap, ok := itemRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, _ := itemMap["name"].(string)
+		status, _ := itemMap["status"].(string)
+		issue, _ := itemMap["issue"].(string)
+
+		if len(name) > maxName {
+			maxName = len(name)
+		}
+		if len(status) > maxStatus {
+			maxStatus = len(status)
+		}
+		if len(issue) > maxIssue {
+			maxIssue = len(issue)
+		}
+	}
+
+	// Print header
+	fmt.Printf("%-*s  %-*s  %-*s\n", maxName, "NAME", maxStatus, "STATUS", maxIssue, "ISSUE")
+	fmt.Printf("%s  %s  %s\n",
+		m.repeatString("-", maxName),
+		m.repeatString("-", maxStatus),
+		m.repeatString("-", maxIssue))
+
+	// Print items
+	for _, itemRaw := range itemsData {
+		itemMap, ok := itemRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, _ := itemMap["name"].(string)
+		status, _ := itemMap["status"].(string)
+		issue, _ := itemMap["issue"].(string)
+
+		fmt.Printf("%-*s  %-*s  %-*s\n", maxName, name, maxStatus, status, maxIssue, issue)
 	}
 
 	return nil

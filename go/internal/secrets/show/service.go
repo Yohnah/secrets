@@ -16,6 +16,7 @@ type Service interface {
 	Template() error
 	Tree(profileName, environmentName, outputFormat string) error
 	Profiles(profileFilter string) error
+	SyncedData(profileFilter string) error
 }
 
 type service struct {
