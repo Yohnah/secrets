@@ -110,25 +110,13 @@ func (s *service) Profiles(profileFilter string) error {
 
 			// If profile exists in DB, check environment and count entries
 			if profileExistsInDB {
-				// Try to get entries from environment to see if it exists
-				dbEntries, err := s.keepass.GetEntriesByEnvironment(profileName, envName)
-				if err != nil {
-					s.logger.Error(fmt.Sprintf("Error getting entries for %s/%s: %v", profileName, envName, err))
-					totalEntries := len(profile.Environments[envName])
-					envInfo.EntriesCount = fmt.Sprintf("0/%d entries", totalEntries)
-				} else {
-					// If we got entries (even if empty), the environment exists
-					// We need to check if HEAD group exists by trying to get entries
-					// An environment exists if GetEntriesByEnvironment returns without error
+				// Count existing entries
+				totalEntries := len(profile.Environments[envName])
+				existingEntries := s.countExistingEntries(profile.Environments[envName], []string{}, profileName, envName)
 
-					// Count existing entries
-					totalEntries := len(profile.Environments[envName])
-					existingEntries := s.countExistingEntries(profile.Environments[envName], dbEntries)
-
-					// Determine if environment exists: it exists if we got entries back or if total > 0
-					envInfo.ExistsInDB = len(dbEntries) > 0 || existingEntries > 0
-					envInfo.EntriesCount = fmt.Sprintf("%d/%d entries", existingEntries, totalEntries)
-				}
+				// Determine if environment exists: it exists if there are existing entries
+				envInfo.ExistsInDB = existingEntries > 0
+				envInfo.EntriesCount = fmt.Sprintf("%d/%d entries", existingEntries, totalEntries)
 			} else {
 				// Profile not in database
 				totalEntries := len(profile.Environments[envName])
@@ -168,43 +156,15 @@ func (s *service) Profiles(profileFilter string) error {
 }
 
 // countExistingEntries counts how many entries from secrets.yml exist in the DB
-func (s *service) countExistingEntries(items []validator.Item, dbEntries []string) int {
-	// Create a map of DB entries for quick lookup
-	dbEntriesMap := make(map[string]bool)
-	for _, entry := range dbEntries {
-		dbEntriesMap[entry] = true
-	}
-
-	// Count matching entries
+func (s *service) countExistingEntries(items []validator.Item, dbEntries []string, profileName, envName string) int {
+	// Count entries that exist in DB by checking each item individually
 	existingEntries := 0
 	for _, item := range items {
-		// The entry path in secrets.yml has format: /EnvironmentName/path/to/entry
-		// But in DB it's stored as: path/to/entry
-		// So we need to extract the relative path
-
-		// Find first / after the environment prefix
-		path := item.Entry
-		if len(path) > 0 && path[0] == '/' {
-			// Skip the leading /
-			path = path[1:]
-			// Find the next / (end of environment name)
-			slashIndex := -1
-			for i, ch := range path {
-				if ch == '/' {
-					slashIndex = i
-					break
-				}
-			}
-			if slashIndex >= 0 && slashIndex < len(path)-1 {
-				// Extract path after environment name
-				relativePath := path[slashIndex+1:]
-				if dbEntriesMap[relativePath] {
-					existingEntries++
-				}
-			}
+		exists, err := s.keepass.FieldExists(profileName, envName, item.Entry, item.Key)
+		if err == nil && exists {
+			existingEntries++
 		}
 	}
-
 	return existingEntries
 }
 
