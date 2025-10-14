@@ -1,0 +1,27 @@
+# ============================================================================
+# YAML Configuration Template
+# ----------------------------------------------------------------------------
+# This template generates a YAML configuration file with secrets organized
+# under a section. It creates a structured YAML document that can be used by
+# applications that read YAML configuration files.
+#
+# Usage:
+#   - Include this file in your application configuration
+#   - Access values using YAML parsing libraries
+#   - The template expects data with: { Section: string, Items: map[string]string }
+#   - Example output creates YAML config with sectioned secrets
+#
+# Security:
+#   - YAML files may contain sensitive configuration data
+#   - Use appropriate access controls for configuration files
+#   - Do NOT commit generated files with real secrets to version control
+#
+# ----------------------------------------------------------------------------
+# Template logic:
+#   - Creates a YAML mapping with the section name as key
+#   - Places all secrets under the section as key-value pairs
+# ============================================================================
+
+{{.Section}}:
+{{range $key, $value := .Items}}  {{$key}}: "{{$value}}"
+{{end}}

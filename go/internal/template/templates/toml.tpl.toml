@@ -1,0 +1,28 @@
+# ============================================================================
+# TOML Configuration Template
+# ----------------------------------------------------------------------------
+# This template generates a TOML configuration file with secrets organized
+# in sections. It creates a structured TOML document that can be used by
+# applications that support TOML configuration format.
+#
+# Usage:
+#   - Include this file in your application configuration
+#   - Access values using TOML parsing libraries
+#   - The template expects data with: { Section: string, Items: map[string]string }
+#   - Example output creates TOML config with sectioned secrets
+#
+# Security:
+#   - TOML files may contain sensitive configuration data
+#   - Use appropriate access controls for configuration files
+#   - Do NOT commit generated files with real secrets to version control
+#
+# ----------------------------------------------------------------------------
+# Template logic:
+#   - Creates a TOML table with the section name
+#   - Places all secrets under the section as key-value pairs
+# ============================================================================
+
+[{{.Section}}]
+{{range $key, $value := .Items}}
+{{$key}} = "{{$value}}"
+{{end}}

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed templates/*.tpl.yml
+//go:embed templates/*.tpl.*
 var templatesFS embed.FS
 
 // Template names handled by the manager.
@@ -31,8 +31,33 @@ func GetAvailableTemplates() ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() && strings.HasSuffix(path, ".tpl.yml") {
-			name := strings.TrimSuffix(filepath.Base(path), ".tpl.yml") + ".yml"
+		if !d.IsDir() && strings.HasPrefix(path, "templates/") {
+			baseName := filepath.Base(path)
+			var name string
+
+			// Handle different template types
+			if strings.HasSuffix(baseName, ".tpl.yml") {
+				name = strings.TrimSuffix(baseName, ".tpl.yml") + ".yml"
+			} else if strings.HasPrefix(baseName, "shell.tpl.") {
+				// Handle shell templates: shell.tpl.sh -> shell.sh, etc.
+				ext := strings.TrimPrefix(baseName, "shell.tpl.")
+				name = "shell." + ext
+			} else if strings.HasSuffix(baseName, ".tpl.env") {
+				name = strings.TrimSuffix(baseName, ".tpl.env") + ".env"
+			} else if strings.HasSuffix(baseName, ".tpl.json") {
+				name = strings.TrimSuffix(baseName, ".tpl.json") + ".json"
+			} else if strings.HasSuffix(baseName, ".tpl.properties") {
+				name = strings.TrimSuffix(baseName, ".tpl.properties") + ".properties"
+			} else if strings.HasSuffix(baseName, ".tpl.tfvars") {
+				name = strings.TrimSuffix(baseName, ".tpl.tfvars") + ".tfvars"
+			} else if strings.HasSuffix(baseName, ".tpl.toml") {
+				name = strings.TrimSuffix(baseName, ".tpl.toml") + ".toml"
+			} else if strings.HasSuffix(baseName, ".tpl.cmd") {
+				name = strings.TrimSuffix(baseName, ".tpl.cmd") + ".cmd"
+			} else {
+				return nil // Skip unknown template types
+			}
+
 			templates = append(templates, name)
 		}
 		return nil
@@ -53,8 +78,32 @@ func GetAvailableTemplatesWithDescriptions() (map[string]string, error) {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() && strings.HasSuffix(path, ".tpl.yml") {
-			name := strings.TrimSuffix(filepath.Base(path), ".tpl.yml") + ".yml"
+		if !d.IsDir() && strings.HasPrefix(path, "templates/") {
+			baseName := filepath.Base(path)
+			var name string
+
+			// Handle different template types
+			if strings.HasSuffix(baseName, ".tpl.yml") {
+				name = strings.TrimSuffix(baseName, ".tpl.yml") + ".yml"
+			} else if strings.HasPrefix(baseName, "shell.tpl.") {
+				// Handle shell templates: shell.tpl.sh -> shell.sh, etc.
+				ext := strings.TrimPrefix(baseName, "shell.tpl.")
+				name = "shell." + ext
+			} else if strings.HasSuffix(baseName, ".tpl.env") {
+				name = strings.TrimSuffix(baseName, ".tpl.env") + ".env"
+			} else if strings.HasSuffix(baseName, ".tpl.json") {
+				name = strings.TrimSuffix(baseName, ".tpl.json") + ".json"
+			} else if strings.HasSuffix(baseName, ".tpl.properties") {
+				name = strings.TrimSuffix(baseName, ".tpl.properties") + ".properties"
+			} else if strings.HasSuffix(baseName, ".tpl.tfvars") {
+				name = strings.TrimSuffix(baseName, ".tpl.tfvars") + ".tfvars"
+			} else if strings.HasSuffix(baseName, ".tpl.toml") {
+				name = strings.TrimSuffix(baseName, ".tpl.toml") + ".toml"
+			} else if strings.HasSuffix(baseName, ".tpl.cmd") {
+				name = strings.TrimSuffix(baseName, ".tpl.cmd") + ".cmd"
+			} else {
+				return nil // Skip unknown template types
+			}
 
 			// Read the first few lines to find description
 			content, err := templatesFS.ReadFile(path)
@@ -67,8 +116,14 @@ func GetAvailableTemplatesWithDescriptions() (map[string]string, error) {
 			for _, line := range lines {
 				line = strings.TrimSpace(line)
 				if strings.HasPrefix(line, "#") && len(strings.TrimSpace(strings.TrimPrefix(line, "#"))) > 0 {
-					// Found a comment line with content
+					// Skip the header separator line
+					if strings.Contains(line, "=====") {
+						continue
+					}
+					// Found a comment line with content (should be the title)
 					description = strings.TrimSpace(strings.TrimPrefix(line, "#"))
+					// Convert from CAPITALIZED_SNAKE_CASE to normal case if needed
+					description = normalizeDescription(description)
 					break
 				}
 			}
@@ -90,7 +145,7 @@ type manager struct {
 }
 
 // NewManager creates a TemplateManager instance with embedded templates registered.
-// Automatically loads all templates from the embedded templates/*.tpl.yml files.
+// Automatically loads all templates from the embedded templates/*.tpl.* files.
 func NewManager() Manager {
 	templates := make(map[string]string)
 
@@ -99,13 +154,38 @@ func NewManager() Manager {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() && strings.HasSuffix(path, ".tpl.yml") {
+		if !d.IsDir() && strings.HasPrefix(path, "templates/") {
+			baseName := filepath.Base(path)
+			var name string
+
 			content, err := templatesFS.ReadFile(path)
 			if err != nil {
 				return err
 			}
-			// Map "k8s.tpl.yml" to "k8s.yml", "secrets.tpl.yml" to "secrets.yml"
-			name := strings.TrimSuffix(filepath.Base(path), ".tpl.yml") + ".yml"
+
+			// Handle different template types
+			if strings.HasSuffix(baseName, ".tpl.yml") {
+				name = strings.TrimSuffix(baseName, ".tpl.yml") + ".yml"
+			} else if strings.HasPrefix(baseName, "shell.tpl.") {
+				// Handle shell templates: shell.tpl.sh -> shell.sh, etc.
+				ext := strings.TrimPrefix(baseName, "shell.tpl.")
+				name = "shell." + ext
+			} else if strings.HasSuffix(baseName, ".tpl.env") {
+				name = strings.TrimSuffix(baseName, ".tpl.env") + ".env"
+			} else if strings.HasSuffix(baseName, ".tpl.json") {
+				name = strings.TrimSuffix(baseName, ".tpl.json") + ".json"
+			} else if strings.HasSuffix(baseName, ".tpl.properties") {
+				name = strings.TrimSuffix(baseName, ".tpl.properties") + ".properties"
+			} else if strings.HasSuffix(baseName, ".tpl.tfvars") {
+				name = strings.TrimSuffix(baseName, ".tpl.tfvars") + ".tfvars"
+			} else if strings.HasSuffix(baseName, ".tpl.toml") {
+				name = strings.TrimSuffix(baseName, ".tpl.toml") + ".toml"
+			} else if strings.HasSuffix(baseName, ".tpl.cmd") {
+				name = strings.TrimSuffix(baseName, ".tpl.cmd") + ".cmd"
+			} else {
+				return nil // Skip unknown template types
+			}
+
 			templates[name] = string(content)
 		}
 		return nil
@@ -133,4 +213,51 @@ func (m *manager) GetTemplate(data interface{}, name string) (string, error) {
 	_ = data
 
 	return templateContent, nil
+}
+
+// normalizeDescription converts template titles from various formats to readable descriptions
+func normalizeDescription(description string) string {
+	// Handle specific cases
+	switch description {
+	case "secret.yml definition template":
+		return "Secrets configuration template"
+	case "Shell Environment Export Template":
+		return "Shell script for environment variables"
+	case "Kubernetes Secret Template":
+		return "Kubernetes Secret YAML resource"
+	case "Secrets Configuration Template":
+		return "Secrets configuration template"
+	case "C Shell Environment Variables Template":
+		return "C shell script for environment variables"
+	case "Fish Shell Environment Variables Template":
+		return "Fish shell script for environment variables"
+	case "Nushell Environment Variables Template":
+		return "Nushell script for environment variables"
+	case "PowerShell Environment Variables Template":
+		return "PowerShell script for environment variables"
+	case "Ansible Variables Template":
+		return "Ansible variables YAML file"
+	case "Docker Compose Environment Template":
+		return "Docker Compose environment variables"
+	case "Dotenv Environment Variables Template":
+		return "Environment variables .env file"
+	case ".NET AppSettings JSON Template":
+		return ".NET application settings JSON"
+	case "JSON Configuration Template":
+		return "JSON configuration file"
+	case "Windows CMD Environment Variables Template":
+		return "Windows CMD batch script"
+	case "Spring Boot Properties Template":
+		return "Spring Boot properties file"
+	case "Terraform Variables Template":
+		return "Terraform variables file"
+	case "TOML Configuration Template":
+		return "TOML configuration file"
+	case "YAML Configuration Template":
+		return "YAML configuration file"
+	default:
+		// Convert from Title Case to readable format
+		// Replace spaces with spaces, handle acronyms, etc.
+		return strings.Title(strings.ToLower(description))
+	}
 }
