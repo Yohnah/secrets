@@ -1,15 +1,11 @@
 package show
 
 import (
-	_ "embed"
 	"fmt"
 	"strings"
 )
 
-//go:embed templates/secrets.tpl.yml
-var secretsTemplate string
-
-// Template outputs the embedded secrets.yml template
+// Template outputs the embedded template file
 func (s *service) Template() error {
 	// Get configuration (ConfigMgr has already processed precedence)
 	cfg, err := s.config.GetConfig()
@@ -17,21 +13,32 @@ func (s *service) Template() error {
 		return fmt.Errorf("failed to get configuration: %w", err)
 	}
 
+	// Get template name from config (passed as argument from CLI)
+	templateName := cfg.TemplateName
+	if templateName == "" {
+		return fmt.Errorf("template name is required")
+	}
+
+	// Pull template from TemplateManager (raw template, no processing)
+	content, err := s.template.GetTemplate(nil, templateName)
+	if err != nil {
+		return fmt.Errorf("failed to get template %q: %w", templateName, err)
+	}
+
 	// Get minimal flag from processed config
 	minimal := cfg.Minimal
 
-	var content string
+	// If minimal flag is set, process the template
 	if minimal {
-		content = s.processMinimalTemplate()
-	} else {
-		content = secretsTemplate
+		content = s.processMinimalTemplate(content)
 	}
+
 	return s.output.OutputRaw(content)
 }
 
 // processMinimalTemplate generates a minimal version of the template
-func (s *service) processMinimalTemplate() string {
-	lines := strings.Split(secretsTemplate, "\n")
+func (s *service) processMinimalTemplate(templateContent string) string {
+	lines := strings.Split(templateContent, "\n")
 	var result strings.Builder
 	inSkipSection := false
 

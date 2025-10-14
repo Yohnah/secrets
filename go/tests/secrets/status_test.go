@@ -55,7 +55,7 @@ func TestStatus_WithValidDatabase(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -99,7 +99,7 @@ func TestStatus_WithoutDatabase(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Run status without initializing first
 	err := secretsMgr.Status()
@@ -141,7 +141,7 @@ func TestStatus_WithIgnoreConfigFile(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -198,7 +198,7 @@ func TestStatus_WithCustomPaths(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -246,7 +246,7 @@ func TestStatus_WithWrongPassword(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -289,7 +289,7 @@ func TestStatus_AfterInit(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()

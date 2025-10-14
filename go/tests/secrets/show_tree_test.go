@@ -59,7 +59,7 @@ outputs: []`
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -117,7 +117,7 @@ outputs: []`
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -175,7 +175,7 @@ outputs: []`
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -237,7 +237,7 @@ outputs: []`
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -299,7 +299,7 @@ outputs: []`
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()

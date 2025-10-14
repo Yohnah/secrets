@@ -26,7 +26,8 @@ type CommandFlags struct {
 	SetupDirInHome bool
 
 	// Show template command flags
-	Minimal bool
+	Minimal      bool
+	TemplateName string
 
 	// Show status command flags
 	OutputFormat string

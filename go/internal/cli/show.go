@@ -21,18 +21,24 @@ var showCmd = &cobra.Command{
 
 // showTemplateCmd represents the show template command
 var showTemplateCmd = &cobra.Command{
-	Use:   "template",
-	Short: "Show secrets.yml template",
-	Long: `Displays the secrets.yml template file with examples and documentation.
+	Use:   "template <template-name>",
+	Short: "Show template file",
+	Long: `Displays the specified template file with examples and documentation.
 
-You can redirect the output to create your own secrets.yml:
-  secrets show template > secrets.yml
+Available templates:
+  - secrets.yml: Main configuration template for secrets management
+
+You can redirect the output to create your own file:
+  secrets show template secrets.yml > secrets.yml
+  secrets show template k8s.yml > k8s.yml
 
 The template includes:
-  - Complete structure with metadata, environments, and outputs sections
-  - Examples for different profiles (production, development, CI/CD)
+  - Complete structure with examples
   - Field reference and validation rules
-  - Documentation for all field types`,
+  - Documentation for all field types
+
+Use --minimal flag to get a simplified version without examples.`,
+	Args: cobra.ExactArgs(1),
 	RunE: runShowTemplate,
 }
 
@@ -124,9 +130,13 @@ func init() {
 }
 
 func runShowTemplate(cmd *cobra.Command, args []string) error {
+	// Extract template name from arguments
+	templateName := args[0]
+
 	// CliMgr captures ALL command-specific flags and feeds them to ConfigMgr
 	commandFlags := &types.CommandFlags{
-		Minimal: flagMinimal,
+		Minimal:      flagMinimal,
+		TemplateName: templateName,
 	}
 
 	// Create manager context with captured flags

@@ -7,6 +7,7 @@ import (
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/secrets/profile"
+	"github.com/Yohnah/secrets/internal/template"
 	"github.com/Yohnah/secrets/internal/validator"
 )
 
@@ -25,18 +26,20 @@ type service struct {
 	prompt          prompt.Manager
 	keepass         keepass.Manager
 	output          output.Manager
+	template        template.Manager
 	validator       validator.ValidatorManager
 	profileResolver profile.Resolver
 }
 
 // NewService creates a new show service instance
-func NewService(cfg config.Manager, log logger.Manager, prm prompt.Manager, kp keepass.Manager, out output.Manager, val validator.ValidatorManager, resolver profile.Resolver) Service {
+func NewService(cfg config.Manager, log logger.Manager, prm prompt.Manager, kp keepass.Manager, out output.Manager, tmpl template.Manager, val validator.ValidatorManager, resolver profile.Resolver) Service {
 	return &service{
 		config:          cfg,
 		logger:          log,
 		prompt:          prm,
 		keepass:         kp,
 		output:          out,
+		template:        tmpl,
 		validator:       val,
 		profileResolver: resolver,
 	}

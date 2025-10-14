@@ -32,7 +32,7 @@ func TestSetupCreatesAllFiles(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Execute setup
 	err := secretsMgr.Setup()
@@ -96,7 +96,7 @@ func TestSetupWithCustomDatabaseName(t *testing.T) {
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	keepassMgr := newMockKeePassManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	err := secretsMgr.Setup()
 	if err != nil {
@@ -142,7 +142,7 @@ func TestSetupFailsIfDirectoryExistsWithoutForce(t *testing.T) {
 	configMgr1 := config.NewManager(flags1, &types.CommandFlags{}, validatorMgr1)
 	loggerMgr1 := logger.NewManager(false)
 	promptMgr1 := prompt.NewManager()
-	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	err := secretsMgr1.Setup()
 	if err != nil {
@@ -158,7 +158,7 @@ func TestSetupFailsIfDirectoryExistsWithoutForce(t *testing.T) {
 	configMgr2 := config.NewManager(flags2, &types.CommandFlags{}, validatorMgr2)
 	loggerMgr2 := logger.NewManager(false)
 	promptMgr2 := prompt.NewManager()
-	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	err = secretsMgr2.Setup()
 	if err == nil {
@@ -185,7 +185,7 @@ func TestSetupWithForceRecreate(t *testing.T) {
 	configMgr1 := config.NewManager(flags1, &types.CommandFlags{}, validatorMgr1)
 	loggerMgr1 := logger.NewManager(false)
 	promptMgr1 := prompt.NewManager()
-	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	err := secretsMgr1.Setup()
 	if err != nil {
@@ -220,7 +220,7 @@ func TestSetupWithForceRecreate(t *testing.T) {
 	configMgr2 := config.NewManager(flags2, cmdFlags2, validatorMgr2)
 	loggerMgr2 := logger.NewManager(false)
 	promptMgr2 := prompt.NewManager()
-	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	err = secretsMgr2.Init()
 	if err != nil {
@@ -269,7 +269,7 @@ func TestSetupWithNoCreateDatabase(t *testing.T) {
 	configMgr := config.NewManager(flags, cmdFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	err := secretsMgr.Setup()
 	if err != nil {
@@ -319,7 +319,7 @@ func TestSetupWithGlobalFlagVerbose(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(true) // Logger should be in verbose mode
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	err := secretsMgr.Setup()
 	if err != nil {
@@ -352,7 +352,7 @@ func TestSetupWithIgnoreGitProject(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	err := secretsMgr.Setup()
 	if err != nil {
@@ -397,7 +397,7 @@ func TestSetupWithSetupDirInHome(t *testing.T) {
 	configMgr := config.NewManager(flags, cmdFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Execute setup
 	err := secretsMgr.Setup()
@@ -476,7 +476,7 @@ func TestSetupPrevalenceProjectExists(t *testing.T) {
 	mockKeePass.GenerateKeyfile(keyfilePath)
 	mockKeePass.CreateDatabase(dbPath, keyfilePath, "test123", "Test")
 
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKeePass, output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKeePass, output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Execute setup - should detect existing project directory
 	err := secretsMgr.Setup()
@@ -530,7 +530,7 @@ func TestSetupDefaultsToProjectNotHome(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKeePass, output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKeePass, output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Execute setup - should create in project directory by default (NOT use existing home)
 	err := secretsMgr.Setup()
@@ -603,7 +603,7 @@ func TestSetupForceRecreateOnlyAffectsProject(t *testing.T) {
 	configMgr := config.NewManager(flags, cmdFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKeePass, output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKeePass, output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Execute setup with --force-recreate
 	err := secretsMgr.Setup()
@@ -659,7 +659,7 @@ func TestSetupBothDirectoriesCanCoexist(t *testing.T) {
 	}
 
 	configMgr1 := config.NewManager(flags1, &types.CommandFlags{}, validatorMgr)
-	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr, promptMgr, mockKeePass, output.NewManager(), validator.NewManager())
+	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr, promptMgr, mockKeePass, output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	err := secretsMgr1.Setup()
 	if err != nil {
@@ -675,7 +675,7 @@ func TestSetupBothDirectoriesCanCoexist(t *testing.T) {
 	}
 
 	configMgr2 := config.NewManager(flags2, cmdFlags2, validatorMgr)
-	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr, promptMgr, mockKeePass, output.NewManager(), validator.NewManager())
+	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr, promptMgr, mockKeePass, output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	err = secretsMgr2.Setup()
 	if err != nil {

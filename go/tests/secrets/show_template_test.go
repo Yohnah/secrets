@@ -37,13 +37,16 @@ func TestShowTemplate_FullTemplate(t *testing.T) {
 		IgnoreConfigFile: true,
 		Verbose:          false,
 	}
+	commandFlags := &types.CommandFlags{
+		TemplateName: "secrets.yml",
+	}
 	validatorMgr := validator.NewManager()
-	configMgr := config.NewManager(globalFlags, &types.CommandFlags{}, validatorMgr)
+	configMgr := config.NewManager(globalFlags, commandFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	outputMock := &mockOutputManager{}
 
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), outputMock, validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), outputMock, newMockTemplateManager(), validator.NewManager())
 
 	// Test full template
 	err := secretsMgr.ShowTemplate()
@@ -86,7 +89,8 @@ func TestShowTemplate_MinimalTemplate(t *testing.T) {
 	}
 
 	commandFlags := &types.CommandFlags{
-		Minimal: true,
+		Minimal:      true,
+		TemplateName: "secrets.yml",
 	}
 
 	validatorMgr := validator.NewManager()
@@ -95,7 +99,7 @@ func TestShowTemplate_MinimalTemplate(t *testing.T) {
 	promptMgr := prompt.NewManager()
 	outputMock := &mockOutputManager{}
 
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), outputMock, validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), outputMock, newMockTemplateManager(), validator.NewManager())
 
 	// Test minimal template
 	err := secretsMgr.ShowTemplate()
@@ -135,9 +139,12 @@ func TestShowTemplate_MinimalTemplate(t *testing.T) {
 
 	// Minimal should be shorter than full
 	outputMock2 := &mockOutputManager{}
-	commandFlags2 := &types.CommandFlags{Minimal: false}
+	commandFlags2 := &types.CommandFlags{
+		Minimal:      false,
+		TemplateName: "secrets.yml",
+	}
 	configMgr2 := config.NewManager(globalFlags, commandFlags2, validatorMgr)
-	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr, promptMgr, newMockKeePassManager(), outputMock2, validator.NewManager())
+	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr, promptMgr, newMockKeePassManager(), outputMock2, newMockTemplateManager(), validator.NewManager())
 	_ = secretsMgr2.ShowTemplate()
 	fullTemplate := outputMock2.output
 
@@ -155,14 +162,17 @@ func TestShowTemplate_UsesOutputManager(t *testing.T) {
 		IgnoreConfigFile: true,
 		Verbose:          false,
 	}
+	commandFlags := &types.CommandFlags{
+		TemplateName: "secrets.yml",
+	}
 	validatorMgr := validator.NewManager()
-	configMgr := config.NewManager(globalFlags, &types.CommandFlags{}, validatorMgr)
+	configMgr := config.NewManager(globalFlags, commandFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 
 	// Use real OutputManager to ensure integration works
 	outputMgr := output.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), outputMgr, validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), outputMgr, newMockTemplateManager(), validator.NewManager())
 
 	// This should not panic or error - output goes to stdout
 	err := secretsMgr.ShowTemplate()

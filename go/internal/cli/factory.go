@@ -7,6 +7,7 @@ import (
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/secrets"
+	"github.com/Yohnah/secrets/internal/template"
 	"github.com/Yohnah/secrets/internal/types"
 	"github.com/Yohnah/secrets/internal/validator"
 )
@@ -75,9 +76,12 @@ func NewManagerContext(commandFlags *types.CommandFlags) *ManagerContext {
 	// Step 7: Instantiate KeePassManager
 	keepassMgr := keepass.NewManager()
 
-	// Step 8: Instantiate SecretsManager (CORE - business logic)
+	// Step 8: Instantiate TemplateManager
+	templateMgr := template.NewManager()
+
+	// Step 9: Instantiate SecretsManager (CORE - business logic)
 	// SecretsManager receives all dependencies via constructor injection
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, validatorMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, templateMgr, validatorMgr)
 
 	return &ManagerContext{
 		Config:    configMgr,

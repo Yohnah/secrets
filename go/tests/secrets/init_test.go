@@ -71,7 +71,7 @@ func TestInitCreatesSecretsYohnahDirectory(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -111,7 +111,7 @@ func TestInitCreatesConfigYml(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -165,7 +165,7 @@ func TestInitWithIgnoreConfigFile(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -223,7 +223,7 @@ func TestInitWithIgnoreGitProject(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -261,7 +261,7 @@ func TestInitWithoutGitFails(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	err := secretsMgr.Init()
 	if err == nil {
@@ -290,7 +290,7 @@ func TestInitDoesNotOverwriteExistingConfig(t *testing.T) {
 	configMgr1 := config.NewManager(flags1, &types.CommandFlags{}, validatorMgr)
 	loggerMgr1 := logger.NewManager(false)
 	promptMgr1 := prompt.NewManager()
-	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr1 := secrets.NewManager(configMgr1, loggerMgr1, promptMgr1, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr1.Setup()
@@ -329,7 +329,7 @@ func TestInitDoesNotOverwriteExistingConfig(t *testing.T) {
 	configMgr2 := config.NewManager(flags2, &types.CommandFlags{}, validatorMgr)
 	loggerMgr2 := logger.NewManager(false)
 	promptMgr2 := prompt.NewManager()
-	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr2, promptMgr2, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	err = secretsMgr2.Init()
 	if err != nil {
@@ -382,7 +382,7 @@ func TestInitWithCustomPaths(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -434,7 +434,7 @@ func TestInitFindsGitRootFromSubdirectory(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -483,7 +483,7 @@ func TestInitAddsToGitignore(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -535,7 +535,7 @@ func TestInitCreatesGitignoreIfNotExists(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -588,7 +588,7 @@ func TestInitDoesNotDuplicateGitignoreEntry(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -679,7 +679,7 @@ func TestInitWithInvalidConfigFile(t *testing.T) {
 	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), validator.NewManager())
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
 
 	// Init should succeed even with invalid config (config validation may not happen in init)
 	err := secretsMgr.Init()

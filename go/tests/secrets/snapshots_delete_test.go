@@ -60,7 +60,7 @@ outputs: []`
 	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validatorMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), newMockTemplateManager(), validatorMgr)
 
 	// Verify v1 and v2 exist before deletion
 	v1Exists, _ := mockKP.TreeGroupExists("test-profile", "v1")
@@ -143,7 +143,7 @@ outputs: []`
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	kpMgr := newMockKeePassManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), validatorMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), newMockTemplateManager(), validatorMgr)
 
 	// Try to delete from non-existent profile
 	err := secretsMgr.SnapshotsDelete("non-existent-profile", "v1")
@@ -195,7 +195,7 @@ outputs: []`
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	kpMgr := newMockKeePassManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), validatorMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), newMockTemplateManager(), validatorMgr)
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -259,7 +259,7 @@ outputs: []`
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	kpMgr := newMockKeePassManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), validatorMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), newMockTemplateManager(), validatorMgr)
 
 	// Setup infrastructure first
 	err := secretsMgr.Setup()
@@ -323,7 +323,7 @@ outputs: []`
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
 	kpMgr := newMockKeePassManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), validatorMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, kpMgr, output.NewManager(), newMockTemplateManager(), validatorMgr)
 
 	// Test various invalid version formats
 	testCases := []string{

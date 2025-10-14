@@ -8,6 +8,7 @@ import (
 
 	"github.com/Yohnah/secrets/internal/config"
 	"github.com/Yohnah/secrets/internal/secrets/common"
+	"github.com/Yohnah/secrets/internal/template"
 	"github.com/Yohnah/secrets/internal/validator"
 	"github.com/tobischo/gokeepasslib/v3"
 	"gopkg.in/yaml.v3"
@@ -628,4 +629,9 @@ func (m *mockValidatorManager) ValidateUniqueEntryInPath(entries []string, entry
 
 func (m *mockValidatorManager) ValidateUniqueFieldsInEntry(fields []string, entryPath string) error {
 	return nil
+}
+
+// newMockTemplateManager creates a new template.Manager for testing
+func newMockTemplateManager() template.Manager {
+	return template.NewManager()
 }

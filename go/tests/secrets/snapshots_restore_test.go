@@ -60,7 +60,7 @@ outputs: []`
 	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validatorMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), newMockTemplateManager(), validatorMgr)
 
 	// Restore v1
 	err := secretsMgr.SnapshotsRestore("test-profile", "v1")
@@ -141,7 +141,7 @@ outputs: []`
 	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validatorMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), newMockTemplateManager(), validatorMgr)
 
 	// Try to restore for non-existent profile
 	err := secretsMgr.SnapshotsRestore("non-existent-profile", "v1")
@@ -201,7 +201,7 @@ outputs: []`
 	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validatorMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), newMockTemplateManager(), validatorMgr)
 
 	// Try to restore non-existent snapshot
 	err := secretsMgr.SnapshotsRestore("test-profile", "v999")
@@ -261,7 +261,7 @@ outputs: []`
 	configMgr := config.NewManager(flags, commandFlags, validatorMgr)
 	loggerMgr := logger.NewManager(false)
 	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), validatorMgr)
+	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, mockKP, output.NewManager(), newMockTemplateManager(), validatorMgr)
 
 	// Get HEAD version before restore (should be 6)
 	headVersionBeforeSecure, _ := mockKP.GetTreeGroupEntryField("test-profile", "HEAD", "metadata", "version")

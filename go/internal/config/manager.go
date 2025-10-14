@@ -47,7 +47,8 @@ type Config struct {
 	ForceRecreate bool
 	DatabaseName  string
 	// Show template specific
-	Minimal bool
+	Minimal      bool
+	TemplateName string
 }
 
 type manager struct {
@@ -177,6 +178,9 @@ func (m *manager) GetConfig() (*Config, error) {
 
 		// Show template flags
 		config.Minimal = m.commandFlags.Minimal
+		if m.commandFlags.TemplateName != "" {
+			config.TemplateName = m.commandFlags.TemplateName
+		}
 
 		// Show status flags
 		if m.commandFlags.OutputFormat != "" {
