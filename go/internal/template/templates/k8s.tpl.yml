@@ -1,8 +1,40 @@
+# K8s Secret Template for secrets.yml
+# This template generates a Kubernetes Secret resource in YAML format
+# that can be applied directly to a Kubernetes cluster.
+#
+# Usage: secrets show template k8s
+#
+# The template expects data with the following structure:
+# - Section: The name of the secret (used as metadata.name)
+# - Items: A map of key-value pairs to be stored as secret data
+#
+# Example usage in secrets.yml:
+# profiles:
+#   myapp:
+#     environments:
+#       production:
+#         items:
+#           database_url: "postgresql://user:pass@host:5432/db"
+#           api_key: "sk-1234567890abcdef"
+#
+# Example output after processing:
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: production-myapp  # Generated from profile-environment
+# type: Opaque
+# data:
+#   database_url: cG9zdGdyZXNxbDovL3VzZXI6cGFzc0Bob3N0OjU0MzIvZGI=  # base64 encoded
+#   api_key: c2stMTIzNDU2Nzg5MGFiY2RlZg==                        # base64 encoded
+
 apiVersion: v1
 kind: Secret
 metadata:
-  name: myapp-secrets
+  name: {{ .Section }}  # Name of the secret, typically profile-environment
 type: Opaque
 data:
-{{range $key, $value := .}}  {{$key}}: {{base64 $value}}
-{{end}}
+  # Each item from the secrets configuration is base64 encoded
+  # and stored as key-value pairs in the secret data
+  {{- range $key, $value := .Items }}
+  {{ $key }}: {{ $value | base64 }}
+  {{- end }}

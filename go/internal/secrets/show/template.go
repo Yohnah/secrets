@@ -40,44 +40,16 @@ func (s *service) Template() error {
 func (s *service) processMinimalTemplate(templateContent string) string {
 	lines := strings.Split(templateContent, "\n")
 	var result strings.Builder
-	inSkipSection := false
 
 	for _, line := range lines {
-		// Skip decorative lines
-		if strings.HasPrefix(line, "# ═══════════════════") {
+		// Skip comment lines (starting with #)
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
 			continue
 		}
-		if strings.HasPrefix(line, "# SECRETS.YML TEMPLATE") {
+		// Skip empty lines
+		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		if strings.Contains(line, "This file defines") {
-			continue
-		}
-
-		// Detect start of COMPLETE EXAMPLE section
-		if strings.Contains(line, "COMPLETE EXAMPLE") {
-			inSkipSection = true
-			continue
-		}
-
-		// Detect start of FIELD REFERENCE section
-		if strings.Contains(line, "FIELD REFERENCE") {
-			inSkipSection = true
-			continue
-		}
-
-		// Detect end of skip section (when we find metadata or environments or outputs)
-		if strings.HasPrefix(line, "metadata:") ||
-			strings.HasPrefix(line, "environments:") ||
-			strings.HasPrefix(line, "outputs:") {
-			inSkipSection = false
-		}
-
-		// Skip lines in sections we're skipping
-		if inSkipSection {
-			continue
-		}
-
 		// Include the line
 		result.WriteString(line)
 		result.WriteString("\n")
