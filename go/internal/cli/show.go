@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"fmt"
 	"os"
+	"strings"
 
+	"github.com/Yohnah/secrets/internal/template"
 	"github.com/Yohnah/secrets/internal/types"
 	"github.com/spf13/cobra"
 )
@@ -25,8 +28,7 @@ var showTemplateCmd = &cobra.Command{
 	Short: "Show template file",
 	Long: `Displays the specified template file with examples and documentation.
 
-Available templates:
-  - secrets.yml: Main configuration template for secrets management
+Available templates will be listed here.
 
 You can redirect the output to create your own file:
   secrets show template secrets.yml > secrets.yml
@@ -127,6 +129,37 @@ func init() {
 
 	// Flags for profiles subcommand only
 	showProfilesCmd.Flags().StringVarP(&flagProfilesOutput, "output", "o", "table", "Output format: table, json, yaml")
+
+	// Update show template help with available templates
+	updateShowTemplateHelp()
+}
+
+func updateShowTemplateHelp() {
+	templates, err := template.GetAvailableTemplates()
+	if err != nil {
+		// Fallback to static help if we can't get templates
+		return
+	}
+
+	var templateList strings.Builder
+	templateList.WriteString("Available templates:\n")
+	for _, tmpl := range templates {
+		templateList.WriteString(fmt.Sprintf("  - %s\n", tmpl))
+	}
+
+	showTemplateCmd.Long = fmt.Sprintf(`Displays the specified template file with examples and documentation.
+
+%s
+You can redirect the output to create your own file:
+  secrets show template secrets.yml > secrets.yml
+  secrets show template k8s.yml > k8s.yml
+
+The template includes:
+  - Complete structure with examples
+  - Field reference and validation rules
+  - Documentation for all field types
+
+Use --minimal flag to get a simplified version without examples.`, templateList.String())
 }
 
 func runShowTemplate(cmd *cobra.Command, args []string) error {

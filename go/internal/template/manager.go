@@ -23,6 +23,28 @@ type Manager interface {
 	GetTemplate(data interface{}, name string) (string, error)
 }
 
+// GetAvailableTemplates returns a list of available template names
+func GetAvailableTemplates() ([]string, error) {
+	var templates []string
+
+	err := fs.WalkDir(templatesFS, "templates", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(path, ".tpl.yml") {
+			name := strings.TrimSuffix(filepath.Base(path), ".tpl.yml") + ".yml"
+			templates = append(templates, name)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to read embedded templates: %w", err)
+	}
+
+	return templates, nil
+}
+
 type manager struct {
 	templates map[string]string
 }
