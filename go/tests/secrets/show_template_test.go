@@ -64,7 +64,7 @@ func TestShowTemplate_FullTemplate(t *testing.T) {
 
 	// Check expected content in full template
 	expected := []string{
-		"SECRETS.YML TEMPLATE",
+		"This file defines the structure and mapping of secrets for your project",
 		"metadata:",
 		"environments:",
 		"outputs:",
@@ -129,7 +129,7 @@ func TestShowTemplate_MinimalTemplate(t *testing.T) {
 	shouldNotHaveInMinimal := []string{
 		"COMPLETE EXAMPLE",
 		"FIELD REFERENCE",
-		"SECRETS.YML TEMPLATE",
+		"This file defines the structure and mapping of secrets for your project",
 	}
 	for _, s := range shouldNotHaveInMinimal {
 		if strings.Contains(template, s) {

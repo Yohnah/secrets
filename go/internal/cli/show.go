@@ -135,7 +135,7 @@ func init() {
 }
 
 func updateShowTemplateHelp() {
-	templates, err := template.GetAvailableTemplates()
+	templates, err := template.GetAvailableTemplatesWithDescriptions()
 	if err != nil {
 		// Fallback to static help if we can't get templates
 		return
@@ -143,8 +143,8 @@ func updateShowTemplateHelp() {
 
 	var templateList strings.Builder
 	templateList.WriteString("Available templates:\n")
-	for _, tmpl := range templates {
-		templateList.WriteString(fmt.Sprintf("  - %s\n", tmpl))
+	for name, description := range templates {
+		templateList.WriteString(fmt.Sprintf("  - %s: %s\n", name, description))
 	}
 
 	showTemplateCmd.Long = fmt.Sprintf(`Displays the specified template file with examples and documentation.

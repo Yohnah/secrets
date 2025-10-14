@@ -129,3 +129,4 @@ test-results/
 *.py
 *.pyc
 .stuffsdev
+*.code-workspace

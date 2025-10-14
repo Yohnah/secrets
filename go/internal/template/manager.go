@@ -45,6 +45,46 @@ func GetAvailableTemplates() ([]string, error) {
 	return templates, nil
 }
 
+// GetAvailableTemplatesWithDescriptions returns a map of template names to their descriptions
+func GetAvailableTemplatesWithDescriptions() (map[string]string, error) {
+	templates := make(map[string]string)
+
+	err := fs.WalkDir(templatesFS, "templates", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(path, ".tpl.yml") {
+			name := strings.TrimSuffix(filepath.Base(path), ".tpl.yml") + ".yml"
+
+			// Read the first few lines to find description
+			content, err := templatesFS.ReadFile(path)
+			if err != nil {
+				return err
+			}
+
+			description := "Template file"
+			lines := strings.Split(string(content), "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "#") && len(strings.TrimSpace(strings.TrimPrefix(line, "#"))) > 0 {
+					// Found a comment line with content
+					description = strings.TrimSpace(strings.TrimPrefix(line, "#"))
+					break
+				}
+			}
+
+			templates[name] = description
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to read embedded templates: %w", err)
+	}
+
+	return templates, nil
+}
+
 type manager struct {
 	templates map[string]string
 }

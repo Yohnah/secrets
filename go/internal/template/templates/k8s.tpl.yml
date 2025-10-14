@@ -1,4 +1,3 @@
-# K8s Secret Template for secrets.yml
 # This template generates a Kubernetes Secret resource in YAML format
 # that can be applied directly to a Kubernetes cluster.
 #
