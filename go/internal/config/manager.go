@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/rand"
 	_ "embed"
 	"fmt"
 	"os"
@@ -363,15 +364,9 @@ func (m *manager) GenerateSecurePassword() string {
 	password := make([]byte, length)
 	randomBytes := make([]byte, length)
 
-	// Read from /dev/urandom directly (crypto/rand is corrupted in this Go installation)
-	urandom, err := os.Open("/dev/urandom")
-	if err != nil {
-		panic(fmt.Sprintf("CRITICAL: Failed to open /dev/urandom: %v. System may be compromised.", err))
-	}
-	defer urandom.Close()
-
-	if _, err := urandom.Read(randomBytes); err != nil {
-		panic(fmt.Sprintf("CRITICAL: Failed to read from /dev/urandom: %v. System may be compromised.", err))
+	// Use crypto/rand to stay portable across operating systems
+	if _, err := rand.Read(randomBytes); err != nil {
+		panic(fmt.Sprintf("CRITICAL: Failed to generate secure random bytes: %v. System may be compromised.", err))
 	}
 
 	// Map random bytes to charset

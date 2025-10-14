@@ -61,13 +61,304 @@ type manager struct {
 	dbPath      string
 	keyfilePath string
 	password    []byte // Changed from string to []byte for secure cleanup
+
+	fs FileSystemPort
+
+	sessionOps  *sessionManager
+	databaseOps *databaseManager
+	profileOps  *profileManager
+	snapshotOps *snapshotManager
 }
 
 // NewManager creates a new instance of the KeePass Manager
 func NewManager() Manager {
-	return &manager{
-		db: nil,
-	}
+	return NewManagerWithFileSystem(osFileSystemAdapter{})
+}
+
+// NewManagerWithFileSystem allows injecting a custom filesystem adapter (useful for tests).
+func NewManagerWithFileSystem(fs FileSystemPort) Manager {
+	mgr := &manager{fs: fs}
+	mgr.sessionOps = &sessionManager{parent: mgr}
+	mgr.databaseOps = &databaseManager{parent: mgr}
+	mgr.profileOps = &profileManager{parent: mgr}
+	mgr.snapshotOps = &snapshotManager{parent: mgr}
+	return mgr
+}
+
+// Session operations delegate to session manager
+func (m *manager) Open(dbPath, keyfilePath, password string) error {
+	return m.sessionOps.Open(dbPath, keyfilePath, password)
+}
+
+func (m *manager) saveAndClose() error {
+	return m.sessionOps.SaveAndClose()
+}
+
+func (m *manager) closeWithoutSave() error {
+	return m.sessionOps.CloseWithoutSave()
+}
+
+func (m *manager) isOpen() bool {
+	return m.sessionOps.IsOpen()
+}
+
+func (m *manager) GetDatabase() *gokeepasslib.Database {
+	return m.sessionOps.GetDatabase()
+}
+
+// Database operations delegate to database manager
+func (m *manager) CreateDatabase(dbPath, keyfilePath, password, rootGroupName string) error {
+	return m.databaseOps.CreateDatabase(dbPath, keyfilePath, password, rootGroupName)
+}
+
+func (m *manager) generateKeyfile(keyfilePath string) error {
+	return m.databaseOps.GenerateKeyfile(keyfilePath)
+}
+
+// Profile operations delegate to profile manager
+func (m *manager) createProfile(profileName string) error {
+	return m.profileOps.CreateProfile(profileName)
+}
+
+func (m *manager) profileExists(profileName string) (bool, error) {
+	return m.profileOps.ProfileExists(profileName)
+}
+
+func (m *manager) createGroup(profileName, parentGroupName, groupName string) (bool, error) {
+	return m.profileOps.CreateGroup(profileName, parentGroupName, groupName)
+}
+
+func (m *manager) groupExists(profileName, parentGroupName, groupName string) (bool, error) {
+	return m.profileOps.GroupExists(profileName, parentGroupName, groupName)
+}
+
+func (m *manager) createEntry(profileName, envName, entryPath string) error {
+	return m.profileOps.CreateEntry(profileName, envName, entryPath)
+}
+
+func (m *manager) entryExists(profileName, envName, entryPath string) (bool, error) {
+	return m.profileOps.EntryExists(profileName, envName, entryPath)
+}
+
+func (m *manager) getEntriesByEnvironment(profileName, envName string) ([]string, error) {
+	return m.profileOps.GetEntriesByEnvironment(profileName, envName)
+}
+
+func (m *manager) getRootGroups() ([]string, error) {
+	return m.profileOps.GetRootGroups()
+}
+
+func (m *manager) getGroupsByParent(parentPath string) ([]string, error) {
+	return m.profileOps.GetGroupsByParent(parentPath)
+}
+
+func (m *manager) getEntriesByGroup(groupPath string) ([]string, error) {
+	return m.profileOps.GetEntriesByGroup(groupPath)
+}
+
+func (m *manager) getFieldsByEntry(entryPath string) ([]string, error) {
+	return m.profileOps.GetFieldsByEntry(entryPath)
+}
+
+func (m *manager) getFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error) {
+	return m.profileOps.GetFieldsByEnvironmentEntry(profileName, envName, entryPath)
+}
+
+func (m *manager) getAllFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error) {
+	return m.profileOps.GetAllFieldsByEnvironmentEntry(profileName, envName, entryPath)
+}
+
+func (m *manager) isStandardField(fieldName string) bool {
+	return m.profileOps.IsStandardField(fieldName)
+}
+
+func (m *manager) setStandardField(profileName, envName, entryPath, fieldName, value string) error {
+	return m.profileOps.SetStandardField(profileName, envName, entryPath, fieldName, value)
+}
+
+func (m *manager) setCustomField(profileName, envName, entryPath, fieldName, value string) error {
+	return m.profileOps.SetCustomField(profileName, envName, entryPath, fieldName, value)
+}
+
+func (m *manager) createAttachment(profileName, envName, entryPath, attachmentName string, data []byte) error {
+	return m.profileOps.CreateAttachment(profileName, envName, entryPath, attachmentName, data)
+}
+
+func (m *manager) fieldExists(profileName, envName, entryPath, fieldName string) (bool, error) {
+	return m.profileOps.FieldExists(profileName, envName, entryPath, fieldName)
+}
+
+// Snapshot operations delegate to snapshot manager
+func (m *manager) listProfileTreeGroups(profileName string) ([]string, error) {
+	return m.snapshotOps.ListProfileTreeGroups(profileName)
+}
+
+func (m *manager) getTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName string) (*common.SecureValue, error) {
+	return m.snapshotOps.GetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName)
+}
+
+func (m *manager) cloneTreeGroup(profileName, sourceTreeGroup, targetTreeGroup string) error {
+	return m.snapshotOps.CloneTreeGroup(profileName, sourceTreeGroup, targetTreeGroup)
+}
+
+func (m *manager) setTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName, value string) error {
+	return m.snapshotOps.SetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName, value)
+}
+
+func (m *manager) treeGroupExists(profileName, treeGroup string) (bool, error) {
+	return m.snapshotOps.TreeGroupExists(profileName, treeGroup)
+}
+
+func (m *manager) renameTreeGroup(profileName, oldName, newName string) error {
+	return m.snapshotOps.RenameTreeGroup(profileName, oldName, newName)
+}
+
+func (m *manager) deleteTreeGroup(profileName, treeGroup string) error {
+	return m.snapshotOps.DeleteTreeGroup(profileName, treeGroup)
+}
+
+type sessionManager struct {
+	parent *manager
+}
+
+func (s *sessionManager) Open(dbPath, keyfilePath, password string) error {
+	return s.parent.open(dbPath, keyfilePath, password)
+}
+
+func (s *sessionManager) SaveAndClose() error {
+	return s.parent.saveAndClose()
+}
+
+func (s *sessionManager) CloseWithoutSave() error {
+	return s.parent.closeWithoutSave()
+}
+
+func (s *sessionManager) IsOpen() bool {
+	return s.parent.isOpen()
+}
+
+func (s *sessionManager) GetDatabase() *gokeepasslib.Database {
+	return s.parent.getDatabase()
+}
+
+type databaseManager struct {
+	parent *manager
+}
+
+func (d *databaseManager) CreateDatabase(dbPath, keyfilePath, password, rootGroupName string) error {
+	return d.parent.createDatabase(dbPath, keyfilePath, password, rootGroupName)
+}
+
+func (d *databaseManager) GenerateKeyfile(keyfilePath string) error {
+	return d.parent.generateKeyfile(keyfilePath)
+}
+
+type profileManager struct {
+	parent *manager
+}
+
+func (p *profileManager) CreateProfile(profileName string) error {
+	return p.parent.createProfile(profileName)
+}
+
+func (p *profileManager) ProfileExists(profileName string) (bool, error) {
+	return p.parent.profileExists(profileName)
+}
+
+func (p *profileManager) CreateGroup(profileName, parentGroupName, groupName string) (bool, error) {
+	return p.parent.createGroup(profileName, parentGroupName, groupName)
+}
+
+func (p *profileManager) GroupExists(profileName, parentGroupName, groupName string) (bool, error) {
+	return p.parent.groupExists(profileName, parentGroupName, groupName)
+}
+
+func (p *profileManager) CreateEntry(profileName, envName, entryPath string) error {
+	return p.parent.createEntry(profileName, envName, entryPath)
+}
+
+func (p *profileManager) EntryExists(profileName, envName, entryPath string) (bool, error) {
+	return p.parent.entryExists(profileName, envName, entryPath)
+}
+
+func (p *profileManager) GetEntriesByEnvironment(profileName, envName string) ([]string, error) {
+	return p.parent.getEntriesByEnvironment(profileName, envName)
+}
+
+func (p *profileManager) GetRootGroups() ([]string, error) {
+	return p.parent.getRootGroups()
+}
+
+func (p *profileManager) GetGroupsByParent(parentPath string) ([]string, error) {
+	return p.parent.getGroupsByParent(parentPath)
+}
+
+func (p *profileManager) GetEntriesByGroup(groupPath string) ([]string, error) {
+	return p.parent.getEntriesByGroup(groupPath)
+}
+
+func (p *profileManager) GetFieldsByEntry(entryPath string) ([]string, error) {
+	return p.parent.getFieldsByEntry(entryPath)
+}
+
+func (p *profileManager) GetFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error) {
+	return p.parent.getFieldsByEnvironmentEntry(profileName, envName, entryPath)
+}
+
+func (p *profileManager) GetAllFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error) {
+	return p.parent.getAllFieldsByEnvironmentEntry(profileName, envName, entryPath)
+}
+
+func (p *profileManager) IsStandardField(fieldName string) bool {
+	return p.parent.isStandardField(fieldName)
+}
+
+func (p *profileManager) SetStandardField(profileName, envName, entryPath, fieldName, value string) error {
+	return p.parent.setStandardField(profileName, envName, entryPath, fieldName, value)
+}
+
+func (p *profileManager) SetCustomField(profileName, envName, entryPath, fieldName, value string) error {
+	return p.parent.setCustomField(profileName, envName, entryPath, fieldName, value)
+}
+
+func (p *profileManager) CreateAttachment(profileName, envName, entryPath, attachmentName string, data []byte) error {
+	return p.parent.createAttachment(profileName, envName, entryPath, attachmentName, data)
+}
+
+func (p *profileManager) FieldExists(profileName, envName, entryPath, fieldName string) (bool, error) {
+	return p.parent.fieldExists(profileName, envName, entryPath, fieldName)
+}
+
+type snapshotManager struct {
+	parent *manager
+}
+
+func (s *snapshotManager) ListProfileTreeGroups(profileName string) ([]string, error) {
+	return s.parent.listProfileTreeGroups(profileName)
+}
+
+func (s *snapshotManager) GetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName string) (*common.SecureValue, error) {
+	return s.parent.getTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName)
+}
+
+func (s *snapshotManager) CloneTreeGroup(profileName, sourceTreeGroup, targetTreeGroup string) error {
+	return s.parent.cloneTreeGroup(profileName, sourceTreeGroup, targetTreeGroup)
+}
+
+func (s *snapshotManager) SetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName, value string) error {
+	return s.parent.setTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName, value)
+}
+
+func (s *snapshotManager) TreeGroupExists(profileName, treeGroup string) (bool, error) {
+	return s.parent.treeGroupExists(profileName, treeGroup)
+}
+
+func (s *snapshotManager) RenameTreeGroup(profileName, oldName, newName string) error {
+	return s.parent.renameTreeGroup(profileName, oldName, newName)
+}
+
+func (s *snapshotManager) DeleteTreeGroup(profileName, treeGroup string) error {
+	return s.parent.deleteTreeGroup(profileName, treeGroup)
 }
 
 // clearPassword securely overwrites password in memory
@@ -83,7 +374,7 @@ func (m *manager) clearPassword() {
 
 // Open opens a KeePass database and keeps it in memory
 // Must be called before any database operations
-func (m *manager) Open(dbPath, keyfilePath, password string) error {
+func (m *manager) open(dbPath, keyfilePath, password string) error {
 	if m.db != nil {
 		return fmt.Errorf("database already open")
 	}
@@ -100,17 +391,17 @@ func (m *manager) Open(dbPath, keyfilePath, password string) error {
 	}
 
 	// Sanitize paths
-	sanitizedDBPath, err := sanitizePath(dbPath)
+	sanitizedDBPath, err := m.sanitizePath(dbPath)
 	if err != nil {
 		return fmt.Errorf("invalid database path: %w", err)
 	}
-	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
+	sanitizedKeyfilePath, err := m.sanitizePath(keyfilePath)
 	if err != nil {
 		return fmt.Errorf("invalid keyfile path: %w", err)
 	}
 
 	// Open database file
-	file, err := os.Open(sanitizedDBPath)
+	file, err := m.fs.Open(sanitizedDBPath)
 	if err != nil {
 		return fmt.Errorf("failed to open database file: %w", err)
 	}
@@ -163,7 +454,7 @@ func (m *manager) SaveAndClose() error {
 	}
 
 	// Open file for writing with secure permissions
-	file, err := os.OpenFile(m.dbPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	file, err := m.fs.OpenFile(m.dbPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		// Clear session even on error
 		m.db = nil
@@ -217,12 +508,17 @@ func (m *manager) IsOpen() bool {
 
 // GetDatabase returns the currently open database
 // Returns nil if no database is open
-func (m *manager) GetDatabase() *gokeepasslib.Database {
+func (m *manager) getDatabase() *gokeepasslib.Database {
 	return m.db
 }
 
 // sanitizePath cleans and validates a file path to prevent path traversal attacks
 func sanitizePath(path string) (string, error) {
+	temp := &manager{fs: osFileSystemAdapter{}}
+	return temp.sanitizePath(path)
+}
+
+func (m *manager) sanitizePath(path string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("path cannot be empty")
 	}
@@ -252,12 +548,12 @@ func sanitizePath(path string) (string, error) {
 	if err != nil {
 		// If symlink doesn't exist yet, that's OK (file creation case)
 		// Check if it's because the file doesn't exist
-		if os.IsNotExist(err) {
+		if m.fs.IsNotExist(err) {
 			// For non-existent paths, check parent directory instead
 			parentDir := filepath.Dir(absPath)
 			if parentDir != "" && parentDir != "." {
 				evalParent, err := filepath.EvalSymlinks(parentDir)
-				if err != nil && !os.IsNotExist(err) {
+				if err != nil && !m.fs.IsNotExist(err) {
 					return "", fmt.Errorf("failed to evaluate parent directory symlinks: %w", err)
 				}
 				// Reconstruct path with evaluated parent
@@ -295,7 +591,7 @@ func (m *manager) GenerateKeyfile(keyfilePath string) error {
 	}
 
 	// Sanitize path to prevent traversal attacks
-	sanitizedPath, err := sanitizePath(keyfilePath)
+	sanitizedPath, err := m.sanitizePath(keyfilePath)
 	if err != nil {
 		return fmt.Errorf("invalid keyfile path: %w", err)
 	}
@@ -308,7 +604,7 @@ func (m *manager) GenerateKeyfile(keyfilePath string) error {
 	}
 
 	// Write keyfile to disk
-	err = os.WriteFile(sanitizedPath, keyData, 0600)
+	err = m.fs.WriteFile(sanitizedPath, keyData, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to write keyfile: %w", err)
 	}
@@ -318,7 +614,7 @@ func (m *manager) GenerateKeyfile(keyfilePath string) error {
 
 // CreateDatabase creates a new KeePass database in KDBX4 format
 // Protected with both password and keyfile
-func (m *manager) CreateDatabase(dbPath, keyfilePath, password, rootGroupName string) error {
+func (m *manager) createDatabase(dbPath, keyfilePath, password, rootGroupName string) error {
 	// Validate input parameters
 	if dbPath == "" {
 		return fmt.Errorf("database path cannot be empty")
@@ -334,11 +630,11 @@ func (m *manager) CreateDatabase(dbPath, keyfilePath, password, rootGroupName st
 	}
 
 	// Sanitize paths to prevent traversal attacks
-	sanitizedDbPath, err := sanitizePath(dbPath)
+	sanitizedDbPath, err := m.sanitizePath(dbPath)
 	if err != nil {
 		return fmt.Errorf("invalid database path: %w", err)
 	}
-	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
+	sanitizedKeyfilePath, err := m.sanitizePath(keyfilePath)
 	if err != nil {
 		return fmt.Errorf("invalid keyfile path: %w", err)
 	}
@@ -371,7 +667,7 @@ func (m *manager) CreateDatabase(dbPath, keyfilePath, password, rootGroupName st
 	}
 
 	// Save database to file with restrictive permissions (0600)
-	file, err := os.OpenFile(sanitizedDbPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	file, err := m.fs.OpenFile(sanitizedDbPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to create database file: %w", err)
 	}
@@ -402,11 +698,11 @@ func (m *manager) OpenDatabase(dbPath, keyfilePath, password string) (*gokeepass
 	}
 
 	// Sanitize paths to prevent traversal attacks
-	sanitizedDbPath, err := sanitizePath(dbPath)
+	sanitizedDbPath, err := m.sanitizePath(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("invalid database path: %w", err)
 	}
-	sanitizedKeyfilePath, err := sanitizePath(keyfilePath)
+	sanitizedKeyfilePath, err := m.sanitizePath(keyfilePath)
 	if err != nil {
 		return nil, fmt.Errorf("invalid keyfile path: %w", err)
 	}
@@ -418,7 +714,7 @@ func (m *manager) OpenDatabase(dbPath, keyfilePath, password string) (*gokeepass
 	}
 
 	// Read database file
-	file, err := os.Open(sanitizedDbPath)
+	file, err := m.fs.Open(sanitizedDbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database file: %w", err)
 	}
@@ -1869,7 +2165,7 @@ func (m *manager) FieldExists(profileName, envName, entryPath, fieldName string)
 	for _, value := range entry.Values {
 		if isStandard {
 			// Case-insensitive comparison for standard fields
-			if strings.ToLower(value.Key) == strings.ToLower(fieldName) {
+			if strings.EqualFold(value.Key, fieldName) {
 				return true, nil
 			}
 		} else {
@@ -1968,7 +2264,7 @@ func (m *manager) GetTreeGroupEntryField(profileName, treeGroup, entryPath, fiel
 	for _, value := range entry.Values {
 		if isStandard {
 			// Case-insensitive comparison for standard fields
-			if strings.ToLower(value.Key) == strings.ToLower(fieldName) {
+			if strings.EqualFold(value.Key, fieldName) {
 				return common.NewSecureValue(value.Value.Content), nil
 			}
 		} else {
@@ -2086,7 +2382,7 @@ func (m *manager) SetTreeGroupEntryField(profileName, treeGroup, entryPath, fiel
 	for i := range entry.Values {
 		if isStandard {
 			// Case-insensitive comparison for standard fields
-			if strings.ToLower(entry.Values[i].Key) == strings.ToLower(fieldName) {
+			if strings.EqualFold(entry.Values[i].Key, fieldName) {
 				entry.Values[i].Value.Content = value
 				fieldFound = true
 				break
