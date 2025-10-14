@@ -258,75 +258,776 @@ type profileManager struct {
 }
 
 func (p *profileManager) CreateProfile(profileName string) error {
-	return p.parent.createProfile(profileName)
+	m := p.parent
+
+	if m.db == nil {
+		return fmt.Errorf("database not open")
+	}
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return fmt.Errorf("database has no root group")
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+	for _, group := range rootGroup.Groups {
+		if group.Name == profileName {
+			return nil
+		}
+	}
+
+	profileGroup := gokeepasslib.NewGroup()
+	profileGroup.Name = profileName
+
+	headGroup := gokeepasslib.NewGroup()
+	headGroup.Name = "HEAD"
+
+	metadataEntry := gokeepasslib.NewEntry()
+	metadataEntry.Values = append(metadataEntry.Values, gokeepasslib.ValueData{
+		Key:   "Title",
+		Value: gokeepasslib.V{Content: "metadata"},
+	})
+	metadataEntry.Values = append(metadataEntry.Values, gokeepasslib.ValueData{
+		Key:   "version",
+		Value: gokeepasslib.V{Content: "1"},
+	})
+	datetime := time.Now().Format(time.RFC3339)
+	metadataEntry.Values = append(metadataEntry.Values, gokeepasslib.ValueData{
+		Key:   "datetime",
+		Value: gokeepasslib.V{Content: datetime},
+	})
+
+	headGroup.Entries = append(headGroup.Entries, metadataEntry)
+	profileGroup.Groups = append(profileGroup.Groups, headGroup)
+	rootGroup.Groups = append(rootGroup.Groups, profileGroup)
+
+	return nil
 }
 
 func (p *profileManager) ProfileExists(profileName string) (bool, error) {
-	return p.parent.profileExists(profileName)
+	m := p.parent
+
+	if m.db == nil {
+		return false, fmt.Errorf("database not open")
+	}
+	if profileName == "" {
+		return false, fmt.Errorf("profile name cannot be empty")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return false, nil
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+	for _, group := range rootGroup.Groups {
+		if group.Name == profileName {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func (p *profileManager) CreateGroup(profileName, parentGroupName, groupName string) (bool, error) {
-	return p.parent.createGroup(profileName, parentGroupName, groupName)
+	m := p.parent
+
+	if m.db == nil {
+		return false, fmt.Errorf("database not open")
+	}
+	if profileName == "" {
+		return false, fmt.Errorf("profile name cannot be empty")
+	}
+	if parentGroupName == "" {
+		return false, fmt.Errorf("parent group name cannot be empty")
+	}
+	if groupName == "" {
+		return false, fmt.Errorf("group name cannot be empty")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return false, fmt.Errorf("database has no root group")
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+	if profileGroup == nil {
+		return false, fmt.Errorf("profile '%s' not found", profileName)
+	}
+
+	var parentGroup *gokeepasslib.Group
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == parentGroupName {
+			parentGroup = &profileGroup.Groups[i]
+			break
+		}
+	}
+	if parentGroup == nil {
+		return false, fmt.Errorf("parent group '%s' not found in profile '%s'", parentGroupName, profileName)
+	}
+
+	for _, group := range parentGroup.Groups {
+		if group.Name == groupName {
+			return false, nil
+		}
+	}
+
+	newGroup := gokeepasslib.NewGroup()
+	newGroup.Name = groupName
+	parentGroup.Groups = append(parentGroup.Groups, newGroup)
+
+	return true, nil
 }
 
 func (p *profileManager) GroupExists(profileName, parentGroupName, groupName string) (bool, error) {
-	return p.parent.groupExists(profileName, parentGroupName, groupName)
+	m := p.parent
+
+	if m.db == nil {
+		return false, fmt.Errorf("database not open")
+	}
+	if profileName == "" {
+		return false, fmt.Errorf("profile name cannot be empty")
+	}
+	if parentGroupName == "" {
+		return false, fmt.Errorf("parent group name cannot be empty")
+	}
+	if groupName == "" {
+		return false, fmt.Errorf("group name cannot be empty")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return false, nil
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+	if profileGroup == nil {
+		return false, nil
+	}
+
+	var parentGroup *gokeepasslib.Group
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == parentGroupName {
+			parentGroup = &profileGroup.Groups[i]
+			break
+		}
+	}
+	if parentGroup == nil {
+		return false, nil
+	}
+
+	for _, group := range parentGroup.Groups {
+		if group.Name == groupName {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func (p *profileManager) CreateEntry(profileName, envName, entryPath string) error {
-	return p.parent.createEntry(profileName, envName, entryPath)
+	m := p.parent
+
+	if m.db == nil {
+		return fmt.Errorf("database not open")
+	}
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if envName == "" {
+		return fmt.Errorf("environment name cannot be empty")
+	}
+	if entryPath == "" {
+		return fmt.Errorf("entry path cannot be empty")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return fmt.Errorf("database has no root group")
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+	if profileGroup == nil {
+		return fmt.Errorf("profile '%s' not found", profileName)
+	}
+
+	var headGroup *gokeepasslib.Group
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == "HEAD" {
+			headGroup = &profileGroup.Groups[i]
+			break
+		}
+	}
+	if headGroup == nil {
+		return fmt.Errorf("HEAD group not found in profile '%s'", profileName)
+	}
+
+	var envGroup *gokeepasslib.Group
+	for i := range headGroup.Groups {
+		if headGroup.Groups[i].Name == envName {
+			envGroup = &headGroup.Groups[i]
+			break
+		}
+	}
+	if envGroup == nil {
+		return fmt.Errorf("environment '%s' not found in profile '%s'", envName, profileName)
+	}
+
+	if len(entryPath) > 0 && entryPath[0] == '/' {
+		entryPath = entryPath[1:]
+	}
+	if entryPath == "" {
+		return fmt.Errorf("entry path is empty after parsing")
+	}
+
+	components := strings.Split(entryPath, "/")
+	if len(components) == 0 {
+		return fmt.Errorf("invalid entry path")
+	}
+
+	currentGroup := envGroup
+	for i := 0; i < len(components)-1; i++ {
+		groupName := components[i]
+		if groupName == "" {
+			continue
+		}
+
+		found := false
+		for j := range currentGroup.Groups {
+			if currentGroup.Groups[j].Name == groupName {
+				currentGroup = &currentGroup.Groups[j]
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			newGroup := gokeepasslib.NewGroup()
+			newGroup.Name = groupName
+			currentGroup.Groups = append(currentGroup.Groups, newGroup)
+			currentGroup = &currentGroup.Groups[len(currentGroup.Groups)-1]
+		}
+	}
+
+	entryName := components[len(components)-1]
+	if entryName == "" {
+		return fmt.Errorf("entry name is empty")
+	}
+
+	newEntry := gokeepasslib.NewEntry()
+	newEntry.Values = append(newEntry.Values, gokeepasslib.ValueData{
+		Key:   "Title",
+		Value: gokeepasslib.V{Content: entryName},
+	})
+
+	currentGroup.Entries = append(currentGroup.Entries, newEntry)
+	return nil
 }
 
 func (p *profileManager) EntryExists(profileName, envName, entryPath string) (bool, error) {
-	return p.parent.entryExists(profileName, envName, entryPath)
+	m := p.parent
+
+	if m.db == nil {
+		return false, fmt.Errorf("database not open")
+	}
+	if profileName == "" {
+		return false, fmt.Errorf("profile name cannot be empty")
+	}
+	if envName == "" {
+		return false, fmt.Errorf("environment name cannot be empty")
+	}
+	if entryPath == "" {
+		return false, fmt.Errorf("entry path cannot be empty")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return false, nil
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+	if profileGroup == nil {
+		return false, nil
+	}
+
+	var headGroup *gokeepasslib.Group
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == "HEAD" {
+			headGroup = &profileGroup.Groups[i]
+			break
+		}
+	}
+	if headGroup == nil {
+		return false, nil
+	}
+
+	var envGroup *gokeepasslib.Group
+	for i := range headGroup.Groups {
+		if headGroup.Groups[i].Name == envName {
+			envGroup = &headGroup.Groups[i]
+			break
+		}
+	}
+	if envGroup == nil {
+		return false, nil
+	}
+
+	if len(entryPath) > 0 && entryPath[0] == '/' {
+		entryPath = entryPath[1:]
+	}
+	if entryPath == "" {
+		return false, fmt.Errorf("entry path is empty after parsing")
+	}
+
+	components := strings.Split(entryPath, "/")
+	currentGroup := envGroup
+	for i := 0; i < len(components)-1; i++ {
+		segment := components[i]
+		if segment == "" {
+			continue
+		}
+
+		found := false
+		for j := range currentGroup.Groups {
+			if currentGroup.Groups[j].Name == segment {
+				currentGroup = &currentGroup.Groups[j]
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return false, nil
+		}
+	}
+
+	entryName := components[len(components)-1]
+	if entryName == "" {
+		return false, fmt.Errorf("entry name is empty")
+	}
+
+	for i := range currentGroup.Entries {
+		if currentGroup.Entries[i].GetTitle() == entryName {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func (p *profileManager) GetEntriesByEnvironment(profileName, envName string) ([]string, error) {
-	return p.parent.getEntriesByEnvironment(profileName, envName)
+	m := p.parent
+
+	if m.db == nil {
+		return nil, fmt.Errorf("database not open")
+	}
+	if profileName == "" {
+		return nil, fmt.Errorf("profile name cannot be empty")
+	}
+	if envName == "" {
+		return nil, fmt.Errorf("environment name cannot be empty")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return []string{}, nil
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+	if profileGroup == nil {
+		return []string{}, nil
+	}
+
+	var headGroup *gokeepasslib.Group
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == "HEAD" {
+			headGroup = &profileGroup.Groups[i]
+			break
+		}
+	}
+	if headGroup == nil {
+		return []string{}, nil
+	}
+
+	var envGroup *gokeepasslib.Group
+	for i := range headGroup.Groups {
+		if headGroup.Groups[i].Name == envName {
+			envGroup = &headGroup.Groups[i]
+			break
+		}
+	}
+	if envGroup == nil {
+		return []string{}, nil
+	}
+
+	var entries []string
+	collectEntries(envGroup, "", &entries)
+	return entries, nil
 }
 
 func (p *profileManager) GetRootGroups() ([]string, error) {
-	return p.parent.getRootGroups()
+	m := p.parent
+
+	if m.db == nil {
+		return nil, fmt.Errorf("database not open")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return []string{}, nil
+	}
+
+	rootGroup := m.db.Content.Root.Groups[0]
+	groups := make([]string, 0, len(rootGroup.Groups))
+	for _, group := range rootGroup.Groups {
+		groups = append(groups, group.Name)
+	}
+
+	return groups, nil
 }
 
 func (p *profileManager) GetGroupsByParent(parentPath string) ([]string, error) {
-	return p.parent.getGroupsByParent(parentPath)
+	m := p.parent
+
+	if m.db == nil {
+		return nil, fmt.Errorf("database not open")
+	}
+
+	parentGroup, err := m.findGroupByPath(parentPath)
+	if err != nil {
+		return nil, err
+	}
+
+	groups := make([]string, 0, len(parentGroup.Groups))
+	for _, group := range parentGroup.Groups {
+		groups = append(groups, group.Name)
+	}
+
+	return groups, nil
 }
 
 func (p *profileManager) GetEntriesByGroup(groupPath string) ([]string, error) {
-	return p.parent.getEntriesByGroup(groupPath)
+	m := p.parent
+
+	if m.db == nil {
+		return nil, fmt.Errorf("database not open")
+	}
+
+	group, err := m.findGroupByPath(groupPath)
+	if err != nil {
+		return nil, err
+	}
+
+	entries := make([]string, 0, len(group.Entries))
+	for _, entry := range group.Entries {
+		var title string
+		for _, value := range entry.Values {
+			if value.Key == "Title" {
+				title = value.Value.Content
+				break
+			}
+		}
+		if title != "" {
+			entries = append(entries, title)
+		}
+	}
+
+	return entries, nil
 }
 
 func (p *profileManager) GetFieldsByEntry(entryPath string) ([]string, error) {
-	return p.parent.getFieldsByEntry(entryPath)
+	m := p.parent
+
+	if m.db == nil {
+		return nil, fmt.Errorf("database not open")
+	}
+
+	entry, err := m.findEntryByPath(entryPath)
+	if err != nil {
+		return nil, err
+	}
+
+	fields := make([]string, 0, len(entry.Values))
+	for _, value := range entry.Values {
+		if value.Key != "" {
+			fields = append(fields, value.Key)
+		}
+	}
+
+	return fields, nil
 }
 
 func (p *profileManager) GetFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error) {
-	return p.parent.getFieldsByEnvironmentEntry(profileName, envName, entryPath)
+	entry, err := p.findEnvironmentEntry(profileName, envName, entryPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var fields []string
+	for _, value := range entry.Values {
+		if value.Key == "Title" {
+			continue
+		}
+		if value.Value.Content != "" {
+			fields = append(fields, value.Key)
+		}
+	}
+	for _, binary := range entry.Binaries {
+		fields = append(fields, "attachments/"+binary.Name)
+	}
+
+	return fields, nil
 }
 
 func (p *profileManager) GetAllFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error) {
-	return p.parent.getAllFieldsByEnvironmentEntry(profileName, envName, entryPath)
+	entry, err := p.findEnvironmentEntry(profileName, envName, entryPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var fields []string
+	for _, value := range entry.Values {
+		if value.Key == "Title" {
+			continue
+		}
+		fields = append(fields, value.Key)
+	}
+	for _, binary := range entry.Binaries {
+		fields = append(fields, "attachments/"+binary.Name)
+	}
+
+	return fields, nil
 }
 
 func (p *profileManager) IsStandardField(fieldName string) bool {
-	return p.parent.isStandardField(fieldName)
+	standardFields := []string{"Title", "UserName", "Password", "URL", "Notes"}
+	fieldLower := strings.ToLower(fieldName)
+
+	for _, standard := range standardFields {
+		if strings.ToLower(standard) == fieldLower {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (p *profileManager) SetStandardField(profileName, envName, entryPath, fieldName, value string) error {
-	return p.parent.setStandardField(profileName, envName, entryPath, fieldName, value)
+	if !p.IsStandardField(fieldName) {
+		return fmt.Errorf("'%s' is not a standard field", fieldName)
+	}
+
+	entry, err := p.findEnvironmentEntry(profileName, envName, entryPath)
+	if err != nil {
+		return err
+	}
+
+	standardFields := map[string]string{
+		"title":    "Title",
+		"username": "UserName",
+		"password": "Password",
+		"url":      "URL",
+		"notes":    "Notes",
+	}
+	normalizedFieldName := standardFields[strings.ToLower(fieldName)]
+
+	for i := range entry.Values {
+		if entry.Values[i].Key == normalizedFieldName {
+			entry.Values[i].Value.Content = value
+			return nil
+		}
+	}
+
+	entry.Values = append(entry.Values, gokeepasslib.ValueData{
+		Key:   normalizedFieldName,
+		Value: gokeepasslib.V{Content: value},
+	})
+
+	return nil
 }
 
 func (p *profileManager) SetCustomField(profileName, envName, entryPath, fieldName, value string) error {
-	return p.parent.setCustomField(profileName, envName, entryPath, fieldName, value)
+	if fieldName == "" {
+		return fmt.Errorf("field name cannot be empty")
+	}
+	if p.IsStandardField(fieldName) {
+		return fmt.Errorf("'%s' is a standard field, use SetStandardField instead", fieldName)
+	}
+
+	entry, err := p.findEnvironmentEntry(profileName, envName, entryPath)
+	if err != nil {
+		return err
+	}
+
+	for i := range entry.Values {
+		if entry.Values[i].Key == fieldName {
+			entry.Values[i].Value.Content = value
+			return nil
+		}
+	}
+
+	entry.Values = append(entry.Values, gokeepasslib.ValueData{
+		Key:   fieldName,
+		Value: gokeepasslib.V{Content: value},
+	})
+
+	return nil
 }
 
 func (p *profileManager) CreateAttachment(profileName, envName, entryPath, attachmentName string, data []byte) error {
-	return p.parent.createAttachment(profileName, envName, entryPath, attachmentName, data)
+	if attachmentName == "" {
+		return fmt.Errorf("attachment name cannot be empty")
+	}
+	if data == nil {
+		return fmt.Errorf("attachment data cannot be nil")
+	}
+
+	entry, err := p.findEnvironmentEntry(profileName, envName, entryPath)
+	if err != nil {
+		return err
+	}
+
+	for _, binary := range entry.Binaries {
+		if binary.Name == attachmentName {
+			return nil
+		}
+	}
+
+	m := p.parent
+	binaryID := len(m.db.Content.Meta.Binaries)
+	m.db.Content.Meta.Binaries = append(m.db.Content.Meta.Binaries, gokeepasslib.Binary{ID: binaryID, Content: data})
+	entry.Binaries = append(entry.Binaries, gokeepasslib.NewBinaryReference(attachmentName, binaryID))
+
+	return nil
 }
 
 func (p *profileManager) FieldExists(profileName, envName, entryPath, fieldName string) (bool, error) {
-	return p.parent.fieldExists(profileName, envName, entryPath, fieldName)
+	if fieldName == "" {
+		return false, fmt.Errorf("field name cannot be empty")
+	}
+
+	entry, err := p.findEnvironmentEntry(profileName, envName, entryPath)
+	if err != nil {
+		return false, err
+	}
+
+	if strings.HasPrefix(fieldName, "attachments/") {
+		attachmentName := strings.TrimPrefix(fieldName, "attachments/")
+		for _, binary := range entry.Binaries {
+			if binary.Name == attachmentName {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
+	isStandard := p.IsStandardField(fieldName)
+	for _, value := range entry.Values {
+		if isStandard {
+			if strings.EqualFold(value.Key, fieldName) {
+				return true, nil
+			}
+			continue
+		}
+		if value.Key == fieldName {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (p *profileManager) findEnvironmentEntry(profileName, envName, entryPath string) (*gokeepasslib.Entry, error) {
+	if entryPath == "" {
+		return nil, fmt.Errorf("entry path cannot be empty")
+	}
+
+	envGroup, err := p.getEnvironmentGroup(profileName, envName)
+	if err != nil {
+		return nil, err
+	}
+
+	entry, err := findEntryByPath(envGroup, entryPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return entry, nil
+}
+
+func (p *profileManager) getEnvironmentGroup(profileName, envName string) (*gokeepasslib.Group, error) {
+	m := p.parent
+	if m.db == nil {
+		return nil, fmt.Errorf("database not open")
+	}
+	if profileName == "" {
+		return nil, fmt.Errorf("profile name cannot be empty")
+	}
+	if envName == "" {
+		return nil, fmt.Errorf("environment name cannot be empty")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return nil, fmt.Errorf("root group not found")
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+	if profileGroup == nil {
+		return nil, fmt.Errorf("profile '%s' not found", profileName)
+	}
+
+	var headGroup *gokeepasslib.Group
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == "HEAD" {
+			headGroup = &profileGroup.Groups[i]
+			break
+		}
+	}
+	if headGroup == nil {
+		return nil, fmt.Errorf("HEAD group not found in profile '%s'", profileName)
+	}
+
+	for i := range headGroup.Groups {
+		if headGroup.Groups[i].Name == envName {
+			return &headGroup.Groups[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("environment '%s' not found in profile '%s'", envName, profileName)
 }
 
 type snapshotManager struct {
@@ -334,31 +1035,301 @@ type snapshotManager struct {
 }
 
 func (s *snapshotManager) ListProfileTreeGroups(profileName string) ([]string, error) {
-	return s.parent.listProfileTreeGroups(profileName)
+	m := s.parent
+	if m.db == nil {
+		return nil, fmt.Errorf("database not open")
+	}
+	if profileName == "" {
+		return nil, fmt.Errorf("profile name cannot be empty")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return nil, fmt.Errorf("no groups in database")
+	}
+
+	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
+	if err != nil {
+		return nil, fmt.Errorf("profile '%s' not found: %w", profileName, err)
+	}
+
+	treeGroups := make([]string, 0, len(profileGroup.Groups))
+	for _, group := range profileGroup.Groups {
+		treeGroups = append(treeGroups, group.Name)
+	}
+
+	return treeGroups, nil
 }
 
 func (s *snapshotManager) GetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName string) (*common.SecureValue, error) {
-	return s.parent.getTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName)
+	m := s.parent
+	if m.db == nil {
+		return nil, fmt.Errorf("database not open")
+	}
+	if profileName == "" {
+		return nil, fmt.Errorf("profile name cannot be empty")
+	}
+	if treeGroup == "" {
+		return nil, fmt.Errorf("tree group name cannot be empty")
+	}
+	if entryPath == "" {
+		return nil, fmt.Errorf("entry path cannot be empty")
+	}
+	if fieldName == "" {
+		return nil, fmt.Errorf("field name cannot be empty")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return nil, fmt.Errorf("no groups in database")
+	}
+
+	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
+	if err != nil {
+		return nil, fmt.Errorf("profile '%s' not found: %w", profileName, err)
+	}
+
+	treeGroupObj, err := findGroupByName(profileGroup, treeGroup)
+	if err != nil {
+		return nil, fmt.Errorf("tree group '%s' not found in profile '%s': %w", treeGroup, profileName, err)
+	}
+
+	entry, err := findEntryByPath(treeGroupObj, entryPath)
+	if err != nil {
+		return nil, fmt.Errorf("entry '%s' not found in tree group '%s': %w", entryPath, treeGroup, err)
+	}
+
+	isStandard := m.profileOps.IsStandardField(fieldName)
+	for _, value := range entry.Values {
+		if isStandard {
+			if strings.EqualFold(value.Key, fieldName) {
+				return common.NewSecureValue(value.Value.Content), nil
+			}
+			continue
+		}
+		if value.Key == fieldName {
+			return common.NewSecureValue(value.Value.Content), nil
+		}
+	}
+
+	return nil, fmt.Errorf("field '%s' not found in entry '%s'", fieldName, entryPath)
 }
 
 func (s *snapshotManager) CloneTreeGroup(profileName, sourceTreeGroup, targetTreeGroup string) error {
-	return s.parent.cloneTreeGroup(profileName, sourceTreeGroup, targetTreeGroup)
+	m := s.parent
+	if m.db == nil {
+		return fmt.Errorf("database not open")
+	}
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if sourceTreeGroup == "" {
+		return fmt.Errorf("source tree group cannot be empty")
+	}
+	if targetTreeGroup == "" {
+		return fmt.Errorf("target tree group cannot be empty")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return fmt.Errorf("no groups in database")
+	}
+
+	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
+	if err != nil {
+		return fmt.Errorf("profile '%s' not found: %w", profileName, err)
+	}
+
+	sourceGroup, err := findGroupByName(profileGroup, sourceTreeGroup)
+	if err != nil {
+		return fmt.Errorf("source tree group '%s' not found in profile '%s': %w", sourceTreeGroup, profileName, err)
+	}
+
+	if _, err = findGroupByName(profileGroup, targetTreeGroup); err == nil {
+		return fmt.Errorf("target tree group '%s' already exists in profile '%s'", targetTreeGroup, profileName)
+	}
+
+	clonedGroup := deepCloneGroup(sourceGroup)
+	clonedGroup.Name = targetTreeGroup
+	profileGroup.Groups = append(profileGroup.Groups, clonedGroup)
+
+	return nil
 }
 
 func (s *snapshotManager) SetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName, value string) error {
-	return s.parent.setTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName, value)
+	m := s.parent
+	if m.db == nil {
+		return fmt.Errorf("database not open")
+	}
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if treeGroup == "" {
+		return fmt.Errorf("tree group cannot be empty")
+	}
+	if entryPath == "" {
+		return fmt.Errorf("entry path cannot be empty")
+	}
+	if fieldName == "" {
+		return fmt.Errorf("field name cannot be empty")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return fmt.Errorf("no groups in database")
+	}
+
+	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
+	if err != nil {
+		return fmt.Errorf("profile '%s' not found: %w", profileName, err)
+	}
+
+	treeGroupObj, err := findGroupByName(profileGroup, treeGroup)
+	if err != nil {
+		return fmt.Errorf("tree group '%s' not found in profile '%s': %w", treeGroup, profileName, err)
+	}
+
+	entry, err := findEntryByPath(treeGroupObj, entryPath)
+	if err != nil {
+		return fmt.Errorf("entry '%s' not found in tree group '%s': %w", entryPath, treeGroup, err)
+	}
+
+	isStandard := m.profileOps.IsStandardField(fieldName)
+	fieldFound := false
+	for i := range entry.Values {
+		if isStandard {
+			if strings.EqualFold(entry.Values[i].Key, fieldName) {
+				entry.Values[i].Value.Content = value
+				fieldFound = true
+				break
+			}
+			continue
+		}
+		if entry.Values[i].Key == fieldName {
+			entry.Values[i].Value.Content = value
+			fieldFound = true
+			break
+		}
+	}
+
+	if !fieldFound {
+		entry.Values = append(entry.Values, gokeepasslib.ValueData{
+			Key:   fieldName,
+			Value: gokeepasslib.V{Content: value},
+		})
+	}
+
+	return nil
 }
 
 func (s *snapshotManager) TreeGroupExists(profileName, treeGroup string) (bool, error) {
-	return s.parent.treeGroupExists(profileName, treeGroup)
+	m := s.parent
+	if m.db == nil {
+		return false, fmt.Errorf("database not open")
+	}
+	if profileName == "" {
+		return false, fmt.Errorf("profile name cannot be empty")
+	}
+	if treeGroup == "" {
+		return false, fmt.Errorf("tree group name cannot be empty")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return false, nil
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+	if profileGroup == nil {
+		return false, nil
+	}
+
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == treeGroup {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func (s *snapshotManager) RenameTreeGroup(profileName, oldName, newName string) error {
-	return s.parent.renameTreeGroup(profileName, oldName, newName)
+	m := s.parent
+	if m.db == nil {
+		return fmt.Errorf("database not open")
+	}
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if oldName == "" {
+		return fmt.Errorf("old name cannot be empty")
+	}
+	if newName == "" {
+		return fmt.Errorf("new name cannot be empty")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return fmt.Errorf("root group not found")
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+	if profileGroup == nil {
+		return fmt.Errorf("profile '%s' not found", profileName)
+	}
+
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == oldName {
+			profileGroup.Groups[i].Name = newName
+			return nil
+		}
+	}
+
+	return fmt.Errorf("tree group '%s' not found in profile '%s'", oldName, profileName)
 }
 
 func (s *snapshotManager) DeleteTreeGroup(profileName, treeGroup string) error {
-	return s.parent.deleteTreeGroup(profileName, treeGroup)
+	m := s.parent
+	if m.db == nil {
+		return fmt.Errorf("database not open")
+	}
+	if profileName == "" {
+		return fmt.Errorf("profile name cannot be empty")
+	}
+	if treeGroup == "" {
+		return fmt.Errorf("tree group name cannot be empty")
+	}
+	if len(m.db.Content.Root.Groups) == 0 {
+		return fmt.Errorf("root group not found")
+	}
+
+	rootGroup := &m.db.Content.Root.Groups[0]
+	var profileGroup *gokeepasslib.Group
+	for i := range rootGroup.Groups {
+		if rootGroup.Groups[i].Name == profileName {
+			profileGroup = &rootGroup.Groups[i]
+			break
+		}
+	}
+	if profileGroup == nil {
+		return fmt.Errorf("profile '%s' not found", profileName)
+	}
+
+	index := -1
+	for i := range profileGroup.Groups {
+		if profileGroup.Groups[i].Name == treeGroup {
+			index = i
+			break
+		}
+	}
+	if index == -1 {
+		return fmt.Errorf("tree group '%s' not found in profile '%s'", treeGroup, profileName)
+	}
+
+	profileGroup.Groups = append(profileGroup.Groups[:index], profileGroup.Groups[index+1:]...)
+	return nil
 }
 
 // clearPassword securely overwrites password in memory
@@ -742,159 +1713,18 @@ func (m *manager) OpenDatabase(dbPath, keyfilePath, password string) (*gokeepass
 
 // ProfileExists checks if a profile group exists in the database
 func (m *manager) ProfileExists(profileName string) (bool, error) {
-	// Check session
-	if m.db == nil {
-		return false, fmt.Errorf("database not open")
-	}
-
-	// Validate input parameters
-	if profileName == "" {
-		return false, fmt.Errorf("profile name cannot be empty")
-	}
-
-	// Check if root group has any groups
-	if len(m.db.Content.Root.Groups) == 0 {
-		return false, nil
-	}
-
-	// Search for profile in root's children
-	rootGroup := &m.db.Content.Root.Groups[0]
-	for _, group := range rootGroup.Groups {
-		if group.Name == profileName {
-			return true, nil
-		}
-	}
-
-	return false, nil
+	return m.profileOps.ProfileExists(profileName)
 }
 
 // GroupExists checks if a group exists under a parent group within a profile
 func (m *manager) GroupExists(profileName, parentGroupName, groupName string) (bool, error) {
-	// Check session
-	if m.db == nil {
-		return false, fmt.Errorf("database not open")
-	}
-
-	// Validate input parameters
-	if profileName == "" {
-		return false, fmt.Errorf("profile name cannot be empty")
-	}
-	if parentGroupName == "" {
-		return false, fmt.Errorf("parent group name cannot be empty")
-	}
-	if groupName == "" {
-		return false, fmt.Errorf("group name cannot be empty")
-	}
-
-	// Check if root group exists
-	if len(m.db.Content.Root.Groups) == 0 {
-		return false, nil
-	}
-
-	rootGroup := &m.db.Content.Root.Groups[0]
-
-	// Find profile group
-	var profileGroup *gokeepasslib.Group
-	for i := range rootGroup.Groups {
-		if rootGroup.Groups[i].Name == profileName {
-			profileGroup = &rootGroup.Groups[i]
-			break
-		}
-	}
-
-	if profileGroup == nil {
-		return false, nil
-	}
-
-	// Find parent group within profile
-	var parentGroup *gokeepasslib.Group
-	for i := range profileGroup.Groups {
-		if profileGroup.Groups[i].Name == parentGroupName {
-			parentGroup = &profileGroup.Groups[i]
-			break
-		}
-	}
-
-	if parentGroup == nil {
-		return false, nil
-	}
-
-	// Check if group exists under parent
-	for _, group := range parentGroup.Groups {
-		if group.Name == groupName {
-			return true, nil
-		}
-	}
-
-	return false, nil
+	return m.profileOps.GroupExists(profileName, parentGroupName, groupName)
 }
 
 // CreateProfile creates a new profile structure in the database:
 // Profile (group) → HEAD (group) → metadata (entry)
 func (m *manager) CreateProfile(profileName string) error {
-	// Check session
-	if m.db == nil {
-		return fmt.Errorf("database not open")
-	}
-
-	// Validate input parameters
-	if profileName == "" {
-		return fmt.Errorf("profile name cannot be empty")
-	}
-
-	// Check if root group exists
-	if len(m.db.Content.Root.Groups) == 0 {
-		return fmt.Errorf("database has no root group")
-	}
-
-	rootGroup := &m.db.Content.Root.Groups[0]
-
-	// Check if profile already exists (idempotent operation)
-	for _, group := range rootGroup.Groups {
-		if group.Name == profileName {
-			// Profile already exists, skip creation (idempotent)
-			return nil
-		}
-	}
-
-	// Create profile group
-	profileGroup := gokeepasslib.NewGroup()
-	profileGroup.Name = profileName
-
-	// Create HEAD group
-	headGroup := gokeepasslib.NewGroup()
-	headGroup.Name = "HEAD"
-
-	// Create metadata entry
-	metadataEntry := gokeepasslib.NewEntry()
-	metadataEntry.Values = append(metadataEntry.Values, gokeepasslib.ValueData{
-		Key:   "Title",
-		Value: gokeepasslib.V{Content: "metadata"},
-	})
-
-	// Add custom fields for version and datetime
-	metadataEntry.Values = append(metadataEntry.Values, gokeepasslib.ValueData{
-		Key:   "version",
-		Value: gokeepasslib.V{Content: "1"},
-	})
-
-	// Get current datetime in ISO 8601 format
-	datetime := time.Now().Format(time.RFC3339)
-	metadataEntry.Values = append(metadataEntry.Values, gokeepasslib.ValueData{
-		Key:   "datetime",
-		Value: gokeepasslib.V{Content: datetime},
-	})
-
-	// Add metadata entry to HEAD group
-	headGroup.Entries = append(headGroup.Entries, metadataEntry)
-
-	// Add HEAD group to profile group
-	profileGroup.Groups = append(profileGroup.Groups, headGroup)
-
-	// Add profile group to root group
-	rootGroup.Groups = append(rootGroup.Groups, profileGroup)
-
-	return nil
+	return m.profileOps.CreateProfile(profileName)
 }
 
 // CreateGroup creates a new group under a parent group within a profile
@@ -902,393 +1732,25 @@ func (m *manager) CreateProfile(profileName string) error {
 // Returns (true, nil) if group was created, (false, nil) if already existed
 // Idempotent: if group already exists, returns (false, nil) without error
 func (m *manager) CreateGroup(profileName, parentGroupName, groupName string) (bool, error) {
-	// Check session
-	if m.db == nil {
-		return false, fmt.Errorf("database not open")
-	}
-
-	// Validate input parameters
-	if profileName == "" {
-		return false, fmt.Errorf("profile name cannot be empty")
-	}
-	if parentGroupName == "" {
-		return false, fmt.Errorf("parent group name cannot be empty")
-	}
-	if groupName == "" {
-		return false, fmt.Errorf("group name cannot be empty")
-	}
-
-	// Check if root group exists
-	if len(m.db.Content.Root.Groups) == 0 {
-		return false, fmt.Errorf("database has no root group")
-	}
-
-	rootGroup := &m.db.Content.Root.Groups[0]
-
-	// Find profile group
-	var profileGroup *gokeepasslib.Group
-	for i := range rootGroup.Groups {
-		if rootGroup.Groups[i].Name == profileName {
-			profileGroup = &rootGroup.Groups[i]
-			break
-		}
-	}
-
-	if profileGroup == nil {
-		return false, fmt.Errorf("profile '%s' not found", profileName)
-	}
-
-	// Find parent group within profile
-	var parentGroup *gokeepasslib.Group
-	for i := range profileGroup.Groups {
-		if profileGroup.Groups[i].Name == parentGroupName {
-			parentGroup = &profileGroup.Groups[i]
-			break
-		}
-	}
-
-	if parentGroup == nil {
-		return false, fmt.Errorf("parent group '%s' not found in profile '%s'", parentGroupName, profileName)
-	}
-
-	// Check if group already exists (idempotent operation)
-	for _, group := range parentGroup.Groups {
-		if group.Name == groupName {
-			// Group already exists, skip creation (idempotent)
-			return false, nil
-		}
-	}
-
-	// Create new group
-	newGroup := gokeepasslib.NewGroup()
-	newGroup.Name = groupName
-
-	// Add group to parent
-	parentGroup.Groups = append(parentGroup.Groups, newGroup)
-
-	return true, nil
+	return m.profileOps.CreateGroup(profileName, parentGroupName, groupName)
 }
 
 // CreateEntry creates a new entry in the database under a specific environment
 // Creates intermediate groups automatically if they don't exist
 // Entry is created empty (no custom fields)
 func (m *manager) CreateEntry(profileName, envName, entryPath string) error {
-	// Check session
-	if m.db == nil {
-		return fmt.Errorf("database not open")
-	}
-
-	// Validate input parameters
-	if profileName == "" {
-		return fmt.Errorf("profile name cannot be empty")
-	}
-	if envName == "" {
-		return fmt.Errorf("environment name cannot be empty")
-	}
-	if entryPath == "" {
-		return fmt.Errorf("entry path cannot be empty")
-	}
-
-	// Check if root group exists
-	if len(m.db.Content.Root.Groups) == 0 {
-		return fmt.Errorf("database has no root group")
-	}
-
-	rootGroup := &m.db.Content.Root.Groups[0]
-
-	// Find profile group
-	var profileGroup *gokeepasslib.Group
-	for i := range rootGroup.Groups {
-		if rootGroup.Groups[i].Name == profileName {
-			profileGroup = &rootGroup.Groups[i]
-			break
-		}
-	}
-
-	if profileGroup == nil {
-		return fmt.Errorf("profile '%s' not found", profileName)
-	}
-
-	// Find HEAD group within profile
-	var headGroup *gokeepasslib.Group
-	for i := range profileGroup.Groups {
-		if profileGroup.Groups[i].Name == "HEAD" {
-			headGroup = &profileGroup.Groups[i]
-			break
-		}
-	}
-
-	if headGroup == nil {
-		return fmt.Errorf("HEAD group not found in profile '%s'", profileName)
-	}
-
-	// Find environment group within HEAD
-	var envGroup *gokeepasslib.Group
-	for i := range headGroup.Groups {
-		if headGroup.Groups[i].Name == envName {
-			envGroup = &headGroup.Groups[i]
-			break
-		}
-	}
-
-	if envGroup == nil {
-		return fmt.Errorf("environment '%s' not found in profile '%s'", envName, profileName)
-	}
-
-	// Parse entry path
-	// Remove leading slash
-	if len(entryPath) > 0 && entryPath[0] == '/' {
-		entryPath = entryPath[1:]
-	}
-
-	// NOTE: Do NOT remove environment prefix - use path exactly as in secrets.yml
-
-	// Split path into components
-	if entryPath == "" {
-		return fmt.Errorf("entry path is empty after parsing")
-	}
-
-	components := strings.Split(entryPath, "/")
-	if len(components) == 0 {
-		return fmt.Errorf("invalid entry path")
-	}
-
-	// Navigate/create intermediate groups
-	currentGroup := envGroup
-	for i := 0; i < len(components)-1; i++ {
-		groupName := components[i]
-		if groupName == "" {
-			continue
-		}
-
-		// Find or create group
-		found := false
-		for j := range currentGroup.Groups {
-			if currentGroup.Groups[j].Name == groupName {
-				currentGroup = &currentGroup.Groups[j]
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			// Create intermediate group
-			newGroup := gokeepasslib.NewGroup()
-			newGroup.Name = groupName
-			currentGroup.Groups = append(currentGroup.Groups, newGroup)
-			currentGroup = &currentGroup.Groups[len(currentGroup.Groups)-1]
-		}
-	}
-
-	// Create entry in the final group
-	entryName := components[len(components)-1]
-	if entryName == "" {
-		return fmt.Errorf("entry name is empty")
-	}
-
-	// Create new empty entry
-	newEntry := gokeepasslib.NewEntry()
-	newEntry.Values = append(newEntry.Values, gokeepasslib.ValueData{
-		Key:   "Title",
-		Value: gokeepasslib.V{Content: entryName},
-	})
-
-	// Add entry to current group
-	currentGroup.Entries = append(currentGroup.Entries, newEntry)
-
-	return nil
+	return m.profileOps.CreateEntry(profileName, envName, entryPath)
 }
 
 // EntryExists checks if an entry exists at the specified path within an environment
 func (m *manager) EntryExists(profileName, envName, entryPath string) (bool, error) {
-	// Check session
-	if m.db == nil {
-		return false, fmt.Errorf("database not open")
-	}
-
-	// Validate input parameters
-	if profileName == "" {
-		return false, fmt.Errorf("profile name cannot be empty")
-	}
-	if envName == "" {
-		return false, fmt.Errorf("environment name cannot be empty")
-	}
-	if entryPath == "" {
-		return false, fmt.Errorf("entry path cannot be empty")
-	}
-
-	// Check if root group exists
-	if len(m.db.Content.Root.Groups) == 0 {
-		return false, nil
-	}
-
-	rootGroup := &m.db.Content.Root.Groups[0]
-
-	// Find profile group
-	var profileGroup *gokeepasslib.Group
-	for i := range rootGroup.Groups {
-		if rootGroup.Groups[i].Name == profileName {
-			profileGroup = &rootGroup.Groups[i]
-			break
-		}
-	}
-
-	if profileGroup == nil {
-		return false, nil
-	}
-
-	// Find HEAD group within profile
-	var headGroup *gokeepasslib.Group
-	for i := range profileGroup.Groups {
-		if profileGroup.Groups[i].Name == "HEAD" {
-			headGroup = &profileGroup.Groups[i]
-			break
-		}
-	}
-
-	if headGroup == nil {
-		return false, nil
-	}
-
-	// Find environment group within HEAD
-	var envGroup *gokeepasslib.Group
-	for i := range headGroup.Groups {
-		if headGroup.Groups[i].Name == envName {
-			envGroup = &headGroup.Groups[i]
-			break
-		}
-	}
-
-	if envGroup == nil {
-		return false, nil
-	}
-
-	// Parse entry path - remove leading slash if present
-	if len(entryPath) > 0 && entryPath[0] == '/' {
-		entryPath = entryPath[1:]
-	}
-
-	// NOTE: Do NOT remove environment prefix - use path exactly as in secrets.yml
-
-	// Split path into components
-	if entryPath == "" {
-		return false, nil
-	}
-
-	components := strings.Split(entryPath, "/")
-	if len(components) == 0 {
-		return false, nil
-	}
-
-	// Navigate through intermediate groups
-	currentGroup := envGroup
-	for i := 0; i < len(components)-1; i++ {
-		groupName := components[i]
-		if groupName == "" {
-			continue
-		}
-
-		// Find group
-		found := false
-		for j := range currentGroup.Groups {
-			if currentGroup.Groups[j].Name == groupName {
-				currentGroup = &currentGroup.Groups[j]
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			// Group doesn't exist, so entry doesn't exist
-			return false, nil
-		}
-	}
-
-	// Check if entry exists in the final group
-	entryName := components[len(components)-1]
-	if entryName == "" {
-		return false, nil
-	}
-
-	// Search for entry by Title
-	for _, entry := range currentGroup.Entries {
-		for _, value := range entry.Values {
-			if value.Key == "Title" && value.Value.Content == entryName {
-				return true, nil
-			}
-		}
-	}
-
-	return false, nil
+	return m.profileOps.EntryExists(profileName, envName, entryPath)
 }
 
 // GetEntriesByEnvironment retrieves all entry paths within a specific environment
 // Returns paths relative to the environment (without environment prefix)
 func (m *manager) GetEntriesByEnvironment(profileName, envName string) ([]string, error) {
-	// Check session
-	if m.db == nil {
-		return nil, fmt.Errorf("database not open")
-	}
-
-	// Validate input parameters
-	if profileName == "" {
-		return nil, fmt.Errorf("profile name cannot be empty")
-	}
-	if envName == "" {
-		return nil, fmt.Errorf("environment name cannot be empty")
-	}
-
-	// Check if root group exists
-	if len(m.db.Content.Root.Groups) == 0 {
-		return []string{}, nil
-	}
-
-	rootGroup := &m.db.Content.Root.Groups[0]
-
-	// Find profile group
-	var profileGroup *gokeepasslib.Group
-	for i := range rootGroup.Groups {
-		if rootGroup.Groups[i].Name == profileName {
-			profileGroup = &rootGroup.Groups[i]
-			break
-		}
-	}
-
-	if profileGroup == nil {
-		return []string{}, nil
-	}
-
-	// Find HEAD group within profile
-	var headGroup *gokeepasslib.Group
-	for i := range profileGroup.Groups {
-		if profileGroup.Groups[i].Name == "HEAD" {
-			headGroup = &profileGroup.Groups[i]
-			break
-		}
-	}
-
-	if headGroup == nil {
-		return []string{}, nil
-	}
-
-	// Find environment group within HEAD
-	var envGroup *gokeepasslib.Group
-	for i := range headGroup.Groups {
-		if headGroup.Groups[i].Name == envName {
-			envGroup = &headGroup.Groups[i]
-			break
-		}
-	}
-
-	if envGroup == nil {
-		return []string{}, nil
-	}
-
-	// Recursively collect all entry paths
-	var entries []string
-	collectEntries(envGroup, "", &entries)
-
-	return entries, nil
+	return m.profileOps.GetEntriesByEnvironment(profileName, envName)
 }
 
 // collectEntries recursively collects all entry paths in a group
@@ -1330,388 +1792,34 @@ func collectEntries(group *gokeepasslib.Group, currentPath string, entries *[]st
 
 // GetRootGroups returns the names of all groups directly under the root
 func (m *manager) GetRootGroups() ([]string, error) {
-	if m.db == nil {
-		return nil, fmt.Errorf("database not open")
-	}
-
-	if len(m.db.Content.Root.Groups) == 0 {
-		return []string{}, nil
-	}
-
-	rootGroup := m.db.Content.Root.Groups[0]
-	var groups []string
-	for _, group := range rootGroup.Groups {
-		groups = append(groups, group.Name)
-	}
-
-	return groups, nil
+	return m.profileOps.GetRootGroups()
 }
 
 // GetGroupsByParent returns the names of all groups directly under the specified parent path
 func (m *manager) GetGroupsByParent(parentPath string) ([]string, error) {
-	if m.db == nil {
-		return nil, fmt.Errorf("database not open")
-	}
-
-	parentGroup, err := m.findGroupByPath(parentPath)
-	if err != nil {
-		return nil, err
-	}
-
-	var groups []string
-	for _, group := range parentGroup.Groups {
-		groups = append(groups, group.Name)
-	}
-
-	return groups, nil
+	return m.profileOps.GetGroupsByParent(parentPath)
 }
 
 // GetEntriesByGroup returns the names of all entries directly under the specified group path
 func (m *manager) GetEntriesByGroup(groupPath string) ([]string, error) {
-	if m.db == nil {
-		return nil, fmt.Errorf("database not open")
-	}
-
-	group, err := m.findGroupByPath(groupPath)
-	if err != nil {
-		return nil, err
-	}
-
-	var entries []string
-	for _, entry := range group.Entries {
-		// Get entry title
-		var title string
-		for _, value := range entry.Values {
-			if value.Key == "Title" {
-				title = value.Value.Content
-				break
-			}
-		}
-		if title != "" {
-			entries = append(entries, title)
-		}
-	}
-
-	return entries, nil
+	return m.profileOps.GetEntriesByGroup(groupPath)
 }
 
 // GetFieldsByEntry returns all field names (standard and custom) for the specified entry path
 func (m *manager) GetFieldsByEntry(entryPath string) ([]string, error) {
-	if m.db == nil {
-		return nil, fmt.Errorf("database not open")
-	}
-
-	entry, err := m.findEntryByPath(entryPath)
-	if err != nil {
-		return nil, err
-	}
-
-	var fields []string
-	for _, value := range entry.Values {
-		fields = append(fields, value.Key)
-	}
-
-	return fields, nil
+	return m.profileOps.GetFieldsByEntry(entryPath)
 }
 
 // GetFieldsByEnvironmentEntry returns all field names (standard and custom) and attachments
 // for the specified entry within a profile and environment
 func (m *manager) GetFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error) {
-	// Check session
-	if m.db == nil {
-		return nil, fmt.Errorf("database not open")
-	}
-
-	// Validate input parameters
-	if profileName == "" {
-		return nil, fmt.Errorf("profile name cannot be empty")
-	}
-	if envName == "" {
-		return nil, fmt.Errorf("environment name cannot be empty")
-	}
-	if entryPath == "" {
-		return nil, fmt.Errorf("entry path cannot be empty")
-	}
-
-	// Check if root group exists
-	if len(m.db.Content.Root.Groups) == 0 {
-		return nil, fmt.Errorf("root group not found")
-	}
-
-	rootGroup := &m.db.Content.Root.Groups[0]
-
-	// Find profile group
-	var profileGroup *gokeepasslib.Group
-	for i := range rootGroup.Groups {
-		if rootGroup.Groups[i].Name == profileName {
-			profileGroup = &rootGroup.Groups[i]
-			break
-		}
-	}
-
-	if profileGroup == nil {
-		return nil, fmt.Errorf("profile '%s' not found", profileName)
-	}
-
-	// Find HEAD group within profile
-	var headGroup *gokeepasslib.Group
-	for i := range profileGroup.Groups {
-		if profileGroup.Groups[i].Name == "HEAD" {
-			headGroup = &profileGroup.Groups[i]
-			break
-		}
-	}
-
-	if headGroup == nil {
-		return nil, fmt.Errorf("HEAD group not found in profile '%s'", profileName)
-	}
-
-	// Find environment group within HEAD
-	var envGroup *gokeepasslib.Group
-	for i := range headGroup.Groups {
-		if headGroup.Groups[i].Name == envName {
-			envGroup = &headGroup.Groups[i]
-			break
-		}
-	}
-
-	if envGroup == nil {
-		return nil, fmt.Errorf("environment '%s' not found in profile '%s'", envName, profileName)
-	}
-
-	// Parse entry path - remove leading slash if present
-	if len(entryPath) > 0 && entryPath[0] == '/' {
-		entryPath = entryPath[1:]
-	}
-
-	// NOTE: Do NOT remove environment prefix - use path exactly as in secrets.yml
-	// Split path into components
-	if entryPath == "" {
-		return nil, fmt.Errorf("entry path cannot be empty")
-	}
-
-	components := strings.Split(entryPath, "/")
-	if len(components) == 0 {
-		return nil, fmt.Errorf("invalid entry path")
-	}
-
-	// Navigate through intermediate groups
-	currentGroup := envGroup
-	for i := 0; i < len(components)-1; i++ {
-		groupName := components[i]
-		if groupName == "" {
-			continue
-		}
-
-		// Find group
-		found := false
-		for j := range currentGroup.Groups {
-			if currentGroup.Groups[j].Name == groupName {
-				currentGroup = &currentGroup.Groups[j]
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return nil, fmt.Errorf("group '%s' not found in path", groupName)
-		}
-	}
-
-	// Find the entry in the final group
-	entryName := components[len(components)-1]
-	if entryName == "" {
-		return nil, fmt.Errorf("entry name cannot be empty")
-	}
-
-	// Search for entry by Title
-	var targetEntry *gokeepasslib.Entry
-	for i := range currentGroup.Entries {
-		for _, value := range currentGroup.Entries[i].Values {
-			if value.Key == "Title" && value.Value.Content == entryName {
-				targetEntry = &currentGroup.Entries[i]
-				break
-			}
-		}
-		if targetEntry != nil {
-			break
-		}
-	}
-
-	if targetEntry == nil {
-		return nil, fmt.Errorf("entry '%s' not found", entryName)
-	}
-
-	// Collect all field names that have non-empty values
-	var fields []string
-
-	// Add standard and custom fields (only if they have content)
-	for _, value := range targetEntry.Values {
-		// Skip Title field (it's the entry name, not a user-facing field)
-		if value.Key == "Title" {
-			continue
-		}
-
-		// Include field if it has any content (even placeholder text)
-		if value.Value.Content != "" {
-			fields = append(fields, value.Key)
-		}
-	}
-
-	// Add attachments with "attachments/" prefix
-	for _, binary := range targetEntry.Binaries {
-		fields = append(fields, "attachments/"+binary.Name)
-	}
-
-	return fields, nil
+	return m.profileOps.GetFieldsByEnvironmentEntry(profileName, envName, entryPath)
 }
 
 // GetAllFieldsByEnvironmentEntry returns ALL field names (standard and custom) and attachments
 // for the specified entry within a profile and environment, including empty fields
 func (m *manager) GetAllFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error) {
-	// Check session
-	if m.db == nil {
-		return nil, fmt.Errorf("database not open")
-	}
-
-	// Validate input parameters
-	if profileName == "" {
-		return nil, fmt.Errorf("profile name cannot be empty")
-	}
-	if envName == "" {
-		return nil, fmt.Errorf("environment name cannot be empty")
-	}
-	if entryPath == "" {
-		return nil, fmt.Errorf("entry path cannot be empty")
-	}
-
-	// Check if root group exists
-	if len(m.db.Content.Root.Groups) == 0 {
-		return nil, fmt.Errorf("root group not found")
-	}
-
-	rootGroup := &m.db.Content.Root.Groups[0]
-
-	// Find profile group
-	var profileGroup *gokeepasslib.Group
-	for i := range rootGroup.Groups {
-		if rootGroup.Groups[i].Name == profileName {
-			profileGroup = &rootGroup.Groups[i]
-			break
-		}
-	}
-
-	if profileGroup == nil {
-		return nil, fmt.Errorf("profile '%s' not found", profileName)
-	}
-
-	// Find HEAD group within profile
-	var headGroup *gokeepasslib.Group
-	for i := range profileGroup.Groups {
-		if profileGroup.Groups[i].Name == "HEAD" {
-			headGroup = &profileGroup.Groups[i]
-			break
-		}
-	}
-
-	if headGroup == nil {
-		return nil, fmt.Errorf("HEAD group not found in profile '%s'", profileName)
-	}
-
-	// Find environment group within HEAD
-	var envGroup *gokeepasslib.Group
-	for i := range headGroup.Groups {
-		if headGroup.Groups[i].Name == envName {
-			envGroup = &headGroup.Groups[i]
-			break
-		}
-	}
-
-	if envGroup == nil {
-		return nil, fmt.Errorf("environment '%s' not found in profile '%s'", envName, profileName)
-	}
-
-	// Parse entry path - remove leading slash if present
-	if len(entryPath) > 0 && entryPath[0] == '/' {
-		entryPath = entryPath[1:]
-	}
-
-	// NOTE: Do NOT remove environment prefix - use path exactly as in secrets.yml
-	// Split path into components
-	if entryPath == "" {
-		return nil, fmt.Errorf("entry path cannot be empty")
-	}
-
-	components := strings.Split(entryPath, "/")
-	if len(components) == 0 {
-		return nil, fmt.Errorf("invalid entry path")
-	}
-
-	// Navigate through intermediate groups
-	currentGroup := envGroup
-	for i := 0; i < len(components)-1; i++ {
-		groupName := components[i]
-		if groupName == "" {
-			continue
-		}
-
-		// Find group
-		found := false
-		for j := range currentGroup.Groups {
-			if currentGroup.Groups[j].Name == groupName {
-				currentGroup = &currentGroup.Groups[j]
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return nil, fmt.Errorf("group '%s' not found in path", groupName)
-		}
-	}
-
-	// Find the entry in the final group
-	entryName := components[len(components)-1]
-	if entryName == "" {
-		return nil, fmt.Errorf("entry name cannot be empty")
-	}
-
-	// Search for entry by Title
-	var targetEntry *gokeepasslib.Entry
-	for i := range currentGroup.Entries {
-		for _, value := range currentGroup.Entries[i].Values {
-			if value.Key == "Title" && value.Value.Content == entryName {
-				targetEntry = &currentGroup.Entries[i]
-				break
-			}
-		}
-		if targetEntry != nil {
-			break
-		}
-	}
-
-	if targetEntry == nil {
-		return nil, fmt.Errorf("entry '%s' not found", entryName)
-	}
-
-	// Collect ALL field names (including empty ones)
-	var fields []string
-
-	// Add all standard and custom fields
-	for _, value := range targetEntry.Values {
-		// Skip Title field (it's the entry name, not a user-facing field)
-		if value.Key == "Title" {
-			continue
-		}
-		fields = append(fields, value.Key)
-	}
-
-	// Add attachments with "attachments/" prefix
-	for _, binary := range targetEntry.Binaries {
-		fields = append(fields, "attachments/"+binary.Name)
-	}
-
-	return fields, nil
+	return m.profileOps.GetAllFieldsByEnvironmentEntry(profileName, envName, entryPath)
 }
 
 // findGroupByPath finds a group by its full path
@@ -1852,172 +1960,19 @@ func findEntryByPath(envGroup *gokeepasslib.Group, entryPath string) (*gokeepass
 // IsStandardField checks if a field name is a standard KeePass field (case-insensitive)
 // Standard fields: Title, UserName, Password, URL, Notes
 func (m *manager) IsStandardField(fieldName string) bool {
-	standardFields := []string{"Title", "UserName", "Password", "URL", "Notes"}
-	fieldLower := strings.ToLower(fieldName)
-
-	for _, standard := range standardFields {
-		if strings.ToLower(standard) == fieldLower {
-			return true
-		}
-	}
-
-	return false
+	return m.profileOps.IsStandardField(fieldName)
 }
 
 // SetStandardField sets a standard KeePass field in an entry
 // Field name is case-insensitive and will be normalized to standard casing
 func (m *manager) SetStandardField(profileName, envName, entryPath, fieldName, value string) error {
-	// Check if database is open
-	if !m.IsOpen() {
-		return fmt.Errorf("database is not open")
-	}
-
-	// Validate input parameters
-	if profileName == "" {
-		return fmt.Errorf("profile name cannot be empty")
-	}
-	if envName == "" {
-		return fmt.Errorf("environment name cannot be empty")
-	}
-	if entryPath == "" {
-		return fmt.Errorf("entry path cannot be empty")
-	}
-	if fieldName == "" {
-		return fmt.Errorf("field name cannot be empty")
-	}
-
-	// Verify it's a standard field
-	if !m.IsStandardField(fieldName) {
-		return fmt.Errorf("'%s' is not a standard field", fieldName)
-	}
-
-	// Normalize field name to standard casing
-	standardFields := map[string]string{
-		"title":    "Title",
-		"username": "UserName",
-		"password": "Password",
-		"url":      "URL",
-		"notes":    "Notes",
-	}
-	normalizedFieldName := standardFields[strings.ToLower(fieldName)]
-
-	// Find profile group
-	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
-	if err != nil {
-		return fmt.Errorf("failed to find profile: %w", err)
-	}
-
-	// Find HEAD group
-	headGroup, err := findGroupByName(profileGroup, "HEAD")
-	if err != nil {
-		return fmt.Errorf("failed to find HEAD group: %w", err)
-	}
-
-	// Find environment group
-	envGroup, err := findGroupByName(headGroup, envName)
-	if err != nil {
-		return fmt.Errorf("failed to find environment '%s': %w", envName, err)
-	}
-
-	// Find entry
-	entry, err := findEntryByPath(envGroup, entryPath)
-	if err != nil {
-		return fmt.Errorf("failed to find entry '%s': %w", entryPath, err)
-	}
-
-	// Set or update the standard field
-	fieldFound := false
-	for i := range entry.Values {
-		if entry.Values[i].Key == normalizedFieldName {
-			entry.Values[i].Value.Content = value
-			fieldFound = true
-			break
-		}
-	}
-
-	// If field doesn't exist, create it
-	if !fieldFound {
-		newValue := gokeepasslib.ValueData{
-			Key:   normalizedFieldName,
-			Value: gokeepasslib.V{Content: value},
-		}
-		entry.Values = append(entry.Values, newValue)
-	}
-
-	return nil
+	return m.profileOps.SetStandardField(profileName, envName, entryPath, fieldName, value)
 }
 
 // SetCustomField sets a custom field in an entry
 // Field name casing is preserved exactly as provided
 func (m *manager) SetCustomField(profileName, envName, entryPath, fieldName, value string) error {
-	// Check if database is open
-	if !m.IsOpen() {
-		return fmt.Errorf("database is not open")
-	}
-
-	// Validate input parameters
-	if profileName == "" {
-		return fmt.Errorf("profile name cannot be empty")
-	}
-	if envName == "" {
-		return fmt.Errorf("environment name cannot be empty")
-	}
-	if entryPath == "" {
-		return fmt.Errorf("entry path cannot be empty")
-	}
-	if fieldName == "" {
-		return fmt.Errorf("field name cannot be empty")
-	}
-
-	// Verify it's NOT a standard field
-	if m.IsStandardField(fieldName) {
-		return fmt.Errorf("'%s' is a standard field, use SetStandardField instead", fieldName)
-	}
-
-	// Find profile group
-	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
-	if err != nil {
-		return fmt.Errorf("failed to find profile: %w", err)
-	}
-
-	// Find HEAD group
-	headGroup, err := findGroupByName(profileGroup, "HEAD")
-	if err != nil {
-		return fmt.Errorf("failed to find HEAD group: %w", err)
-	}
-
-	// Find environment group
-	envGroup, err := findGroupByName(headGroup, envName)
-	if err != nil {
-		return fmt.Errorf("failed to find environment '%s': %w", envName, err)
-	}
-
-	// Find entry
-	entry, err := findEntryByPath(envGroup, entryPath)
-	if err != nil {
-		return fmt.Errorf("failed to find entry '%s': %w", entryPath, err)
-	}
-
-	// Set or update the custom field (preserve exact casing)
-	fieldFound := false
-	for i := range entry.Values {
-		if entry.Values[i].Key == fieldName {
-			entry.Values[i].Value.Content = value
-			fieldFound = true
-			break
-		}
-	}
-
-	// If field doesn't exist, create it
-	if !fieldFound {
-		newValue := gokeepasslib.ValueData{
-			Key:   fieldName,
-			Value: gokeepasslib.V{Content: value},
-		}
-		entry.Values = append(entry.Values, newValue)
-	}
-
-	return nil
+	return m.profileOps.SetCustomField(profileName, envName, entryPath, fieldName, value)
 }
 
 // CreateAttachment creates or updates an attachment in an entry
@@ -2025,190 +1980,20 @@ func (m *manager) SetCustomField(profileName, envName, entryPath, fieldName, val
 // 1. Binary data is stored in db.Content.Meta.Binaries
 // 2. Entry references binary by ID via entry.Binaries (BinaryReference)
 func (m *manager) CreateAttachment(profileName, envName, entryPath, attachmentName string, data []byte) error {
-	// Check if database is open
-	if !m.IsOpen() {
-		return fmt.Errorf("database is not open")
-	}
-
-	// Validate input parameters
-	if profileName == "" {
-		return fmt.Errorf("profile name cannot be empty")
-	}
-	if envName == "" {
-		return fmt.Errorf("environment name cannot be empty")
-	}
-	if entryPath == "" {
-		return fmt.Errorf("entry path cannot be empty")
-	}
-	if attachmentName == "" {
-		return fmt.Errorf("attachment name cannot be empty")
-	}
-	if data == nil {
-		return fmt.Errorf("attachment data cannot be nil")
-	}
-
-	// Find profile group
-	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
-	if err != nil {
-		return fmt.Errorf("failed to find profile: %w", err)
-	}
-
-	// Find HEAD group
-	headGroup, err := findGroupByName(profileGroup, "HEAD")
-	if err != nil {
-		return fmt.Errorf("failed to find HEAD group: %w", err)
-	}
-
-	// Find environment group
-	envGroup, err := findGroupByName(headGroup, envName)
-	if err != nil {
-		return fmt.Errorf("failed to find environment '%s': %w", envName, err)
-	}
-
-	// Find entry
-	entry, err := findEntryByPath(envGroup, entryPath)
-	if err != nil {
-		return fmt.Errorf("failed to find entry '%s': %w", entryPath, err)
-	}
-
-	// Check if attachment with same name already exists
-	for i := range entry.Binaries {
-		if entry.Binaries[i].Name == attachmentName {
-			// According to .context, if something already exists, it should not be touched
-			// Return success silently (idempotent behavior)
-			return nil
-		}
-	}
-
-	// Generate unique binary ID
-	// Use the next available ID in db.Content.Meta.Binaries
-	binaryID := len(m.db.Content.Meta.Binaries)
-
-	// Create binary data in Meta.Binaries
-	binary := gokeepasslib.Binary{
-		ID:      binaryID,
-		Content: data,
-	}
-	m.db.Content.Meta.Binaries = append(m.db.Content.Meta.Binaries, binary)
-
-	// Create binary reference in entry using the helper function
-	binaryRef := gokeepasslib.NewBinaryReference(attachmentName, binaryID)
-	entry.Binaries = append(entry.Binaries, binaryRef)
-
-	return nil
+	return m.profileOps.CreateAttachment(profileName, envName, entryPath, attachmentName, data)
 }
 
 // FieldExists checks if a field exists in an entry (standard or custom field)
 // For standard fields, comparison is case-insensitive
 // For custom fields, comparison is case-sensitive
 func (m *manager) FieldExists(profileName, envName, entryPath, fieldName string) (bool, error) {
-	// Check if database is open
-	if !m.IsOpen() {
-		return false, fmt.Errorf("database is not open")
-	}
-
-	// Validate input parameters
-	if profileName == "" {
-		return false, fmt.Errorf("profile name cannot be empty")
-	}
-	if envName == "" {
-		return false, fmt.Errorf("environment name cannot be empty")
-	}
-	if entryPath == "" {
-		return false, fmt.Errorf("entry path cannot be empty")
-	}
-	if fieldName == "" {
-		return false, fmt.Errorf("field name cannot be empty")
-	}
-
-	// Find profile group
-	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
-	if err != nil {
-		return false, fmt.Errorf("failed to find profile: %w", err)
-	}
-
-	// Find HEAD group
-	headGroup, err := findGroupByName(profileGroup, "HEAD")
-	if err != nil {
-		return false, fmt.Errorf("failed to find HEAD group: %w", err)
-	}
-
-	// Find environment group
-	envGroup, err := findGroupByName(headGroup, envName)
-	if err != nil {
-		return false, fmt.Errorf("failed to find environment '%s': %w", envName, err)
-	}
-
-	// Find entry
-	entry, err := findEntryByPath(envGroup, entryPath)
-	if err != nil {
-		return false, fmt.Errorf("failed to find entry '%s': %w", entryPath, err)
-	}
-
-	// Check if it's an attachment field
-	if strings.HasPrefix(fieldName, "attachments/") {
-		// Extract attachment name
-		attachmentName := strings.TrimPrefix(fieldName, "attachments/")
-
-		// Check in entry binaries
-		for _, binary := range entry.Binaries {
-			if binary.Name == attachmentName {
-				return true, nil
-			}
-		}
-		return false, nil
-	}
-
-	// Check if field exists (standard or custom)
-	isStandard := m.IsStandardField(fieldName)
-
-	for _, value := range entry.Values {
-		if isStandard {
-			// Case-insensitive comparison for standard fields
-			if strings.EqualFold(value.Key, fieldName) {
-				return true, nil
-			}
-		} else {
-			// Case-sensitive comparison for custom fields
-			if value.Key == fieldName {
-				return true, nil
-			}
-		}
-	}
-
-	return false, nil
+	return m.profileOps.FieldExists(profileName, envName, entryPath, fieldName)
 }
 
 // ListProfileTreeGroups lists all tree groups (HEAD, v1, v2, etc.) for a given profile
 // Returns the list of tree group names
 func (m *manager) ListProfileTreeGroups(profileName string) ([]string, error) {
-	// Validate session
-	if m.db == nil {
-		return nil, fmt.Errorf("database not open")
-	}
-
-	// Validate input
-	if profileName == "" {
-		return nil, fmt.Errorf("profile name cannot be empty")
-	}
-
-	// Find profile group
-	if len(m.db.Content.Root.Groups) == 0 {
-		return nil, fmt.Errorf("no groups in database")
-	}
-
-	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
-	if err != nil {
-		return nil, fmt.Errorf("profile '%s' not found: %w", profileName, err)
-	}
-
-	// List all direct children of the profile (tree groups: HEAD, v1, v2, etc.)
-	var treeGroups []string
-	for _, group := range profileGroup.Groups {
-		treeGroups = append(treeGroups, group.Name)
-	}
-
-	return treeGroups, nil
+	return m.snapshotOps.ListProfileTreeGroups(profileName)
 }
 
 // GetTreeGroupEntryField retrieves a field value from an entry within a tree group
@@ -2217,196 +2002,18 @@ func (m *manager) ListProfileTreeGroups(profileName string) ([]string, error) {
 // entryPath: path to the entry (e.g., "metadata" or "/env/path/to/entry")
 // fieldName: the field name to retrieve
 func (m *manager) GetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName string) (*common.SecureValue, error) {
-	// Validate session
-	if m.db == nil {
-		return nil, fmt.Errorf("database not open")
-	}
-
-	// Validate input
-	if profileName == "" {
-		return nil, fmt.Errorf("profile name cannot be empty")
-	}
-	if treeGroup == "" {
-		return nil, fmt.Errorf("tree group name cannot be empty")
-	}
-	if entryPath == "" {
-		return nil, fmt.Errorf("entry path cannot be empty")
-	}
-	if fieldName == "" {
-		return nil, fmt.Errorf("field name cannot be empty")
-	}
-
-	// Find profile group
-	if len(m.db.Content.Root.Groups) == 0 {
-		return nil, fmt.Errorf("no groups in database")
-	}
-
-	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
-	if err != nil {
-		return nil, fmt.Errorf("profile '%s' not found: %w", profileName, err)
-	}
-
-	// Find tree group (HEAD, v1, v2, etc.)
-	treeGroupObj, err := findGroupByName(profileGroup, treeGroup)
-	if err != nil {
-		return nil, fmt.Errorf("tree group '%s' not found in profile '%s': %w", treeGroup, profileName, err)
-	}
-
-	// Find entry by path
-	entry, err := findEntryByPath(treeGroupObj, entryPath)
-	if err != nil {
-		return nil, fmt.Errorf("entry '%s' not found in tree group '%s': %w", entryPath, treeGroup, err)
-	}
-
-	// Find field in entry
-	isStandard := m.IsStandardField(fieldName)
-
-	for _, value := range entry.Values {
-		if isStandard {
-			// Case-insensitive comparison for standard fields
-			if strings.EqualFold(value.Key, fieldName) {
-				return common.NewSecureValue(value.Value.Content), nil
-			}
-		} else {
-			// Case-sensitive comparison for custom fields
-			if value.Key == fieldName {
-				return common.NewSecureValue(value.Value.Content), nil
-			}
-		}
-	}
-
-	return nil, fmt.Errorf("field '%s' not found in entry '%s'", fieldName, entryPath)
+	return m.snapshotOps.GetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName)
 }
 
 // CloneTreeGroup clones a source tree group to a new tree group within the same profile
 // This performs a recursive deep copy of all subgroups and entries
 func (m *manager) CloneTreeGroup(profileName, sourceTreeGroup, targetTreeGroup string) error {
-	// Validate session
-	if m.db == nil {
-		return fmt.Errorf("database not open")
-	}
-
-	// Validate input
-	if profileName == "" {
-		return fmt.Errorf("profile name cannot be empty")
-	}
-	if sourceTreeGroup == "" {
-		return fmt.Errorf("source tree group cannot be empty")
-	}
-	if targetTreeGroup == "" {
-		return fmt.Errorf("target tree group cannot be empty")
-	}
-
-	// Find profile group
-	if len(m.db.Content.Root.Groups) == 0 {
-		return fmt.Errorf("no groups in database")
-	}
-
-	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
-	if err != nil {
-		return fmt.Errorf("profile '%s' not found: %w", profileName, err)
-	}
-
-	// Find source tree group
-	sourceGroup, err := findGroupByName(profileGroup, sourceTreeGroup)
-	if err != nil {
-		return fmt.Errorf("source tree group '%s' not found in profile '%s': %w", sourceTreeGroup, profileName, err)
-	}
-
-	// Check if target already exists
-	_, err = findGroupByName(profileGroup, targetTreeGroup)
-	if err == nil {
-		return fmt.Errorf("target tree group '%s' already exists in profile '%s'", targetTreeGroup, profileName)
-	}
-
-	// Deep clone the source group
-	clonedGroup := deepCloneGroup(sourceGroup)
-
-	// Rename the cloned group to target name
-	clonedGroup.Name = targetTreeGroup
-
-	// Add cloned group to profile
-	profileGroup.Groups = append(profileGroup.Groups, clonedGroup)
-
-	return nil
+	return m.snapshotOps.CloneTreeGroup(profileName, sourceTreeGroup, targetTreeGroup)
 }
 
 // SetTreeGroupEntryField sets a field value in an entry within a tree group
 func (m *manager) SetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName, value string) error {
-	// Validate session
-	if m.db == nil {
-		return fmt.Errorf("database not open")
-	}
-
-	// Validate input
-	if profileName == "" {
-		return fmt.Errorf("profile name cannot be empty")
-	}
-	if treeGroup == "" {
-		return fmt.Errorf("tree group cannot be empty")
-	}
-	if entryPath == "" {
-		return fmt.Errorf("entry path cannot be empty")
-	}
-	if fieldName == "" {
-		return fmt.Errorf("field name cannot be empty")
-	}
-
-	// Find profile group
-	if len(m.db.Content.Root.Groups) == 0 {
-		return fmt.Errorf("no groups in database")
-	}
-
-	profileGroup, err := findGroupByName(&m.db.Content.Root.Groups[0], profileName)
-	if err != nil {
-		return fmt.Errorf("profile '%s' not found: %w", profileName, err)
-	}
-
-	// Find tree group
-	treeGroupObj, err := findGroupByName(profileGroup, treeGroup)
-	if err != nil {
-		return fmt.Errorf("tree group '%s' not found in profile '%s': %w", treeGroup, profileName, err)
-	}
-
-	// Find entry by path
-	entry, err := findEntryByPath(treeGroupObj, entryPath)
-	if err != nil {
-		return fmt.Errorf("entry '%s' not found in tree group '%s': %w", entryPath, treeGroup, err)
-	}
-
-	// Check if field is standard
-	isStandard := m.IsStandardField(fieldName)
-
-	// Set or update the field
-	fieldFound := false
-	for i := range entry.Values {
-		if isStandard {
-			// Case-insensitive comparison for standard fields
-			if strings.EqualFold(entry.Values[i].Key, fieldName) {
-				entry.Values[i].Value.Content = value
-				fieldFound = true
-				break
-			}
-		} else {
-			// Case-sensitive comparison for custom fields
-			if entry.Values[i].Key == fieldName {
-				entry.Values[i].Value.Content = value
-				fieldFound = true
-				break
-			}
-		}
-	}
-
-	// If field doesn't exist, create it
-	if !fieldFound {
-		newValue := gokeepasslib.ValueData{
-			Key:   fieldName,
-			Value: gokeepasslib.V{Content: value},
-		}
-		entry.Values = append(entry.Values, newValue)
-	}
-
-	return nil
+	return m.snapshotOps.SetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName, value)
 }
 
 // deepCloneGroup performs a deep clone of a group and all its subgroups/entries
@@ -2471,151 +2078,15 @@ func deepCloneEntry(source *gokeepasslib.Entry) gokeepasslib.Entry {
 
 // TreeGroupExists checks if a tree group exists under a profile
 func (m *manager) TreeGroupExists(profileName, treeGroup string) (bool, error) {
-	if m.db == nil {
-		return false, fmt.Errorf("database not open")
-	}
-
-	// Validate input
-	if profileName == "" {
-		return false, fmt.Errorf("profile name cannot be empty")
-	}
-	if treeGroup == "" {
-		return false, fmt.Errorf("tree group name cannot be empty")
-	}
-
-	// Check if root group exists
-	if len(m.db.Content.Root.Groups) == 0 {
-		return false, nil
-	}
-
-	rootGroup := &m.db.Content.Root.Groups[0]
-
-	// Find profile group
-	var profileGroup *gokeepasslib.Group
-	for i := range rootGroup.Groups {
-		if rootGroup.Groups[i].Name == profileName {
-			profileGroup = &rootGroup.Groups[i]
-			break
-		}
-	}
-
-	if profileGroup == nil {
-		return false, nil
-	}
-
-	// Try to find tree group under profile
-	for i := range profileGroup.Groups {
-		if profileGroup.Groups[i].Name == treeGroup {
-			return true, nil
-		}
-	}
-
-	return false, nil
+	return m.snapshotOps.TreeGroupExists(profileName, treeGroup)
 }
 
 // RenameTreeGroup renames a tree group under a profile
 func (m *manager) RenameTreeGroup(profileName, oldName, newName string) error {
-	if m.db == nil {
-		return fmt.Errorf("database not open")
-	}
-
-	// Validate input
-	if profileName == "" {
-		return fmt.Errorf("profile name cannot be empty")
-	}
-	if oldName == "" {
-		return fmt.Errorf("old name cannot be empty")
-	}
-	if newName == "" {
-		return fmt.Errorf("new name cannot be empty")
-	}
-
-	// Check if root group exists
-	if len(m.db.Content.Root.Groups) == 0 {
-		return fmt.Errorf("root group not found")
-	}
-
-	rootGroup := &m.db.Content.Root.Groups[0]
-
-	// Find profile group
-	var profileGroup *gokeepasslib.Group
-	for i := range rootGroup.Groups {
-		if rootGroup.Groups[i].Name == profileName {
-			profileGroup = &rootGroup.Groups[i]
-			break
-		}
-	}
-
-	if profileGroup == nil {
-		return fmt.Errorf("profile '%s' not found", profileName)
-	}
-
-	// Find tree group to rename
-	var treeGroupFound bool
-	for i := range profileGroup.Groups {
-		if profileGroup.Groups[i].Name == oldName {
-			profileGroup.Groups[i].Name = newName
-			treeGroupFound = true
-			break
-		}
-	}
-
-	if !treeGroupFound {
-		return fmt.Errorf("tree group '%s' not found in profile '%s'", oldName, profileName)
-	}
-
-	return nil
+	return m.snapshotOps.RenameTreeGroup(profileName, oldName, newName)
 }
 
 // DeleteTreeGroup deletes a tree group under a profile
 func (m *manager) DeleteTreeGroup(profileName, treeGroup string) error {
-	if m.db == nil {
-		return fmt.Errorf("database not open")
-	}
-
-	// Validate input
-	if profileName == "" {
-		return fmt.Errorf("profile name cannot be empty")
-	}
-	if treeGroup == "" {
-		return fmt.Errorf("tree group name cannot be empty")
-	}
-
-	// Check if root group exists
-	if len(m.db.Content.Root.Groups) == 0 {
-		return fmt.Errorf("root group not found")
-	}
-
-	rootGroup := &m.db.Content.Root.Groups[0]
-
-	// Find profile group
-	var profileGroup *gokeepasslib.Group
-	for i := range rootGroup.Groups {
-		if rootGroup.Groups[i].Name == profileName {
-			profileGroup = &rootGroup.Groups[i]
-			break
-		}
-	}
-
-	if profileGroup == nil {
-		return fmt.Errorf("profile '%s' not found", profileName)
-	}
-
-	// Find and delete tree group
-	var treeGroupIndex = -1
-	for i := range profileGroup.Groups {
-		if profileGroup.Groups[i].Name == treeGroup {
-			treeGroupIndex = i
-			break
-		}
-	}
-
-	if treeGroupIndex == -1 {
-		return fmt.Errorf("tree group '%s' not found in profile '%s'", treeGroup, profileName)
-	}
-
-	// Remove tree group from slice
-	profileGroup.Groups = append(profileGroup.Groups[:treeGroupIndex], profileGroup.Groups[treeGroupIndex+1:]...)
-
-	return nil
+	return m.snapshotOps.DeleteTreeGroup(profileName, treeGroup)
 }
