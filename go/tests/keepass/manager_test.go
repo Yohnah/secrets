@@ -3,7 +3,7 @@ package keepass_test
 import (
 	"testing"
 
-	"github.com/Yohnah/secrets/internal/testhelpers"
+	"github.com/Yohnah/secrets/tests/testhelpers"
 )
 
 func TestCreateEntry(t *testing.T) {

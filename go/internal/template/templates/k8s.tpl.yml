@@ -37,3 +37,4 @@ data:
   {{- range $key, $value := .Items }}
   {{ $key }}: {{ $value | base64 }}
   {{- end }}
+  
