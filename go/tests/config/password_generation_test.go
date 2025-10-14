@@ -9,6 +9,7 @@ import (
 )
 
 func TestGenerateSecurePassword_Uniqueness(t *testing.T) {
+	t.Parallel()
 	mgr := config.NewManager(&types.GlobalFlags{}, &types.CommandFlags{}, validator.NewManager())
 
 	passwords := make(map[string]bool)
@@ -28,6 +29,7 @@ func TestGenerateSecurePassword_Uniqueness(t *testing.T) {
 }
 
 func TestGenerateSecurePassword_MeetsComplexity(t *testing.T) {
+	t.Parallel()
 	mgr := config.NewManager(&types.GlobalFlags{}, &types.CommandFlags{}, validator.NewManager())
 
 	passesCount := 0
@@ -65,6 +67,7 @@ func TestGenerateSecurePassword_MeetsComplexity(t *testing.T) {
 }
 
 func TestGenerateSecurePassword_Length(t *testing.T) {
+	t.Parallel()
 	mgr := config.NewManager(&types.GlobalFlags{}, &types.CommandFlags{}, validator.NewManager())
 
 	for i := 0; i < 10; i++ {

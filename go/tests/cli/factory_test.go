@@ -13,6 +13,7 @@ import (
 // 2. All managers are instantiated (not nil)
 // 3. The 7-step initialization pattern is maintained
 func TestNewManagerContext(t *testing.T) {
+	t.Parallel()
 	// Arrange & Act
 	ctx := cli.NewManagerContextForTest()
 
@@ -63,6 +64,7 @@ func TestNewManagerContext(t *testing.T) {
 // multiple independent instances (not singleton).
 // This is important to maintain the per-command initialization pattern.
 func TestNewManagerContext_MultipleInstances(t *testing.T) {
+	t.Parallel()
 	// Arrange & Act
 	ctx1 := cli.NewManagerContextForTest()
 	ctx2 := cli.NewManagerContextForTest()
@@ -90,6 +92,7 @@ func TestNewManagerContext_MultipleInstances(t *testing.T) {
 // exposes all managers as public (exported) fields.
 // This is necessary so that CLI commands can access them.
 func TestManagerContext_AllFieldsExported(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	ctx := cli.NewManagerContextForTest()
 
@@ -121,6 +124,7 @@ func TestManagerContext_AllFieldsExported(t *testing.T) {
 
 // TestVersionFlag verifies that the --version flag works correctly
 func TestVersionFlag(t *testing.T) {
+	t.Parallel()
 	// This test verifies that the version information is properly injected
 	// and that the --version flag produces output containing expected elements
 

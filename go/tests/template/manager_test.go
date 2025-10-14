@@ -8,6 +8,7 @@ import (
 )
 
 func TestNewManager_ReturnsManager(t *testing.T) {
+	t.Parallel()
 	mgr := template.NewManager()
 	if mgr == nil {
 		t.Fatal("Expected non-nil manager")
@@ -15,6 +16,7 @@ func TestNewManager_ReturnsManager(t *testing.T) {
 }
 
 func TestGetTemplate_SecretsYml_Success(t *testing.T) {
+	t.Parallel()
 	mgr := template.NewManager()
 
 	content, err := mgr.GetTemplate(nil, "secrets.yml")
@@ -41,6 +43,7 @@ func TestGetTemplate_SecretsYml_Success(t *testing.T) {
 }
 
 func TestGetTemplate_NotFound(t *testing.T) {
+	t.Parallel()
 	mgr := template.NewManager()
 
 	_, err := mgr.GetTemplate(nil, "nonexistent.yml")
@@ -55,6 +58,7 @@ func TestGetTemplate_NotFound(t *testing.T) {
 }
 
 func TestGetTemplate_WithData_ReturnsRaw(t *testing.T) {
+	t.Parallel()
 	mgr := template.NewManager()
 
 	// For now, data parameter is ignored and raw template is returned
@@ -73,6 +77,7 @@ func TestGetTemplate_WithData_ReturnsRaw(t *testing.T) {
 }
 
 func TestGetTemplate_EmptyName(t *testing.T) {
+	t.Parallel()
 	mgr := template.NewManager()
 
 	_, err := mgr.GetTemplate(nil, "")
@@ -82,6 +87,7 @@ func TestGetTemplate_EmptyName(t *testing.T) {
 }
 
 func TestGetTemplate_SecretsYml_ContainsDocumentation(t *testing.T) {
+	t.Parallel()
 	mgr := template.NewManager()
 
 	content, err := mgr.GetTemplate(nil, "secrets.yml")

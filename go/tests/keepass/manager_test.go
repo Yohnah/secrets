@@ -7,6 +7,7 @@ import (
 )
 
 func TestCreateEntry(t *testing.T) {
+	t.Parallel()
 	// Setup test database with session
 	testDB, cleanup := testhelpers.SetupTestDatabaseWithSession(t, "TestDB")
 	defer cleanup()
@@ -73,6 +74,7 @@ func TestCreateEntry(t *testing.T) {
 }
 
 func TestEntryExists(t *testing.T) {
+	t.Parallel()
 	// Setup test database with session
 	testDB, cleanup := testhelpers.SetupTestDatabaseWithSession(t, "TestDB")
 	defer cleanup()
@@ -130,6 +132,7 @@ func TestEntryExists(t *testing.T) {
 }
 
 func TestGetEntriesByEnvironment(t *testing.T) {
+	t.Parallel()
 	// Setup test database with session
 	testDB, cleanup := testhelpers.SetupTestDatabaseWithSession(t, "TestDB")
 	defer cleanup()
@@ -187,6 +190,7 @@ func TestGetEntriesByEnvironment(t *testing.T) {
 }
 
 func TestPathTraversalPrevention(t *testing.T) {
+	t.Parallel()
 	// Setup test database
 	testDB, cleanup := testhelpers.SetupTestDatabase(t, "TestDB")
 	defer cleanup()
@@ -211,6 +215,7 @@ func TestPathTraversalPrevention(t *testing.T) {
 }
 
 func TestParameterValidation(t *testing.T) {
+	t.Parallel()
 	// Setup test database
 	testDB, cleanup := testhelpers.SetupTestDatabase(t, "TestDB")
 	defer cleanup()

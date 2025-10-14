@@ -11,6 +11,7 @@ import (
 )
 
 func TestOutputTreeANSI(t *testing.T) {
+	t.Parallel()
 	manager := output.NewManager()
 	payload := map[string]interface{}{
 		"tree": map[string]interface{}{
@@ -73,6 +74,7 @@ func TestOutputTreeANSI(t *testing.T) {
 }
 
 func TestOutputTreeASCII(t *testing.T) {
+	t.Parallel()
 	manager := output.NewManager()
 	payload := map[string]interface{}{
 		"tree": map[string]interface{}{
@@ -135,6 +137,7 @@ func TestOutputTreeASCII(t *testing.T) {
 }
 
 func TestOutputTreeInvalidStyle(t *testing.T) {
+	t.Parallel()
 	manager := output.NewManager()
 	payload := map[string]interface{}{
 		"tree": map[string]interface{}{

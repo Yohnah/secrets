@@ -12,40 +12,52 @@ import (
 	"github.com/tobischo/gokeepasslib/v3"
 )
 
-// Manager interface defines operations for KeePass database management
-type Manager interface {
-	// Session management
+// SessionManager defines operations for session management
+type SessionManager interface {
 	Open(dbPath, keyfilePath, password string) error
 	SaveAndClose() error
 	CloseWithoutSave() error
 	IsOpen() bool
 	GetDatabase() *gokeepasslib.Database
+}
 
-	// Database operations (require open session)
+// DatabaseManager defines operations for database infrastructure creation
+type DatabaseManager interface {
 	CreateDatabase(dbPath, keyfilePath, password, rootGroupName string) error
 	GenerateKeyfile(keyfilePath string) error
+}
+
+// ProfileManager defines operations for profile, group, entry, and field management
+type ProfileManager interface {
+	// Profile operations
 	CreateProfile(profileName string) error
 	ProfileExists(profileName string) (bool, error)
+
+	// Group operations
 	CreateGroup(profileName, parentGroupName, groupName string) (bool, error)
 	GroupExists(profileName, parentGroupName, groupName string) (bool, error)
+	GetRootGroups() ([]string, error)
+	GetGroupsByParent(parentPath string) ([]string, error)
+
+	// Entry operations
 	CreateEntry(profileName, envName, entryPath string) error
 	EntryExists(profileName, envName, entryPath string) (bool, error)
 	GetEntriesByEnvironment(profileName, envName string) ([]string, error)
-	GetRootGroups() ([]string, error)
-	GetGroupsByParent(parentPath string) ([]string, error)
 	GetEntriesByGroup(groupPath string) ([]string, error)
+
+	// Field operations
 	GetFieldsByEntry(entryPath string) ([]string, error)
 	GetFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error)
 	GetAllFieldsByEnvironmentEntry(profileName, envName, entryPath string) ([]string, error)
-
-	// Field operations (require open session)
 	IsStandardField(fieldName string) bool
 	SetStandardField(profileName, envName, entryPath, fieldName, value string) error
 	SetCustomField(profileName, envName, entryPath, fieldName, value string) error
 	CreateAttachment(profileName, envName, entryPath, attachmentName string, data []byte) error
 	FieldExists(profileName, envName, entryPath, fieldName string) (bool, error)
+}
 
-	// Snapshots operations (require open session)
+// SnapshotManager defines operations for snapshot (tree group) management
+type SnapshotManager interface {
 	ListProfileTreeGroups(profileName string) ([]string, error)
 	GetTreeGroupEntryField(profileName, treeGroup, entryPath, fieldName string) (*common.SecureValue, error)
 	CloneTreeGroup(profileName, sourceTreeGroup, targetTreeGroup string) error
@@ -53,6 +65,15 @@ type Manager interface {
 	TreeGroupExists(profileName, treeGroup string) (bool, error)
 	RenameTreeGroup(profileName, oldName, newName string) error
 	DeleteTreeGroup(profileName, treeGroup string) error
+}
+
+// Manager is the main interface that composes all specialized managers
+// This maintains backward compatibility while allowing specialized access
+type Manager interface {
+	SessionManager
+	DatabaseManager
+	ProfileManager
+	SnapshotManager
 }
 
 // manager implements the Manager interface
@@ -63,6 +84,11 @@ type manager struct {
 	password    []byte // Changed from string to []byte for secure cleanup
 
 	fs FileSystemPort
+
+	// pathCache stores split paths to avoid repeated string.Split calls
+	// Key: path string, Value: []string components
+	// Cache is cleared on any database modification operation
+	pathCache map[string][]string
 
 	sessionOps  *sessionManager
 	databaseOps *databaseManager
@@ -77,7 +103,10 @@ func NewManager() Manager {
 
 // NewManagerWithFileSystem allows injecting a custom filesystem adapter (useful for tests).
 func NewManagerWithFileSystem(fs FileSystemPort) Manager {
-	mgr := &manager{fs: fs}
+	mgr := &manager{
+		fs:        fs,
+		pathCache: make(map[string][]string),
+	}
 	mgr.sessionOps = &sessionManager{parent: mgr}
 	mgr.databaseOps = &databaseManager{parent: mgr}
 	mgr.profileOps = &profileManager{parent: mgr}
@@ -302,6 +331,9 @@ func (p *profileManager) CreateProfile(profileName string) error {
 	profileGroup.Groups = append(profileGroup.Groups, headGroup)
 	rootGroup.Groups = append(rootGroup.Groups, profileGroup)
 
+	// Clear path cache after modification
+	m.clearPathCache()
+
 	return nil
 }
 
@@ -380,6 +412,9 @@ func (p *profileManager) CreateGroup(profileName, parentGroupName, groupName str
 	newGroup := gokeepasslib.NewGroup()
 	newGroup.Name = groupName
 	parentGroup.Groups = append(parentGroup.Groups, newGroup)
+
+	// Clear path cache after modification
+	m.clearPathCache()
 
 	return true, nil
 }
@@ -538,6 +573,10 @@ func (p *profileManager) CreateEntry(profileName, envName, entryPath string) err
 	})
 
 	currentGroup.Entries = append(currentGroup.Entries, newEntry)
+
+	// Clear path cache after modification
+	m.clearPathCache()
+
 	return nil
 }
 
@@ -870,6 +909,9 @@ func (p *profileManager) SetStandardField(profileName, envName, entryPath, field
 		Value: gokeepasslib.V{Content: value},
 	})
 
+	// Clear path cache after modification
+	p.parent.clearPathCache()
+
 	return nil
 }
 
@@ -898,6 +940,9 @@ func (p *profileManager) SetCustomField(profileName, envName, entryPath, fieldNa
 		Value: gokeepasslib.V{Content: value},
 	})
 
+	// Clear path cache after modification
+	p.parent.clearPathCache()
+
 	return nil
 }
 
@@ -924,6 +969,9 @@ func (p *profileManager) CreateAttachment(profileName, envName, entryPath, attac
 	binaryID := len(m.db.Content.Meta.Binaries)
 	m.db.Content.Meta.Binaries = append(m.db.Content.Meta.Binaries, gokeepasslib.Binary{ID: binaryID, Content: data})
 	entry.Binaries = append(entry.Binaries, gokeepasslib.NewBinaryReference(attachmentName, binaryID))
+
+	// Clear path cache after modification
+	m.clearPathCache()
 
 	return nil
 }
@@ -1147,6 +1195,9 @@ func (s *snapshotManager) CloneTreeGroup(profileName, sourceTreeGroup, targetTre
 	clonedGroup.Name = targetTreeGroup
 	profileGroup.Groups = append(profileGroup.Groups, clonedGroup)
 
+	// Clear path cache after modification
+	m.clearPathCache()
+
 	return nil
 }
 
@@ -1210,6 +1261,9 @@ func (s *snapshotManager) SetTreeGroupEntryField(profileName, treeGroup, entryPa
 			Value: gokeepasslib.V{Content: value},
 		})
 	}
+
+	// Clear path cache after modification
+	m.clearPathCache()
 
 	return nil
 }
@@ -1283,6 +1337,10 @@ func (s *snapshotManager) RenameTreeGroup(profileName, oldName, newName string) 
 	for i := range profileGroup.Groups {
 		if profileGroup.Groups[i].Name == oldName {
 			profileGroup.Groups[i].Name = newName
+
+			// Clear path cache after modification
+			m.clearPathCache()
+
 			return nil
 		}
 	}
@@ -1329,6 +1387,10 @@ func (s *snapshotManager) DeleteTreeGroup(profileName, treeGroup string) error {
 	}
 
 	profileGroup.Groups = append(profileGroup.Groups[:index], profileGroup.Groups[index+1:]...)
+
+	// Clear path cache after modification
+	m.clearPathCache()
+
 	return nil
 }
 
@@ -1832,7 +1894,7 @@ func (m *manager) findGroupByPath(path string) (*gokeepasslib.Group, error) {
 		return &m.db.Content.Root.Groups[0], nil
 	}
 
-	parts := strings.Split(path, "/")
+	parts := m.splitPath(path)
 	current := &m.db.Content.Root.Groups[0]
 
 	for _, part := range parts {
@@ -1854,7 +1916,7 @@ func (m *manager) findGroupByPath(path string) (*gokeepasslib.Group, error) {
 
 // findEntryByPath finds an entry by its full path
 func (m *manager) findEntryByPath(path string) (*gokeepasslib.Entry, error) {
-	parts := strings.Split(path, "/")
+	parts := m.splitPath(path)
 	if len(parts) < 2 {
 		return nil, fmt.Errorf("invalid entry path: %s", path)
 	}
@@ -2089,4 +2151,22 @@ func (m *manager) RenameTreeGroup(profileName, oldName, newName string) error {
 // DeleteTreeGroup deletes a tree group under a profile
 func (m *manager) DeleteTreeGroup(profileName, treeGroup string) error {
 	return m.snapshotOps.DeleteTreeGroup(profileName, treeGroup)
+}
+
+// splitPath splits a path by "/" using cache for performance
+// Returns cached result if available, otherwise splits and caches
+func (m *manager) splitPath(path string) []string {
+	if cached, ok := m.pathCache[path]; ok {
+		return cached
+	}
+
+	parts := strings.Split(path, "/")
+	m.pathCache[path] = parts
+	return parts
+}
+
+// clearPathCache clears the path cache after database modifications
+// Should be called after any operation that modifies the database structure
+func (m *manager) clearPathCache() {
+	m.pathCache = make(map[string][]string)
 }
