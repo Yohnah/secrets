@@ -10,7 +10,10 @@ import (
 	"golang.org/x/term"
 )
 
-// Manager defines the interface for user interaction
+// Manager defines the interface for user interaction.
+// PromptManager handles all user input and confirmation prompts.
+// It provides secure password input with confirmation, boolean confirmations,
+// and manages interactive vs non-interactive modes.
 type Manager interface {
 	Confirm(message string) (bool, error)
 	ConfirmWithDefault(message string, defaultYes bool) (bool, error)

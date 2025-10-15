@@ -5,7 +5,10 @@ import (
 	"os"
 )
 
-// Manager defines the interface for logging
+// Manager defines the interface for logging.
+// LoggerManager handles all application logging and user feedback.
+// It provides different log levels (Info, Debug, Error, Success) and respects
+// the verbose flag to control debug output visibility.
 type Manager interface {
 	Info(message string)
 	Debug(message string)

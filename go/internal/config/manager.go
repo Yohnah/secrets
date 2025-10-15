@@ -17,7 +17,11 @@ import (
 //go:embed templates/config.tpl.yml
 var configTemplate string
 
-// Manager defines the interface for configuration management
+// Manager defines the interface for configuration management.
+// ConfigManager is the source of truth for all application configuration.
+// It processes configuration from multiple sources (flags, config.yml, env vars, defaults)
+// following the precedence: FLAGS > CONFIG.YML > ENV VARS > DEFAULTS.
+// It translates raw CLI flags into semantic configuration and validates all settings.
 type Manager interface {
 	GetConfig() (*Config, error)
 	CreateDefaultConfig(path string) error

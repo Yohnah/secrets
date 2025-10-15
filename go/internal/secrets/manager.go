@@ -14,8 +14,11 @@ import (
 	"github.com/Yohnah/secrets/internal/validator"
 )
 
-// Manager defines the interface for secrets business logic
-// This is the facade that coordinates between subdominios
+// Manager defines the interface for secrets business logic.
+// SecretsManager is the CORE of the application and makes all business decisions.
+// It orchestrates all operations by coordinating between specialized services (subdomains).
+// This manager decides WHAT to do and delegates HOW to do it to the appropriate services.
+// It follows the Facade pattern to provide a unified interface for all secrets operations.
 type Manager interface {
 	Init() error
 	Setup() error
