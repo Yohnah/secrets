@@ -15,6 +15,8 @@ var (
 	flagOutputFormat   string
 	flagTreeOutput     string
 	flagProfilesOutput string
+	syncedDataFlagProfile string
+	syncedDataFlagOutput  string
 ) // showCmd represents the show command
 var showCmd = &cobra.Command{
 	Use:   "show",
@@ -108,6 +110,37 @@ Examples:
 	RunE: runShowProfiles,
 }
 
+// showSyncedDataCmd represents the show synced-data command
+var showSyncedDataCmd = &cobra.Command{
+	Use:   "synced-data",
+	Short: "Show synchronization status between secrets.yml and KeePass database",
+	Long: `Check synchronization status between secrets.yml and KeePass database.
+
+Displays for each item:
+  - NAME: Item name (environment/item_name)
+  - STATUS: ✓ (synced) or ✗ (not synced)
+  - ISSUE: "OK" if synced, or describes what's missing (entry/key)
+  - FIELD VALUE STATUS: Status of the field value in KeePass
+    - "empty": Field exists but has no value
+    - "has_data": Field has a value set
+    - "default": Field has the default placeholder value
+    - "N/A": Field does not exist or cannot be checked
+
+Examples:
+  # Check sync status (auto-detect profile if single profile)
+  secrets show synced-data
+
+  # Check specific profile
+  secrets show synced-data --profile-name webapp-production
+
+  # Output in JSON format
+  secrets show synced-data -o json
+
+  # Output in YAML format
+  secrets show synced-data -o yaml`,
+	RunE: runShowSyncedData,
+}
+
 func init() {
 	// Register show command with root
 	rootCmd.AddCommand(showCmd)
@@ -117,6 +150,7 @@ func init() {
 	showCmd.AddCommand(showStatusCmd)
 	showCmd.AddCommand(showTreeCmd)
 	showCmd.AddCommand(showProfilesCmd)
+	showCmd.AddCommand(showSyncedDataCmd)
 
 	// Flags for template subcommand only
 	showTemplateCmd.Flags().BoolVar(&flagMinimal, "minimal", false, "Show minimal template without examples")
@@ -129,6 +163,10 @@ func init() {
 
 	// Flags for profiles subcommand only
 	showProfilesCmd.Flags().StringVarP(&flagProfilesOutput, "output", "o", "table", "Output format: table, json, yaml")
+
+	// Flags for synced-data subcommand only
+	showSyncedDataCmd.Flags().StringVarP(&syncedDataFlagProfile, "profile-name", "p", "", "Profile name (optional, auto-detect if single profile)")
+	showSyncedDataCmd.Flags().StringVarP(&syncedDataFlagOutput, "output", "o", "table", "Output format: table, json, yaml (default: table)")
 
 	// Update show template help with available templates
 	updateShowTemplateHelp()
@@ -273,6 +311,24 @@ func runShowProfiles(cmd *cobra.Command, args []string) error {
 	// Execute business logic (delegate all decisions to CORE)
 	// SecretsManager will pull processed config from ConfigMgr
 	if err := managers.Secrets.ShowProfiles(profileFilter); err != nil {
+		managers.Logger.Error(err.Error())
+		os.Exit(1)
+	}
+
+	return nil
+}
+
+func runShowSyncedData(cmd *cobra.Command, args []string) error {
+	// CliMgr captures ALL command-specific flags and feeds them to ConfigMgr
+	commandFlags := &types.CommandFlags{
+		OutputFormat: syncedDataFlagOutput,
+	}
+
+	// Create manager context with captured flags
+	managers := NewManagerContext(commandFlags)
+
+	// Execute business logic (delegate all decisions to CORE)
+	if err := managers.Secrets.ShowSyncedData(syncedDataFlagProfile); err != nil {
 		managers.Logger.Error(err.Error())
 		os.Exit(1)
 	}
