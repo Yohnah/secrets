@@ -21,6 +21,11 @@ Displays for each item:
   - NAME: Item name (environment/item_name)
   - STATUS: ✓ (synced) or ✗ (not synced)
   - ISSUE: "OK" if synced, or describes what's missing (entry/key)
+  - FIELD VALUE STATUS: Status of the field value in KeePass
+    - "empty": Field exists but has no value
+    - "has_data": Field has a value set
+    - "default": Field has the default placeholder value
+    - "N/A": Field does not exist or cannot be checked
 
 Examples:
   # Check sync status (auto-detect profile if single profile)

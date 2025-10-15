@@ -257,3 +257,326 @@ func TestParameterValidation(t *testing.T) {
 		}
 	})
 }
+
+func TestGetFieldValue(t *testing.T) {
+	t.Parallel()
+	// Setup test database with session
+	testDB, cleanup := testhelpers.SetupTestDatabaseWithSession(t, "TestDB")
+	defer cleanup()
+
+	// Create profile and environment
+	profileName := "testprofile"
+	envName := "testenv"
+	testhelpers.CreateTestProfile(t, testDB.Manager, profileName, envName)
+
+	// Create a test entry
+	entryPath := "/testentry"
+	err := testDB.Manager.CreateEntry(profileName, envName, entryPath)
+	if err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	// Set standard field values
+	err = testDB.Manager.SetStandardField(profileName, envName, entryPath, "UserName", "testuser")
+	if err != nil {
+		t.Fatalf("Failed to set UserName: %v", err)
+	}
+
+	err = testDB.Manager.SetStandardField(profileName, envName, entryPath, "Password", "testpass123")
+	if err != nil {
+		t.Fatalf("Failed to set Password: %v", err)
+	}
+
+	err = testDB.Manager.SetStandardField(profileName, envName, entryPath, "URL", "https://example.com")
+	if err != nil {
+		t.Fatalf("Failed to set URL: %v", err)
+	}
+
+	// Set a custom field
+	err = testDB.Manager.SetCustomField(profileName, envName, entryPath, "CustomField", "custom_value")
+	if err != nil {
+		t.Fatalf("Failed to set custom field: %v", err)
+	}
+
+	// Set an empty field
+	err = testDB.Manager.SetStandardField(profileName, envName, entryPath, "Notes", "")
+	if err != nil {
+		t.Fatalf("Failed to set empty Notes: %v", err)
+	}
+
+	tests := []struct {
+		name          string
+		fieldName     string
+		expectedValue string
+		expectError   bool
+	}{
+		{
+			name:          "get standard field - case insensitive",
+			fieldName:     "username",
+			expectedValue: "testuser",
+			expectError:   false,
+		},
+		{
+			name:          "get standard field - exact case",
+			fieldName:     "UserName",
+			expectedValue: "testuser",
+			expectError:   false,
+		},
+		{
+			name:          "get password field",
+			fieldName:     "password",
+			expectedValue: "testpass123",
+			expectError:   false,
+		},
+		{
+			name:          "get URL field",
+			fieldName:     "url",
+			expectedValue: "https://example.com",
+			expectError:   false,
+		},
+		{
+			name:          "get custom field - case sensitive",
+			fieldName:     "CustomField",
+			expectedValue: "custom_value",
+			expectError:   false,
+		},
+		{
+			name:          "get empty field",
+			fieldName:     "Notes",
+			expectedValue: "",
+			expectError:   false,
+		},
+		{
+			name:          "get non-existent field",
+			fieldName:     "NonExistentField",
+			expectedValue: "",
+			expectError:   true,
+		},
+		{
+			name:          "attachment field",
+			fieldName:     "attachments/test.txt",
+			expectedValue: "",
+			expectError:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			value, err := testDB.Manager.GetFieldValue(profileName, envName, entryPath, tt.fieldName)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error but got: %v", err)
+				}
+				if value != tt.expectedValue {
+					t.Errorf("GetFieldValue() = %q, expected %q", value, tt.expectedValue)
+				}
+			}
+		})
+	}
+}
+
+func TestGetFieldValue_EntryNotFound(t *testing.T) {
+	t.Parallel()
+	// Setup test database with session
+	testDB, cleanup := testhelpers.SetupTestDatabaseWithSession(t, "TestDB")
+	defer cleanup()
+
+	// Create profile and environment
+	profileName := "testprofile"
+	envName := "testenv"
+	testhelpers.CreateTestProfile(t, testDB.Manager, profileName, envName)
+
+	// Try to get field value from non-existent entry
+	_, err := testDB.Manager.GetFieldValue(profileName, envName, "/nonexistent", "UserName")
+	if err == nil {
+		t.Error("Expected error for non-existent entry")
+	}
+}
+
+func TestGetAttachmentContent(t *testing.T) {
+	t.Parallel()
+	// Setup test database with session
+	testDB, cleanup := testhelpers.SetupTestDatabaseWithSession(t, "TestDB")
+	defer cleanup()
+
+	// Create profile and environment
+	profileName := "testprofile"
+	envName := "testenv"
+	testhelpers.CreateTestProfile(t, testDB.Manager, profileName, envName)
+
+	// Create a test entry
+	entryPath := "/testentry"
+	err := testDB.Manager.CreateEntry(profileName, envName, entryPath)
+	if err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	// Create attachments with different content
+	defaultContent := []byte("Attachment pending to be filled by the developer")
+	err = testDB.Manager.CreateAttachment(profileName, envName, entryPath, "default.txt", defaultContent)
+	if err != nil {
+		t.Fatalf("Failed to create default attachment: %v", err)
+	}
+
+	realContent := []byte("This is real attachment content")
+	err = testDB.Manager.CreateAttachment(profileName, envName, entryPath, "data.txt", realContent)
+	if err != nil {
+		t.Fatalf("Failed to create data attachment: %v", err)
+	}
+
+	emptyContent := []byte{}
+	err = testDB.Manager.CreateAttachment(profileName, envName, entryPath, "empty.txt", emptyContent)
+	if err != nil {
+		t.Fatalf("Failed to create empty attachment: %v", err)
+	}
+
+	tests := []struct {
+		name           string
+		attachmentName string
+		expectedLength int
+		expectedString string
+		expectError    bool
+	}{
+		{
+			name:           "get default placeholder attachment",
+			attachmentName: "default.txt",
+			expectedLength: len(defaultContent),
+			expectedString: "Attachment pending to be filled by the developer",
+			expectError:    false,
+		},
+		{
+			name:           "get attachment with data",
+			attachmentName: "data.txt",
+			expectedLength: len(realContent),
+			expectedString: "This is real attachment content",
+			expectError:    false,
+		},
+		{
+			name:           "get empty attachment",
+			attachmentName: "empty.txt",
+			expectedLength: 0,
+			expectedString: "",
+			expectError:    false,
+		},
+		{
+			name:           "get non-existent attachment",
+			attachmentName: "notfound.txt",
+			expectedLength: 0,
+			expectedString: "",
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content, err := testDB.Manager.GetAttachmentContent(profileName, envName, entryPath, tt.attachmentName)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error but got: %v", err)
+				}
+				if len(content) != tt.expectedLength {
+					t.Errorf("GetAttachmentContent() length = %d, expected %d", len(content), tt.expectedLength)
+				}
+				if string(content) != tt.expectedString {
+					t.Errorf("GetAttachmentContent() = %q, expected %q", string(content), tt.expectedString)
+				}
+			}
+		})
+	}
+}
+
+func TestGetAttachmentContent_EntryNotFound(t *testing.T) {
+	t.Parallel()
+	// Setup test database with session
+	testDB, cleanup := testhelpers.SetupTestDatabaseWithSession(t, "TestDB")
+	defer cleanup()
+
+	// Create profile and environment
+	profileName := "testprofile"
+	envName := "testenv"
+	testhelpers.CreateTestProfile(t, testDB.Manager, profileName, envName)
+
+	// Try to get attachment from non-existent entry
+	_, err := testDB.Manager.GetAttachmentContent(profileName, envName, "/nonexistent", "file.txt")
+	if err == nil {
+		t.Error("Expected error for non-existent entry")
+	}
+}
+
+func TestAttachmentsAfterFieldModifications(t *testing.T) {
+	t.Parallel()
+	// Regression test for: attachment IDs becoming invalid after modifying other fields
+	// This test ensures that attachments remain accessible after database modifications
+
+	testDB, cleanup := testhelpers.SetupTestDatabaseWithSession(t, "TestDB")
+	defer cleanup()
+
+	// Create profile and environment
+	profileName := "testprofile"
+	envName := "testenv"
+	testhelpers.CreateTestProfile(t, testDB.Manager, profileName, envName)
+
+	// Create two entries: one with regular field, one with attachment
+	entry1 := "/entry1"
+	entry2 := "/entry2"
+	err := testDB.Manager.CreateEntry(profileName, envName, entry1)
+	if err != nil {
+		t.Fatalf("Failed to create entry1: %v", err)
+	}
+	err = testDB.Manager.CreateEntry(profileName, envName, entry2)
+	if err != nil {
+		t.Fatalf("Failed to create entry2: %v", err)
+	}
+
+	// Create attachment in entry2
+	attachmentContent := []byte("Attachment pending to be filled by the developer")
+	err = testDB.Manager.CreateAttachment(profileName, envName, entry2, "test.txt", attachmentContent)
+	if err != nil {
+		t.Fatalf("Failed to create attachment: %v", err)
+	}
+
+	// Verify attachment exists and has correct content
+	content, err := testDB.Manager.GetAttachmentContent(profileName, envName, entry2, "test.txt")
+	if err != nil {
+		t.Errorf("Failed to get attachment before modification: %v", err)
+	}
+	if string(content) != string(attachmentContent) {
+		t.Errorf("Attachment content mismatch before modification: got %q, want %q", string(content), string(attachmentContent))
+	}
+
+	// Now modify a field in entry1 (simulating user adding data)
+	err = testDB.Manager.SetStandardField(profileName, envName, entry1, "Password", "new_password_123")
+	if err != nil {
+		t.Fatalf("Failed to set field: %v", err)
+	}
+
+	// Save and reload database (simulating what happens in real usage)
+	err = testDB.Manager.SaveAndClose()
+	if err != nil {
+		t.Fatalf("Failed to save database: %v", err)
+	}
+	err = testDB.Manager.Open(testDB.DBPath, testDB.KeyfilePath, testDB.Password)
+	if err != nil {
+		t.Fatalf("Failed to reopen database: %v", err)
+	}
+
+	// Verify attachment is still accessible with correct content
+	content, err = testDB.Manager.GetAttachmentContent(profileName, envName, entry2, "test.txt")
+	if err != nil {
+		t.Errorf("Failed to get attachment after modification: %v", err)
+	}
+	if string(content) != string(attachmentContent) {
+		t.Errorf("Attachment content mismatch after modification: got %q, want %q", string(content), string(attachmentContent))
+	}
+}
+

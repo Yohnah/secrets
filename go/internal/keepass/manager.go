@@ -54,6 +54,8 @@ type ProfileManager interface {
 	SetCustomField(profileName, envName, entryPath, fieldName, value string) error
 	CreateAttachment(profileName, envName, entryPath, attachmentName string, data []byte) error
 	FieldExists(profileName, envName, entryPath, fieldName string) (bool, error)
+	GetFieldValue(profileName, envName, entryPath, fieldName string) (string, error)
+	GetAttachmentContent(profileName, envName, entryPath, attachmentName string) ([]byte, error)
 }
 
 // SnapshotManager defines operations for snapshot (tree group) management
@@ -966,9 +968,15 @@ func (p *profileManager) CreateAttachment(profileName, envName, entryPath, attac
 	}
 
 	m := p.parent
-	binaryID := len(m.db.Content.Meta.Binaries)
-	m.db.Content.Meta.Binaries = append(m.db.Content.Meta.Binaries, gokeepasslib.Binary{ID: binaryID, Content: data})
-	entry.Binaries = append(entry.Binaries, gokeepasslib.NewBinaryReference(attachmentName, binaryID))
+	// Use AddBinary to add the binary to the database
+	// This method handles format version differences (KDBX v3 vs v4)
+	addedBinary := m.db.AddBinary(data)
+	if addedBinary == nil {
+		return fmt.Errorf("failed to add binary to database")
+	}
+	
+	// Create a reference to the binary in the entry
+	entry.Binaries = append(entry.Binaries, gokeepasslib.NewBinaryReference(attachmentName, addedBinary.ID))
 
 	// Clear path cache after modification
 	m.clearPathCache()
@@ -1010,6 +1018,73 @@ func (p *profileManager) FieldExists(profileName, envName, entryPath, fieldName 
 	}
 
 	return false, nil
+}
+
+// GetFieldValue retrieves the value of a specific field in an entry
+func (p *profileManager) GetFieldValue(profileName, envName, entryPath, fieldName string) (string, error) {
+	if fieldName == "" {
+		return "", fmt.Errorf("field name cannot be empty")
+	}
+
+	entry, err := p.findEnvironmentEntry(profileName, envName, entryPath)
+	if err != nil {
+		return "", err
+	}
+
+	// Check if it's an attachment
+	if strings.HasPrefix(fieldName, "attachments/") {
+		return "", fmt.Errorf("cannot get value from attachment field: %s", fieldName)
+	}
+
+	// Search for the field
+	isStandard := p.IsStandardField(fieldName)
+	for _, value := range entry.Values {
+		if isStandard {
+			if strings.EqualFold(value.Key, fieldName) {
+				return value.Value.Content, nil
+			}
+			continue
+		}
+		if value.Key == fieldName {
+			return value.Value.Content, nil
+		}
+	}
+
+	return "", fmt.Errorf("field '%s' not found in entry '%s'", fieldName, entryPath)
+}
+
+// GetAttachmentContent retrieves the content of a specific attachment in an entry
+func (p *profileManager) GetAttachmentContent(profileName, envName, entryPath, attachmentName string) ([]byte, error) {
+	if attachmentName == "" {
+		return nil, fmt.Errorf("attachment name cannot be empty")
+	}
+
+	entry, err := p.findEnvironmentEntry(profileName, envName, entryPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Search for the attachment
+	for _, binary := range entry.Binaries {
+		if binary.Name == attachmentName {
+			// Get the binary ID from the reference
+			binaryID := binary.Value.ID
+			// Use FindBinary which handles format version differences
+			dbBinary := p.parent.db.FindBinary(binaryID)
+			if dbBinary == nil {
+				return nil, fmt.Errorf("attachment '%s' content not found in database (ID: %d)", attachmentName, binaryID)
+			}
+			
+			// Get content bytes from the binary
+			content, err := dbBinary.GetContentBytes()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get attachment '%s' content: %w", attachmentName, err)
+			}
+			return content, nil
+		}
+	}
+
+	return nil, fmt.Errorf("attachment '%s' not found in entry '%s'", attachmentName, entryPath)
 }
 
 func (p *profileManager) findEnvironmentEntry(profileName, envName, entryPath string) (*gokeepasslib.Entry, error) {
@@ -2050,6 +2125,15 @@ func (m *manager) CreateAttachment(profileName, envName, entryPath, attachmentNa
 // For custom fields, comparison is case-sensitive
 func (m *manager) FieldExists(profileName, envName, entryPath, fieldName string) (bool, error) {
 	return m.profileOps.FieldExists(profileName, envName, entryPath, fieldName)
+}
+
+// GetFieldValue retrieves the value of a specific field in an entry
+func (m *manager) GetFieldValue(profileName, envName, entryPath, fieldName string) (string, error) {
+	return m.profileOps.GetFieldValue(profileName, envName, entryPath, fieldName)
+}
+
+func (m *manager) GetAttachmentContent(profileName, envName, entryPath, attachmentName string) ([]byte, error) {
+	return m.profileOps.GetAttachmentContent(profileName, envName, entryPath, attachmentName)
 }
 
 // ListProfileTreeGroups lists all tree groups (HEAD, v1, v2, etc.) for a given profile

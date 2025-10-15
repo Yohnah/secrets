@@ -2,6 +2,7 @@ package show
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Yohnah/secrets/internal/secrets/common"
 	"github.com/Yohnah/secrets/internal/validator"
@@ -9,9 +10,10 @@ import (
 
 // SyncedDataItem represents the sync status of a single item
 type SyncedDataItem struct {
-	Name   string `json:"name" yaml:"name"`
-	Status string `json:"status" yaml:"status"`
-	Issue  string `json:"issue" yaml:"issue"`
+	Name             string `json:"name" yaml:"name"`
+	Status           string `json:"status" yaml:"status"`
+	Issue            string `json:"issue" yaml:"issue"`
+	FieldValueStatus string `json:"field_value_status" yaml:"field_value_status"`
 }
 
 // SyncedData displays synchronization status between secrets.yml and KeePass database
@@ -90,9 +92,10 @@ func (s *service) SyncedData(profileFilter string) error {
 		// Process each item in the environment
 		for _, item := range items {
 			syncItem := SyncedDataItem{
-				Name:   fmt.Sprintf("%s/%s", envName, item.Name),
-				Status: "✓",
-				Issue:  "OK",
+				Name:             fmt.Sprintf("%s/%s", envName, item.Name),
+				Status:           "✓",
+				Issue:            "OK",
+				FieldValueStatus: "N/A",
 			}
 
 			// Determine entry path
@@ -100,6 +103,7 @@ func (s *service) SyncedData(profileFilter string) error {
 			if entryPath == "" {
 				syncItem.Status = "✗"
 				syncItem.Issue = "Missing entry path in secrets.yml"
+				syncItem.FieldValueStatus = "N/A"
 				allItems = append(allItems, syncItem)
 				continue
 			}
@@ -109,6 +113,7 @@ func (s *service) SyncedData(profileFilter string) error {
 			if keyName == "" {
 				syncItem.Status = "✗"
 				syncItem.Issue = "Missing key name in secrets.yml"
+				syncItem.FieldValueStatus = "N/A"
 				allItems = append(allItems, syncItem)
 				continue
 			}
@@ -121,15 +126,56 @@ func (s *service) SyncedData(profileFilter string) error {
 					// Entry doesn't exist
 					syncItem.Status = "✗"
 					syncItem.Issue = "Missing entry"
+					syncItem.FieldValueStatus = "N/A"
 				} else {
 					// Entry exists but key doesn't
 					syncItem.Status = "✗"
 					syncItem.Issue = fmt.Sprintf("Missing key: %s", keyName)
+					syncItem.FieldValueStatus = "N/A"
 				}
 			} else if !exists {
 				// Key doesn't exist
 				syncItem.Status = "✗"
 				syncItem.Issue = fmt.Sprintf("Missing key: %s", keyName)
+				syncItem.FieldValueStatus = "N/A"
+			} else {
+			// Field exists - determine if it's an attachment or regular field
+			if strings.HasPrefix(keyName, "attachments/") {
+				// Handle attachment
+				attachmentName := strings.TrimPrefix(keyName, "attachments/")
+				content, err := s.keepass.GetAttachmentContent(profileName, envName, entryPath, attachmentName)
+				if err != nil {
+					// Error getting attachment content - log for debugging
+					s.logger.Debug(fmt.Sprintf("ERROR getting attachment '%s' from entry '%s': %v", attachmentName, entryPath, err))
+					syncItem.FieldValueStatus = "N/A"
+				} else {
+						// Determine attachment value status
+						contentStr := string(content)
+						if len(content) == 0 {
+							syncItem.FieldValueStatus = "empty"
+						} else if contentStr == "Attachment pending to be filled by the developer" {
+							syncItem.FieldValueStatus = "default"
+						} else {
+							syncItem.FieldValueStatus = "has_data"
+						}
+					}
+				} else {
+					// Handle regular field
+					value, err := s.keepass.GetFieldValue(profileName, envName, entryPath, keyName)
+					if err != nil {
+						// Error getting value
+						syncItem.FieldValueStatus = "N/A"
+					} else {
+						// Determine field value status
+						if value == "" {
+							syncItem.FieldValueStatus = "empty"
+						} else if value == "Field pending to be filled by the developer" {
+							syncItem.FieldValueStatus = "default"
+						} else {
+							syncItem.FieldValueStatus = "has_data"
+						}
+					}
+				}
 			}
 
 			allItems = append(allItems, syncItem)
@@ -141,9 +187,10 @@ func (s *service) SyncedData(profileFilter string) error {
 	items := make([]interface{}, len(allItems))
 	for i, item := range allItems {
 		items[i] = map[string]interface{}{
-			"name":   item.Name,
-			"status": item.Status,
-			"issue":  item.Issue,
+			"name":               item.Name,
+			"status":             item.Status,
+			"issue":              item.Issue,
+			"field_value_status": item.FieldValueStatus,
 		}
 	}
 

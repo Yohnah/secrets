@@ -842,6 +842,7 @@ func (m *manager) renderSyncedDataList(data map[string]interface{}, displayMeta 
 	maxName := len("NAME")
 	maxStatus := len("STATUS")
 	maxIssue := len("ISSUE")
+	maxFieldValue := len("FIELD VALUE STATUS")
 
 	for _, itemRaw := range itemsData {
 		itemMap, ok := itemRaw.(map[string]interface{})
@@ -852,6 +853,7 @@ func (m *manager) renderSyncedDataList(data map[string]interface{}, displayMeta 
 		name, _ := itemMap["name"].(string)
 		status, _ := itemMap["status"].(string)
 		issue, _ := itemMap["issue"].(string)
+		fieldValueStatus, _ := itemMap["field_value_status"].(string)
 
 		if len(name) > maxName {
 			maxName = len(name)
@@ -862,14 +864,18 @@ func (m *manager) renderSyncedDataList(data map[string]interface{}, displayMeta 
 		if len(issue) > maxIssue {
 			maxIssue = len(issue)
 		}
+		if len(fieldValueStatus) > maxFieldValue {
+			maxFieldValue = len(fieldValueStatus)
+		}
 	}
 
 	// Print header
-	fmt.Printf("%-*s  %-*s  %-*s\n", maxName, "NAME", maxStatus, "STATUS", maxIssue, "ISSUE")
-	fmt.Printf("%s  %s  %s\n",
+	fmt.Printf("%-*s  %-*s  %-*s  %-*s\n", maxName, "NAME", maxStatus, "STATUS", maxIssue, "ISSUE", maxFieldValue, "FIELD VALUE STATUS")
+	fmt.Printf("%s  %s  %s  %s\n",
 		m.repeatString("-", maxName),
 		m.repeatString("-", maxStatus),
-		m.repeatString("-", maxIssue))
+		m.repeatString("-", maxIssue),
+		m.repeatString("-", maxFieldValue))
 
 	// Print items
 	for _, itemRaw := range itemsData {
@@ -881,8 +887,9 @@ func (m *manager) renderSyncedDataList(data map[string]interface{}, displayMeta 
 		name, _ := itemMap["name"].(string)
 		status, _ := itemMap["status"].(string)
 		issue, _ := itemMap["issue"].(string)
+		fieldValueStatus, _ := itemMap["field_value_status"].(string)
 
-		fmt.Printf("%-*s  %-*s  %-*s\n", maxName, name, maxStatus, status, maxIssue, issue)
+		fmt.Printf("%-*s  %-*s  %-*s  %-*s\n", maxName, name, maxStatus, status, maxIssue, issue, maxFieldValue, fieldValueStatus)
 	}
 
 	return nil

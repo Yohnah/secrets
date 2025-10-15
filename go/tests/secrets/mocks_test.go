@@ -290,6 +290,18 @@ func (m *mockKeePassManager) FieldExists(profileName, envName, entryPath, fieldN
 	return false, nil
 }
 
+func (m *mockKeePassManager) GetFieldValue(profileName, envName, entryPath, fieldName string) (string, error) {
+	// Simple mock implementation: return empty string (simulating empty field)
+	// Tests can be extended later if they need specific field values
+	return "", nil
+}
+
+func (m *mockKeePassManager) GetAttachmentContent(profileName, envName, entryPath, attachmentName string) ([]byte, error) {
+	// Simple mock implementation: return empty byte slice
+	// Tests can be extended later if they need specific attachment content
+	return []byte{}, nil
+}
+
 func (m *mockKeePassManager) ListProfileTreeGroups(profileName string) ([]string, error) {
 	if groups, ok := m.treeGroups[profileName]; ok {
 		return groups, nil
