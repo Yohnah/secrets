@@ -12,7 +12,7 @@ environments:
       entry: "/Production/API"
       key: "Token"
     - name: "SSH_KEY"
-      type: "ssh_agent"
+      type: "sshkey"
       entry: "/Production/SSH"
       key: "attachments/id_rsa"
 

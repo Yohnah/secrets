@@ -331,8 +331,7 @@ func TestTypeValidation(t *testing.T) {
 		valid    bool
 	}{
 		{"Valid - envvar", "envvar", true},
-		{"Valid - text", "text", true},
-		{"Valid - ssh_agent", "ssh_agent", true},
+		{"Valid - sshkey", "sshkey", true},
 		{"Invalid - wrong_type", "wrong_type", false},
 		{"Invalid - empty", "", false},
 	}

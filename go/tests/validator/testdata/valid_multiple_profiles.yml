@@ -8,7 +8,7 @@ environments:
       entry: "/Production/DB"
       key: "Password"
     - name: "DB_HOST"
-      type: "text"
+      type: "envvar"
       entry: "/Production/DB"
       key: "host"
 

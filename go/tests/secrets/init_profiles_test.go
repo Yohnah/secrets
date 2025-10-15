@@ -453,7 +453,7 @@ func TestInitUsesCurrentDirSecretsYML(t *testing.T) {
 environments:
   dev:
     - name: "LOCAL_SECRET"
-      type: "text"
+      type: "envvar"
       entry: "/Dev/Local"
       key: "secret"
 
@@ -476,7 +476,7 @@ outputs: []`
 environments:
   prod:
     - name: "OTHER_SECRET"
-      type: "text"
+      type: "envvar"
       entry: "/Prod/Other"
       key: "secret"
 

@@ -205,12 +205,11 @@ func validateItemFields(item Item, profileName, envName string, itemIndex int) [
 		errors = append(errors, fmt.Errorf("%s: field 'type' is required", location))
 	} else {
 		validTypes := map[string]bool{
-			"envvar":    true,
-			"text":      true,
-			"ssh_agent": true,
+			"envvar": true,
+			"sshkey": true,
 		}
 		if !validTypes[item.Type] {
-			errors = append(errors, fmt.Errorf("%s: field 'type' ('%s') must be one of: envvar, text, ssh_agent", location, item.Type))
+			errors = append(errors, fmt.Errorf("%s: field 'type' ('%s') must be one of: envvar, sshkey", location, item.Type))
 		}
 	}
 
