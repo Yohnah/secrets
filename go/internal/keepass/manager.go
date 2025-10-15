@@ -974,7 +974,7 @@ func (p *profileManager) CreateAttachment(profileName, envName, entryPath, attac
 	if addedBinary == nil {
 		return fmt.Errorf("failed to add binary to database")
 	}
-	
+
 	// Create a reference to the binary in the entry
 	entry.Binaries = append(entry.Binaries, gokeepasslib.NewBinaryReference(attachmentName, addedBinary.ID))
 
@@ -1074,7 +1074,7 @@ func (p *profileManager) GetAttachmentContent(profileName, envName, entryPath, a
 			if dbBinary == nil {
 				return nil, fmt.Errorf("attachment '%s' content not found in database (ID: %d)", attachmentName, binaryID)
 			}
-			
+
 			// Get content bytes from the binary
 			content, err := dbBinary.GetContentBytes()
 			if err != nil {

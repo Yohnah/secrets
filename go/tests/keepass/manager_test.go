@@ -579,4 +579,3 @@ func TestAttachmentsAfterFieldModifications(t *testing.T) {
 		t.Errorf("Attachment content mismatch after modification: got %q, want %q", string(content), string(attachmentContent))
 	}
 }
-

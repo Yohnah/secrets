@@ -11,10 +11,10 @@ import (
 )
 
 var (
-	flagMinimal        bool
-	flagOutputFormat   string
-	flagTreeOutput     string
-	flagProfilesOutput string
+	flagMinimal           bool
+	flagOutputFormat      string
+	flagTreeOutput        string
+	flagProfilesOutput    string
 	syncedDataFlagProfile string
 	syncedDataFlagOutput  string
 ) // showCmd represents the show command

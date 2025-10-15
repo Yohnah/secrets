@@ -139,16 +139,16 @@ func (s *service) SyncedData(profileFilter string) error {
 				syncItem.Issue = fmt.Sprintf("Missing key: %s", keyName)
 				syncItem.FieldValueStatus = "N/A"
 			} else {
-			// Field exists - determine if it's an attachment or regular field
-			if strings.HasPrefix(keyName, "attachments/") {
-				// Handle attachment
-				attachmentName := strings.TrimPrefix(keyName, "attachments/")
-				content, err := s.keepass.GetAttachmentContent(profileName, envName, entryPath, attachmentName)
-				if err != nil {
-					// Error getting attachment content - log for debugging
-					s.logger.Debug(fmt.Sprintf("ERROR getting attachment '%s' from entry '%s': %v", attachmentName, entryPath, err))
-					syncItem.FieldValueStatus = "N/A"
-				} else {
+				// Field exists - determine if it's an attachment or regular field
+				if strings.HasPrefix(keyName, "attachments/") {
+					// Handle attachment
+					attachmentName := strings.TrimPrefix(keyName, "attachments/")
+					content, err := s.keepass.GetAttachmentContent(profileName, envName, entryPath, attachmentName)
+					if err != nil {
+						// Error getting attachment content - log for debugging
+						s.logger.Debug(fmt.Sprintf("ERROR getting attachment '%s' from entry '%s': %v", attachmentName, entryPath, err))
+						syncItem.FieldValueStatus = "N/A"
+					} else {
 						// Determine attachment value status
 						contentStr := string(content)
 						if len(content) == 0 {
