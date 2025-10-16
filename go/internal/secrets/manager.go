@@ -6,6 +6,7 @@ import (
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
+	"github.com/Yohnah/secrets/internal/secrets/importer"
 	"github.com/Yohnah/secrets/internal/secrets/initialize"
 	"github.com/Yohnah/secrets/internal/secrets/profile"
 	"github.com/Yohnah/secrets/internal/secrets/show"
@@ -31,12 +32,14 @@ type Manager interface {
 	SnapshotsNew(profileName string) error
 	SnapshotsRestore(profileName, version string) error
 	SnapshotsDelete(profileName, version string) error
+	ImportVariables(environmentName string, filePaths []string, decodeBase64 bool) error
 }
 
 type manager struct {
 	initService      initialize.Service
 	showService      show.Service
 	snapshotsService snapshots.Service
+	importService    importer.Service
 }
 
 // NewManager creates a new SecretsManager instance (Facade Pattern)
@@ -48,6 +51,7 @@ func NewManager(cfg config.Manager, log logger.Manager, prm prompt.Manager, kp k
 		initService:      initialize.NewService(cfg, log, prm, kp, val),
 		showService:      show.NewService(cfg, log, prm, kp, out, tmpl, val, resolver),
 		snapshotsService: snapshots.NewService(cfg, log, prm, kp, out, val, resolver),
+		importService:    importer.NewService(cfg, log, kp, out, prm, val, resolver),
 	}
 }
 
@@ -108,4 +112,9 @@ func (m *manager) SnapshotsRestore(profileName, version string) error {
 // SnapshotsDelete delegates to the snapshots service
 func (m *manager) SnapshotsDelete(profileName, version string) error {
 	return m.snapshotsService.Delete(profileName, version)
+}
+
+// ImportVariables delegates to the import service
+func (m *manager) ImportVariables(environmentName string, filePaths []string, decodeBase64 bool) error {
+	return m.importService.ImportVariables(environmentName, filePaths, decodeBase64)
 }

@@ -197,9 +197,9 @@ func validateItemFields(item Item, profileName, envName string, itemIndex int) [
 	if item.Name == "" {
 		errors = append(errors, fmt.Errorf("%s: field 'name' is required", location))
 	} else {
-		// Validate name format: alphanumeric, underscore, hyphen (no spaces, no special chars)
+		// Validate name format: alphanumeric, underscore, hyphen, dot (no spaces, no special chars)
 		if !isValidItemName(item.Name) {
-			errors = append(errors, fmt.Errorf("%s: field 'name' ('%s') contains invalid characters (only alphanumeric, underscore, and hyphen allowed)", location, item.Name))
+			errors = append(errors, fmt.Errorf("%s: field 'name' ('%s') contains invalid characters (only alphanumeric, underscore, hyphen, and dot allowed)", location, item.Name))
 		}
 	}
 
@@ -244,9 +244,9 @@ func validateItemFields(item Item, profileName, envName string, itemIndex int) [
 }
 
 // isValidItemName checks if an item name contains only allowed characters
-// Allowed: A-Z, a-z, 0-9, underscore (_), hyphen (-)
+// Allowed: A-Z, a-z, 0-9, underscore (_), hyphen (-), dot (.)
 func isValidItemName(name string) bool {
-	pattern := `^[A-Za-z0-9_-]+$`
+	pattern := `^[A-Za-z0-9_.-]+$`
 	matched, _ := regexp.MatchString(pattern, name)
 	return matched
 }

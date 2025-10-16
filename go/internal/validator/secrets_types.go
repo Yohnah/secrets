@@ -17,7 +17,7 @@ type Profile struct {
 type Metadata struct {
 	Profile            string            `yaml:"profile"`
 	DefaultEnvironment string            `yaml:"default_environment,omitempty"` // Deprecated, will be removed
-	Basedirs           map[string]string `yaml:"basedirs,omitempty"`           // environment -> volume-name mapping
+	Basedirs           map[string]string `yaml:"basedirs,omitempty"`            // environment -> volume-name mapping
 }
 
 // Outputs represents the outputs section as a list of output items

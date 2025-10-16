@@ -218,9 +218,9 @@ func TestValidItemName(t *testing.T) {
 		{"Valid - Underscore", "DB_PASS_WORD", true},
 		{"Valid - Hyphen", "DB-PASS-WORD", true},
 		{"Valid - Mixed", "DB_PASS-123", true},
+		{"Valid - Dot", "spring.datasource.url", true},
 		{"Invalid - Space", "DB PASS", false},
 		{"Invalid - Special Char @", "DB@PASS", false},
-		{"Invalid - Dot", "DB.PASS", false},
 	}
 
 	for _, tc := range testCases {
