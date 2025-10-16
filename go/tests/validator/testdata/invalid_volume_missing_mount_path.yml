@@ -8,5 +8,4 @@ environments:
       key: "Password"
 volumes:
   - name: "data-volume"
-    environment: "production"
-    type: "tmpfs"
+    type: "dir"

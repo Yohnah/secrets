@@ -9,5 +9,4 @@ environments:
 volumes:
   - name: "data-volume"
     mount_path: "/var/lib/data"
-    environment: "production"
     type: "invalid_type"

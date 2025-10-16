@@ -377,9 +377,6 @@ func validateVolumes(profile Profile) []error {
 		if volume.MountPath == "" {
 			errors = append(errors, fmt.Errorf("profile '%s': volumes[%d]: 'mount_path' is required", profile.Metadata.Profile, i))
 		}
-		if volume.Environment == "" {
-			errors = append(errors, fmt.Errorf("profile '%s': volumes[%d]: 'environment' is required", profile.Metadata.Profile, i))
-		}
 		if volume.Type == "" {
 			errors = append(errors, fmt.Errorf("profile '%s': volumes[%d]: 'type' is required", profile.Metadata.Profile, i))
 		}
@@ -392,36 +389,25 @@ func validateVolumes(profile Profile) []error {
 			nameMap[volume.Name] = true
 		}
 
-		// Validate environment exists
-		if volume.Environment != "" {
-			envExists := false
-			for envName := range profile.Environments {
-				if envName == volume.Environment {
-					envExists = true
+		// Validate volume type (only "dir" for now)
+		if volume.Type != "dir" {
+			errors = append(errors, fmt.Errorf("profile '%s': volumes[%d]: invalid type '%s' (only 'dir' is currently supported)", profile.Metadata.Profile, i, volume.Type))
+		}
+	}
+
+	// Validate basedirs references to volumes
+	if profile.Metadata.Basedirs != nil {
+		for envName, volumeName := range profile.Metadata.Basedirs {
+			found := false
+			for _, volume := range profile.Volumes {
+				if volume.Name == volumeName {
+					found = true
 					break
 				}
 			}
-			if !envExists {
-				errors = append(errors, fmt.Errorf("profile '%s': volumes[%d] (name: '%s', type: '%s'): environment '%s' not found", profile.Metadata.Profile, i, volume.Name, volume.Type, volume.Environment))
+			if !found {
+				errors = append(errors, fmt.Errorf("profile '%s': basedirs['%s'] references volume '%s' which is not defined in volumes section", profile.Metadata.Profile, envName, volumeName))
 			}
-		}
-
-		// Validate mount_path is absolute
-		if volume.MountPath != "" && !strings.HasPrefix(volume.MountPath, "/") {
-			errors = append(errors, fmt.Errorf("profile '%s': volumes[%d]: mount_path '%s' must be an absolute path (start with '/')", profile.Metadata.Profile, i, volume.MountPath))
-		}
-
-		// Validate volume type
-		validTypes := []string{"tmpfs", "bind", "volume", "nfs"}
-		typeValid := false
-		for _, t := range validTypes {
-			if volume.Type == t {
-				typeValid = true
-				break
-			}
-		}
-		if !typeValid {
-			errors = append(errors, fmt.Errorf("profile '%s': volumes[%d]: invalid type '%s'", profile.Metadata.Profile, i, volume.Type))
 		}
 	}
 

@@ -1,5 +1,7 @@
 metadata:
   profile: "test-volumes"
+  basedirs:
+    production: "data-volume"
 
 environments:
   production:
@@ -11,9 +13,7 @@ environments:
 volumes:
   - name: "data-volume"
     mount_path: "/var/lib/data"
-    environment: "production"
-    type: "tmpfs"
+    type: "dir"
   - name: "logs-volume"
     mount_path: "/var/log/app"
-    environment: "production"
-    type: "bind"
+    type: "dir"

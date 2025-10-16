@@ -9,9 +9,7 @@ environments:
 volumes:
   - name: "data-volume"
     mount_path: "/var/lib/data"
-    environment: "production"
-    type: "tmpfs"
+    type: "dir"
   - name: "data-volume"
     mount_path: "/var/lib/other"
-    environment: "production"
-    type: "bind"
+    type: "dir"

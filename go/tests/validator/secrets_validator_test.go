@@ -48,6 +48,8 @@ func TestReadAndValidateSecretsYML_ValidFiles(t *testing.T) {
 		{"Valid With Outputs", "valid_with_outputs.yml"},
 		{"Valid With Custom Output", "valid_with_custom_output.yml"},
 		{"Valid With New Output Formats", "valid_with_outputs_new_formats.yml"},
+		{"Valid With Volumes", "valid_with_volumes.yml"},
+		{"Valid Empty Volumes", "valid_empty_volumes.yml"},
 	}
 
 	for _, tc := range testCases {
@@ -629,19 +631,16 @@ func TestReadAndValidateSecretsYML_ValidVolumes(t *testing.T) {
 	if profile.Volumes[0].MountPath != "/var/lib/data" {
 		t.Errorf("Expected mount_path '/var/lib/data', got '%s'", profile.Volumes[0].MountPath)
 	}
-	if profile.Volumes[0].Environment != "production" {
-		t.Errorf("Expected environment 'production', got '%s'", profile.Volumes[0].Environment)
-	}
-	if profile.Volumes[0].Type != "tmpfs" {
-		t.Errorf("Expected type 'tmpfs', got '%s'", profile.Volumes[0].Type)
+	if profile.Volumes[0].Type != "dir" {
+		t.Errorf("Expected type 'dir', got '%s'", profile.Volumes[0].Type)
 	}
 
 	// Check second volume
 	if profile.Volumes[1].Name != "logs-volume" {
 		t.Errorf("Expected volume name 'logs-volume', got '%s'", profile.Volumes[1].Name)
 	}
-	if profile.Volumes[1].Type != "bind" {
-		t.Errorf("Expected type 'bind', got '%s'", profile.Volumes[1].Type)
+	if profile.Volumes[1].Type != "dir" {
+		t.Errorf("Expected type 'dir', got '%s'", profile.Volumes[1].Type)
 	}
 }
 
@@ -653,12 +652,11 @@ func TestReadAndValidateSecretsYML_InvalidVolumes(t *testing.T) {
 	}{
 		{"Missing name", "invalid_volume_missing_name.yml"},
 		{"Missing mount_path", "invalid_volume_missing_mount_path.yml"},
-		{"Missing environment", "invalid_volume_missing_environment.yml"},
 		{"Missing type", "invalid_volume_missing_type.yml"},
-		{"Invalid environment", "invalid_volume_invalid_environment.yml"},
 		{"Invalid mount_path", "invalid_volume_invalid_mount_path.yml"},
 		{"Invalid type", "invalid_volume_invalid_type.yml"},
 		{"Duplicate names", "invalid_volume_duplicate_names.yml"},
+		{"Invalid basedirs reference", "invalid_volume_basedirs_reference.yml"},
 	}
 
 	for _, tc := range testCases {

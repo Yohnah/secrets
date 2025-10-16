@@ -8,6 +8,5 @@ environments:
       key: "Password"
 volumes:
   - name: "data-volume"
-    mount_path: "var/lib/data"
-    environment: "production"
-    type: "tmpfs"
+    mount_path: ""  # Empty mount_path should be invalid
+    type: "dir"

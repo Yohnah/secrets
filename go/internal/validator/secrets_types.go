@@ -15,8 +15,9 @@ type Profile struct {
 
 // Metadata contains the profile configuration
 type Metadata struct {
-	Profile            string `yaml:"profile"`
-	DefaultEnvironment string `yaml:"default_environment,omitempty"` // Deprecated, will be removed
+	Profile            string            `yaml:"profile"`
+	DefaultEnvironment string            `yaml:"default_environment,omitempty"` // Deprecated, will be removed
+	Basedirs           map[string]string `yaml:"basedirs,omitempty"`           // environment -> volume-name mapping
 }
 
 // Outputs represents the outputs section as a list of output items
@@ -36,10 +37,9 @@ type OutputItem struct {
 
 // VolumeItem represents a single volume configuration
 type VolumeItem struct {
-	Name        string `yaml:"name"`
-	MountPath   string `yaml:"mount_path"`
-	Environment string `yaml:"environment"`
-	Type        string `yaml:"type"`
+	Name      string `yaml:"name"`
+	MountPath string `yaml:"mount_path"`
+	Type      string `yaml:"type"`
 }
 
 // ShellItem represents a shell output item with additional format field

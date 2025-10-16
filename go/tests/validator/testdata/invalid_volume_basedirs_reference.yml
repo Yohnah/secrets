@@ -1,5 +1,7 @@
 metadata:
   profile: "test-volumes"
+  basedirs:
+    production: "non-existent-volume"
 environments:
   production:
     - name: "DB_PASSWORD"
@@ -7,7 +9,6 @@ environments:
       entry: "/Database"
       key: "Password"
 volumes:
-  - name: "data-volume"
+  - name: "existing-volume"
     mount_path: "/var/lib/data"
-    environment: "nonexistent"
-    type: "tmpfs"
+    type: "dir"
