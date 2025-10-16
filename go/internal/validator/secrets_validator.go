@@ -100,6 +100,9 @@ func validateSecretsConfig(profiles []Profile) []error {
 
 		outputErrors := validateOutputs(profile)
 		errors = append(errors, outputErrors...)
+
+		volumeErrors := validateVolumes(profile)
+		errors = append(errors, volumeErrors...)
 	}
 
 	return errors
@@ -353,6 +356,72 @@ func validateOutputs(profile Profile) []error {
 			if output.Template == "" {
 				errors = append(errors, fmt.Errorf("profile '%s': outputs[%d]: 'template' is required for custom format", profile.Metadata.Profile, i))
 			}
+		}
+	}
+
+	return errors
+}
+
+// validateVolumes validates the volumes section (list format)
+func validateVolumes(profile Profile) []error {
+	var errors []error
+
+	// Track volume names to check for duplicates
+	nameMap := make(map[string]bool)
+
+	for i, volume := range profile.Volumes {
+		// Validate required fields
+		if volume.Name == "" {
+			errors = append(errors, fmt.Errorf("profile '%s': volumes[%d]: 'name' is required", profile.Metadata.Profile, i))
+		}
+		if volume.MountPath == "" {
+			errors = append(errors, fmt.Errorf("profile '%s': volumes[%d]: 'mount_path' is required", profile.Metadata.Profile, i))
+		}
+		if volume.Environment == "" {
+			errors = append(errors, fmt.Errorf("profile '%s': volumes[%d]: 'environment' is required", profile.Metadata.Profile, i))
+		}
+		if volume.Type == "" {
+			errors = append(errors, fmt.Errorf("profile '%s': volumes[%d]: 'type' is required", profile.Metadata.Profile, i))
+		}
+
+		// Check for duplicate names
+		if volume.Name != "" {
+			if nameMap[volume.Name] {
+				errors = append(errors, fmt.Errorf("profile '%s': volumes[%d]: duplicate name '%s'", profile.Metadata.Profile, i, volume.Name))
+			}
+			nameMap[volume.Name] = true
+		}
+
+		// Validate environment exists
+		if volume.Environment != "" {
+			envExists := false
+			for envName := range profile.Environments {
+				if envName == volume.Environment {
+					envExists = true
+					break
+				}
+			}
+			if !envExists {
+				errors = append(errors, fmt.Errorf("profile '%s': volumes[%d] (name: '%s', type: '%s'): environment '%s' not found", profile.Metadata.Profile, i, volume.Name, volume.Type, volume.Environment))
+			}
+		}
+
+		// Validate mount_path is absolute
+		if volume.MountPath != "" && !strings.HasPrefix(volume.MountPath, "/") {
+			errors = append(errors, fmt.Errorf("profile '%s': volumes[%d]: mount_path '%s' must be an absolute path (start with '/')", profile.Metadata.Profile, i, volume.MountPath))
+		}
+
+		// Validate volume type
+		validTypes := []string{"tmpfs", "bind", "volume", "nfs"}
+		typeValid := false
+		for _, t := range validTypes {
+			if volume.Type == t {
+				typeValid = true
+				break
+			}
+		}
+		if !typeValid {
+			errors = append(errors, fmt.Errorf("profile '%s': volumes[%d]: invalid type '%s'", profile.Metadata.Profile, i, volume.Type))
 		}
 	}
 

@@ -1,0 +1,17 @@
+metadata:
+  profile: "test-volumes"
+environments:
+  production:
+    - name: "DB_PASSWORD"
+      type: "envvar"
+      entry: "/Database"
+      key: "Password"
+volumes:
+  - name: "data-volume"
+    mount_path: "/var/lib/data"
+    environment: "production"
+    type: "tmpfs"
+  - name: "data-volume"
+    mount_path: "/var/lib/other"
+    environment: "production"
+    type: "bind"

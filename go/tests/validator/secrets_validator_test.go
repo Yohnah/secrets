@@ -596,3 +596,107 @@ outputs:
 	// For custom format, we don't have Template field in OutputItem yet
 	// This test might need adjustment when custom format is fully implemented
 }
+
+// TestReadAndValidateSecretsYML_ValidVolumes tests valid volumes configuration
+func TestReadAndValidateSecretsYML_ValidVolumes(t *testing.T) {
+	filePath := filepath.Join("testdata", "valid_with_volumes.yml")
+
+	validatorMgr := validator.NewManager()
+	config, errors := validatorMgr.ReadAndValidateSecretsYML(filePath)
+
+	if len(errors) > 0 {
+		t.Errorf("Expected no errors for valid volumes file, got: %s", formatErrors(errors))
+	}
+
+	if config == nil {
+		t.Fatal("Expected config to be non-nil")
+	}
+
+	if len(config.Profiles) != 1 {
+		t.Fatalf("Expected 1 profile, got %d", len(config.Profiles))
+	}
+
+	profile := config.Profiles[0]
+
+	if len(profile.Volumes) != 2 {
+		t.Fatalf("Expected 2 volumes, got %d", len(profile.Volumes))
+	}
+
+	// Check first volume
+	if profile.Volumes[0].Name != "data-volume" {
+		t.Errorf("Expected volume name 'data-volume', got '%s'", profile.Volumes[0].Name)
+	}
+	if profile.Volumes[0].MountPath != "/var/lib/data" {
+		t.Errorf("Expected mount_path '/var/lib/data', got '%s'", profile.Volumes[0].MountPath)
+	}
+	if profile.Volumes[0].Environment != "production" {
+		t.Errorf("Expected environment 'production', got '%s'", profile.Volumes[0].Environment)
+	}
+	if profile.Volumes[0].Type != "tmpfs" {
+		t.Errorf("Expected type 'tmpfs', got '%s'", profile.Volumes[0].Type)
+	}
+
+	// Check second volume
+	if profile.Volumes[1].Name != "logs-volume" {
+		t.Errorf("Expected volume name 'logs-volume', got '%s'", profile.Volumes[1].Name)
+	}
+	if profile.Volumes[1].Type != "bind" {
+		t.Errorf("Expected type 'bind', got '%s'", profile.Volumes[1].Type)
+	}
+}
+
+// TestReadAndValidateSecretsYML_InvalidVolumes tests invalid volumes configurations
+func TestReadAndValidateSecretsYML_InvalidVolumes(t *testing.T) {
+	testCases := []struct {
+		name     string
+		fileName string
+	}{
+		{"Missing name", "invalid_volume_missing_name.yml"},
+		{"Missing mount_path", "invalid_volume_missing_mount_path.yml"},
+		{"Missing environment", "invalid_volume_missing_environment.yml"},
+		{"Missing type", "invalid_volume_missing_type.yml"},
+		{"Invalid environment", "invalid_volume_invalid_environment.yml"},
+		{"Invalid mount_path", "invalid_volume_invalid_mount_path.yml"},
+		{"Invalid type", "invalid_volume_invalid_type.yml"},
+		{"Duplicate names", "invalid_volume_duplicate_names.yml"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			filePath := filepath.Join("testdata", tc.fileName)
+
+			validatorMgr := validator.NewManager()
+			_, errors := validatorMgr.ReadAndValidateSecretsYML(filePath)
+
+			if len(errors) == 0 {
+				t.Errorf("Expected errors for %s, but got none", tc.name)
+			}
+		})
+	}
+}
+
+// TestReadAndValidateSecretsYML_EmptyVolumes tests that empty volumes are allowed
+func TestReadAndValidateSecretsYML_EmptyVolumes(t *testing.T) {
+	filePath := filepath.Join("testdata", "valid_empty_volumes.yml")
+
+	validatorMgr := validator.NewManager()
+	config, errors := validatorMgr.ReadAndValidateSecretsYML(filePath)
+
+	if len(errors) > 0 {
+		t.Errorf("Expected no errors for empty volumes file, got: %s", formatErrors(errors))
+	}
+
+	if config == nil {
+		t.Fatal("Expected config to be non-nil")
+	}
+
+	if len(config.Profiles) != 1 {
+		t.Fatalf("Expected 1 profile, got %d", len(config.Profiles))
+	}
+
+	profile := config.Profiles[0]
+
+	if len(profile.Volumes) != 0 {
+		t.Fatalf("Expected 0 volumes, got %d", len(profile.Volumes))
+	}
+}

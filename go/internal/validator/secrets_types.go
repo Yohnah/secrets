@@ -10,6 +10,7 @@ type Profile struct {
 	Metadata     Metadata          `yaml:"metadata"`
 	Environments map[string][]Item `yaml:"environments"`
 	Outputs      Outputs           `yaml:"outputs,omitempty"`
+	Volumes      Volumes           `yaml:"volumes,omitempty"`
 }
 
 // Metadata contains the profile configuration
@@ -21,6 +22,9 @@ type Metadata struct {
 // Outputs represents the outputs section as a list of output items
 type Outputs []OutputItem
 
+// Volumes represents the volumes section as a list of volume items
+type Volumes []VolumeItem
+
 // OutputItem represents a single output configuration
 type OutputItem struct {
 	File        string `yaml:"file"`
@@ -28,6 +32,14 @@ type OutputItem struct {
 	Format      string `yaml:"format"`
 	SectionBy   string `yaml:"section_by,omitempty"` // Optional, defaults to "none"
 	Template    string `yaml:"template,omitempty"`   // Optional, used for custom format
+}
+
+// VolumeItem represents a single volume configuration
+type VolumeItem struct {
+	Name        string `yaml:"name"`
+	MountPath   string `yaml:"mount_path"`
+	Environment string `yaml:"environment"`
+	Type        string `yaml:"type"`
 }
 
 // ShellItem represents a shell output item with additional format field
