@@ -10,7 +10,7 @@ import (
 )
 
 // Variables retrieves and displays environment variables (type=envvar) from a profile environment
-func (s *service) Variables(environmentName, outputFormat, customTemplateContent string) error {
+func (s *service) Variables(environmentName, outputFormat, customTemplateContent string, withNoValues bool) error {
 	// Resolve profile (auto-detect when no profile specified)
 	resolvedProfile, err := s.profileResolver.Resolve("")
 	if err != nil {
@@ -107,14 +107,13 @@ func (s *service) Variables(environmentName, outputFormat, customTemplateContent
 			}
 		}
 
-		if value == "" {
-			s.logger.Info(fmt.Sprintf("Empty value for '%s' in entry '%s/%s/%s', skipping",
-				fieldName, profileName, environmentName, entryPath))
-			continue
-		}
-
 		// Use the item name as the variable name
-		itemsMap[item.Name] = value
+		// If withNoValues is true, use empty string instead of actual value
+		if withNoValues {
+			itemsMap[item.Name] = ""
+		} else {
+			itemsMap[item.Name] = value
+		}
 	}
 
 	if len(itemsMap) == 0 {

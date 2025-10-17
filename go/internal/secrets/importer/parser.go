@@ -83,6 +83,22 @@ func parseJSON(content []byte) (map[string]string, error) {
 	}
 
 	variables := make(map[string]string)
+
+	// Check if the root contains a single "variables", "data", or "env" key
+	// If so, extract directly from that key instead of prefixing
+	if rootMap, ok := data.(map[string]interface{}); ok {
+		if len(rootMap) == 1 {
+			for key := range rootMap {
+				lowerKey := strings.ToLower(key)
+				if lowerKey == "variables" || lowerKey == "data" || lowerKey == "env" {
+					// Extract from this key directly
+					flattenJSON(rootMap[key], "", variables)
+					return variables, nil
+				}
+			}
+		}
+	}
+
 	flattenJSON(data, "", variables)
 	return variables, nil
 }
@@ -128,6 +144,21 @@ func parseYAML(content []byte) (map[string]string, error) {
 	// Check if it's a Kubernetes Secret
 	if isKubernetesSecret(data) {
 		return parseKubernetesSecret(data)
+	}
+
+	// Check if the root contains a single "variables", "data", or "env" key
+	// If so, extract directly from that key instead of prefixing
+	if rootMap, ok := data.(map[string]interface{}); ok {
+		if len(rootMap) == 1 {
+			for key := range rootMap {
+				lowerKey := strings.ToLower(key)
+				if lowerKey == "variables" || lowerKey == "data" || lowerKey == "env" {
+					// Extract from this key directly
+					flattenYAML(rootMap[key], "", variables)
+					return variables, nil
+				}
+			}
+		}
 	}
 
 	// Otherwise, flatten the YAML structure

@@ -12,14 +12,15 @@ import (
 )
 
 var (
-	flagMinimal           bool
-	flagOutputFormat      string
-	flagTreeOutput        string
-	flagProfilesOutput    string
-	syncedDataFlagProfile string
-	syncedDataFlagOutput  string
-	variablesFlagOutput   string
-	variablesFlagTemplate string
+	flagMinimal               bool
+	flagOutputFormat          string
+	flagTreeOutput            string
+	flagProfilesOutput        string
+	syncedDataFlagProfile     string
+	syncedDataFlagOutput      string
+	variablesFlagOutput       string
+	variablesFlagTemplate     string
+	variablesFlagWithNoValues bool
 )
 
 // showCmd represents the show command
@@ -218,6 +219,7 @@ func init() {
 	// Flags for variables subcommand only
 	showVariablesCmd.Flags().StringVarP(&variablesFlagOutput, "output", "o", "yaml", "Output format: json, yaml, dotenv, k8s, shell.sh, etc. (default: yaml)")
 	showVariablesCmd.Flags().StringVarP(&variablesFlagTemplate, "template", "t", "", "Path to custom template file (overrides --output)")
+	showVariablesCmd.Flags().BoolVar(&variablesFlagWithNoValues, "with-no-values", false, "Show variables without their values (empty values)")
 
 	// Update show template help with available templates
 	updateShowTemplateHelp()
@@ -485,7 +487,7 @@ func runShowVariables(cmd *cobra.Command, args []string) error {
 
 	// Execute business logic (delegate all decisions to CORE)
 	// SecretsManager will pull processed config from ConfigMgr
-	if err := managers.Secrets.ShowVariables(environmentName, variablesFlagOutput, customTemplateContent); err != nil {
+	if err := managers.Secrets.ShowVariables(environmentName, variablesFlagOutput, customTemplateContent, variablesFlagWithNoValues); err != nil {
 		managers.Logger.Error(err.Error())
 		os.Exit(1)
 	}
