@@ -43,5 +43,5 @@ data:
   # Each item from the secrets configuration is base64 encoded
   # and stored as key-value pairs in the secret data
   {{- range $key, $value := .Items }}
-  {{ $key }}: {{ $value | base64 }}
+  {{ $key }}: {{ $value | base64encode }}
   {{- end }}

@@ -1,15 +1,35 @@
 package template
 
 import (
+	"bytes"
+	"crypto/md5"
+	"crypto/rand"
+	"crypto/sha256"
 	"embed"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io/fs"
+	"math/big"
 	"path/filepath"
 	"strings"
+	"text/template"
+	"time"
+
+	"github.com/google/uuid"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed templates/*.tpl.*
 var templatesFS embed.FS
+
+// TemplateData defines the structure passed to templates for rendering
+type TemplateData struct {
+	Section     string            `json:"section"`
+	Environment string            `json:"environment"`
+	Profile     string            `json:"profile"`
+	Items       map[string]string `json:"items"`
+}
 
 // Template names handled by the manager.
 const (
@@ -21,6 +41,10 @@ type Manager interface {
 	// GetTemplate returns the raw template content for the requested template name.
 	// When data is nil, the template must be returned without processing.
 	GetTemplate(data interface{}, name string) (string, error)
+
+	// RenderTemplate renders a template with the provided data.
+	// Returns the rendered output or an error if rendering fails.
+	RenderTemplate(name string, data TemplateData) (string, error)
 }
 
 // GetAvailableTemplates returns a list of available template names
@@ -212,6 +236,180 @@ func (m *manager) GetTemplate(data interface{}, name string) (string, error) {
 	_ = data
 
 	return templateContent, nil
+}
+
+// RenderTemplate renders a template with the provided data using Go templates.
+func (m *manager) RenderTemplate(name string, data TemplateData) (string, error) {
+	templateContent, ok := m.templates[name]
+	if !ok {
+		return "", fmt.Errorf("template %q not found", name)
+	}
+
+	// Create a new template with custom functions
+	tmpl, err := template.New(name).Funcs(getFuncMap()).Parse(templateContent)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse template %q: %w", name, err)
+	}
+
+	// Execute the template with the provided data
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("failed to execute template %q: %w", name, err)
+	}
+
+	return buf.String(), nil
+}
+
+// getFuncMap returns a template.FuncMap with custom functions for templates
+func getFuncMap() template.FuncMap {
+	return template.FuncMap{
+		// Encoding/Decoding functions
+		"base64encode": func(s string) string {
+			return base64.StdEncoding.EncodeToString([]byte(s))
+		},
+		"base64decode": func(s string) (string, error) {
+			data, err := base64.StdEncoding.DecodeString(s)
+			if err != nil {
+				return "", err
+			}
+			return string(data), nil
+		},
+		"urlencode": func(s string) string {
+			return strings.ReplaceAll(s, " ", "%20")
+		},
+		"urldecode": func(s string) string {
+			return strings.ReplaceAll(s, "%20", " ")
+		},
+
+		// Data format functions
+		"toJSON": func(v interface{}) (string, error) {
+			data, err := json.Marshal(v)
+			if err != nil {
+				return "", err
+			}
+			return string(data), nil
+		},
+		"toYAML": func(v interface{}) (string, error) {
+			data, err := yaml.Marshal(v)
+			if err != nil {
+				return "", err
+			}
+			return string(data), nil
+		},
+		"fromJSON": func(s string) (interface{}, error) {
+			var result interface{}
+			err := json.Unmarshal([]byte(s), &result)
+			return result, err
+		},
+
+		// String manipulation functions
+		"upper": strings.ToUpper,
+		"lower": strings.ToLower,
+		"title": strings.Title,
+		"trim":  strings.TrimSpace,
+		"quote": func(s string) string {
+			return fmt.Sprintf("%q", s)
+		},
+		"unquote": func(s string) string {
+			return strings.Trim(s, `"'`)
+		},
+		"replace": func(old, new, s string) string {
+			return strings.ReplaceAll(s, old, new)
+		},
+		"substr": func(start, length int, s string) string {
+			if start < 0 || start >= len(s) {
+				return ""
+			}
+			end := start + length
+			if end > len(s) {
+				end = len(s)
+			}
+			return s[start:end]
+		},
+
+		// Collection functions
+		"join": func(sep string, items []string) string {
+			return strings.Join(items, sep)
+		},
+		"split": strings.Split,
+		"first": func(items []interface{}) interface{} {
+			if len(items) == 0 {
+				return nil
+			}
+			return items[0]
+		},
+		"last": func(items []interface{}) interface{} {
+			if len(items) == 0 {
+				return nil
+			}
+			return items[len(items)-1]
+		},
+		"len": func(v interface{}) int {
+			switch val := v.(type) {
+			case string:
+				return len(val)
+			case []interface{}:
+				return len(val)
+			case map[string]interface{}:
+				return len(val)
+			default:
+				return 0
+			}
+		},
+
+		// Control functions
+		"default": func(defaultVal, val interface{}) interface{} {
+			if val == nil || val == "" {
+				return defaultVal
+			}
+			return val
+		},
+		"empty": func(val interface{}) bool {
+			return val == nil || val == ""
+		},
+		"not": func(val bool) bool {
+			return !val
+		},
+
+		// Math functions
+		"add": func(a, b int) int { return a + b },
+		"sub": func(a, b int) int { return a - b },
+		"mul": func(a, b int) int { return a * b },
+		"div": func(a, b int) int {
+			if b == 0 {
+				return 0
+			}
+			return a / b
+		},
+
+		// Date/Time functions
+		"now": time.Now,
+		"date": func(format string, t time.Time) string {
+			return t.Format(format)
+		},
+
+		// Hashing functions
+		"sha256": func(s string) string {
+			hash := sha256.Sum256([]byte(s))
+			return fmt.Sprintf("%x", hash)
+		},
+		"md5": func(s string) string {
+			hash := md5.Sum([]byte(s))
+			return fmt.Sprintf("%x", hash)
+		},
+
+		// Identification functions
+		"uuid": func() string {
+			return uuid.New().String()
+		},
+		"random": func(max int) int {
+			n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+			if err != nil {
+				return 0
+			}
+			return int(n.Int64())
+		},
+	}
 }
 
 // normalizeDescription converts template titles from various formats to readable descriptions
