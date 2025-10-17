@@ -93,6 +93,8 @@ func TestAllTestsUseMocks(t *testing.T) {
 			"snapshots_restore_test.go",
 			"secrets_validator_test.go",
 			"validator_test.go",
+			"import_variables_test.go",  // Tests parser functionality (needs real file I/O)
+			"import_contents_test.go",   // Tests file content operations (needs real file I/O)
 		}
 		for _, integrationTest := range integrationTests {
 			if strings.Contains(path, integrationTest) {
