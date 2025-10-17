@@ -12,49 +12,54 @@ import (
 )
 
 // ParseFile reads a file and extracts variables based on its format.
-// The format is detected by file extension.
-// Returns a map of variable names to values.
+// The format is detected by file extension (.json, .yml, .yaml, .env, .properties, .toml, .tfvars, .ini).
+// If decodeBase64 is true, all values are treated as base64-encoded and decoded.
+// Returns a map of variable names to values, or an error if parsing fails.
+// Supports nested structures (flattened with dot notation) and Kubernetes Secret detection.
 func ParseFile(filePath string, decodeBase64 bool) (map[string]string, error) {
-	// Read file content
-	content, err := os.ReadFile(filePath)
+	// Read the entire file content into memory for processing
+	fileContent, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file %s: %w", filePath, err)
 	}
 
-	// Detect format by extension
-	ext := strings.ToLower(filepath.Ext(filePath))
+	// Detect format by analyzing the file extension (converted to lowercase for case-insensitive matching)
+	fileExtension := strings.ToLower(filepath.Ext(filePath))
 
-	var variables map[string]string
+	var parsedVariables map[string]string
 
-	switch ext {
+	// Route to appropriate parser based on file extension
+	// Each parser handles format-specific syntax and structure
+	switch fileExtension {
 	case ".json":
-		variables, err = parseJSON(content)
+		parsedVariables, err = parseJSON(fileContent)
 	case ".yml", ".yaml":
-		variables, err = parseYAML(content)
+		parsedVariables, err = parseYAML(fileContent)
 	case ".env", ".dotenv":
-		variables, err = parseDotenv(content)
+		parsedVariables, err = parseDotenv(fileContent)
 	case ".properties":
-		variables, err = parseProperties(content)
+		parsedVariables, err = parseProperties(fileContent)
 	case ".toml":
-		variables, err = parseTOML(content)
+		parsedVariables, err = parseTOML(fileContent)
 	case ".tfvars":
-		variables, err = parseTerraform(content)
+		parsedVariables, err = parseTerraform(fileContent)
 	case ".ini":
-		variables, err = parseINI(content)
+		parsedVariables, err = parseINI(fileContent)
 	default:
-		return nil, fmt.Errorf("unsupported file format: %s (file: %s)", ext, filePath)
+		return nil, fmt.Errorf("unsupported file format: %s (file: %s)", fileExtension, filePath)
 	}
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse file %s: %w", filePath, err)
 	}
 
-	// Decode base64 if requested
+	// If base64 decoding is requested, decode all values that appear to be base64-encoded
+	// This allows importing files with encoded secrets (common in Kubernetes manifests)
 	if decodeBase64 {
-		variables = decodeBase64Values(variables)
+		parsedVariables = decodeBase64Values(parsedVariables)
 	}
 
-	return variables, nil
+	return parsedVariables, nil
 }
 
 // parseJSON parses JSON files
@@ -70,24 +75,30 @@ func parseJSON(content []byte) (map[string]string, error) {
 	return variables, nil
 }
 
-// flattenJSON recursively flattens nested JSON structures
-func flattenJSON(data interface{}, prefix string, result map[string]string) {
-	switch v := data.(type) {
+// flattenJSON recursively flattens nested JSON structures into a flat key-value map.
+// Nested objects are flattened using dot notation (e.g., "parent.child.key": "value").
+// Only string, number, and boolean values are preserved; arrays and nulls are ignored.
+// The prefix accumulates the path as we traverse deeper into the structure.
+func flattenJSON(data interface{}, currentPrefix string, flattenedResult map[string]string) {
+	switch value := data.(type) {
 	case map[string]interface{}:
-		for key, value := range v {
-			newKey := key
-			if prefix != "" {
-				newKey = prefix + "." + key
+		// For objects, recursively process each key-value pair
+		for objectKey, objectValue := range value {
+			fullKey := objectKey
+			if currentPrefix != "" {
+				fullKey = currentPrefix + "." + objectKey
 			}
-			flattenJSON(value, newKey, result)
+			flattenJSON(objectValue, fullKey, flattenedResult)
 		}
 	case string:
-		if prefix != "" {
-			result[prefix] = v
+		// For string values, add to result if we have a valid key path
+		if currentPrefix != "" {
+			flattenedResult[currentPrefix] = value
 		}
 	case float64, int, bool:
-		if prefix != "" {
-			result[prefix] = fmt.Sprint(v)
+		// For primitive values (numbers, booleans), convert to string and add to result
+		if currentPrefix != "" {
+			flattenedResult[currentPrefix] = fmt.Sprint(value)
 		}
 	}
 }

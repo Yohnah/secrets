@@ -343,6 +343,6 @@ func (s *service) ImportContents(environmentName string, filePaths []string, dec
 		s.validatorManager,
 		s.profileResolver,
 	)
-	
+
 	return contentsService.ImportContents(environmentName, filePaths, decodeBase64)
 }

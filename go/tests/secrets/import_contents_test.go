@@ -195,11 +195,11 @@ func TestImportContents_FilenameMatching(t *testing.T) {
 	// - File "DB_HOST" should match item name "DB_HOST"
 	// - File "DB_HOST.txt" should match item name "DB_HOST" (extension removed)
 	// - File "DB_HOST.json" should match item name "DB_HOST" (extension removed)
-	
+
 	testCases := []struct {
-		filename     string
-		itemName     string
-		shouldMatch  bool
+		filename    string
+		itemName    string
+		shouldMatch bool
 	}{
 		{"DB_HOST", "DB_HOST", true},
 		{"DB_HOST.txt", "DB_HOST", true},
@@ -218,7 +218,7 @@ func TestImportContents_FilenameMatching(t *testing.T) {
 			if idx := filepath.Ext(tc.filename); idx != "" {
 				baseName = tc.filename[:len(tc.filename)-len(idx)]
 			}
-			
+
 			matches := baseName == tc.itemName
 			if matches != tc.shouldMatch {
 				t.Errorf("Expected match=%v for filename '%s' and item '%s', got %v",
@@ -307,7 +307,7 @@ func TestImportContents_PathWithSpaces(t *testing.T) {
 	if err := os.Mkdir(subDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	filePath := filepath.Join(subDir, "file with spaces.txt")
 	content := `content in file with spaces`
 	if err := os.WriteFile(filePath, []byte(content), 0600); err != nil {

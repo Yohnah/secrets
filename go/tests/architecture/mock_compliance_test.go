@@ -51,69 +51,71 @@ func TestAllTestsUseMocks(t *testing.T) {
 
 	violations := []string{}
 
-	err = filepath.Walk(testsDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	// Walk through all test files in the tests directory to check for mock compliance
+	// This recursively scans all subdirectories and applies filtering rules
+	err = filepath.Walk(testsDir, func(currentFilePath string, fileInfo os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
 
-		// Skip non-Go files
-		if !strings.HasSuffix(path, ".go") {
+		// Skip non-Go files - only analyze Go source code
+		if !strings.HasSuffix(currentFilePath, ".go") {
 			return nil
 		}
 
-		// Skip non-test files
-		if !strings.HasSuffix(path, "_test.go") {
+		// Skip non-test files - only check test files for mock compliance
+		if !strings.HasSuffix(currentFilePath, "_test.go") {
 			return nil
 		}
 
-		// Skip mock files (they may need to use some real operations)
-		if strings.Contains(path, "mocks_test.go") {
+		// Skip mock files - these files define mocks and may legitimately use real operations
+		if strings.Contains(currentFilePath, "mocks_test.go") {
 			return nil
 		}
 
-		// Skip architecture tests (they test the architecture and may need real operations)
-		if strings.Contains(path, "architecture/") {
+		// Skip architecture tests - these tests validate the architecture itself and may need real operations
+		if strings.Contains(currentFilePath, "architecture/") {
 			return nil
 		}
 
-		// Skip integration tests that need real file system operations
-		// These tests verify end-to-end functionality and are allowed to use real artifacts
-		integrationTests := []string{
-			"init_test.go",
-			"init_database_test.go",
-			"init_profiles_test.go",
-			"setup_test.go",
-			"status_test.go",
-			"show_profiles_test.go",
-			"show_tree_test.go",
-			"show_template_test.go",
-			"snapshots_new_test.go",
-			"snapshots_list_test.go",
-			"snapshots_delete_test.go",
-			"snapshots_restore_test.go",
-			"secrets_validator_test.go",
-			"validator_test.go",
+		// Skip integration tests that require real file system operations for end-to-end testing
+		// These tests verify complete workflows and are exempt from mock requirements
+		exemptedIntegrationTests := []string{
+			"init_test.go",              // Tests database initialization workflow
+			"init_database_test.go",     // Tests database creation and setup
+			"init_profiles_test.go",     // Tests profile creation logic
+			"setup_test.go",             // Tests complete setup process
+			"status_test.go",            // Tests status reporting functionality
+			"show_profiles_test.go",     // Tests profile display operations
+			"show_tree_test.go",         // Tests tree structure display
+			"show_template_test.go",     // Tests template rendering
+			"snapshots_new_test.go",     // Tests snapshot creation
+			"snapshots_list_test.go",    // Tests snapshot listing
+			"snapshots_delete_test.go",  // Tests snapshot deletion
+			"snapshots_restore_test.go", // Tests snapshot restoration
+			"secrets_validator_test.go", // Tests validation logic
+			"validator_test.go",         // Tests validator functionality
 			"import_variables_test.go",  // Tests parser functionality (needs real file I/O)
 			"import_contents_test.go",   // Tests file content operations (needs real file I/O)
 		}
-		for _, integrationTest := range integrationTests {
-			if strings.Contains(path, integrationTest) {
+		for _, exemptedTestFile := range exemptedIntegrationTests {
+			if strings.Contains(currentFilePath, exemptedTestFile) {
 				return nil
 			}
 		}
 
-		// Read file content
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return err
+		// Read file content to analyze for artifact usage patterns
+		fileContent, readErr := os.ReadFile(currentFilePath)
+		if readErr != nil {
+			return readErr
 		}
 
-		// Check for artifact patterns in the source
-		source := string(content)
-		for _, pattern := range artifactPatterns {
-			if pattern.MatchString(source) {
-				relPath, _ := filepath.Rel(testsDir, path)
-				violations = append(violations, relPath+": "+pattern.String())
+		// Check for artifact patterns in the source code
+		sourceCode := string(fileContent)
+		for _, artifactPattern := range artifactPatterns {
+			if artifactPattern.MatchString(sourceCode) {
+				relativePath, _ := filepath.Rel(testsDir, currentFilePath)
+				violations = append(violations, relativePath+": "+artifactPattern.String())
 			}
 		}
 

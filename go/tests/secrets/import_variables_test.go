@@ -365,7 +365,6 @@ environments:
 // - Validator integration with secrets.yml
 // - File I/O operations (reading content, filename matching)
 
-
 // TestReadAndValidateSecretsYML_InvalidFile tests error handling for invalid secrets.yml
 func TestReadAndValidateSecretsYML_InvalidFile(t *testing.T) {
 	tempDir := t.TempDir()

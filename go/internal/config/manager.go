@@ -89,13 +89,15 @@ func NewManager(globalFlags *types.GlobalFlags, commandFlags *types.CommandFlags
 // GetConfig processes and returns the complete configuration
 // Applies precedence: FLAGS > CONFIG.YML > ENV VARS > DEFAULTS
 func (m *manager) GetConfig() (*Config, error) {
+	// Return cached config if already computed (performance optimization)
 	if m.config != nil {
 		return m.config, nil
 	}
 
+	// Initialize config with default values
 	config := &Config{}
 
-	// Step 1: Apply DEFAULTS
+	// Step 1: Apply DEFAULTS - Base configuration values used when no other source provides them
 	config.DatabasePath = ".secrets_yohnah/secrets.kdbx"
 	config.KeyfilePath = ".secrets_yohnah/secrets.keyfile"
 	config.ConfigPath = ".secrets_yohnah/config.yml"
@@ -109,15 +111,16 @@ func (m *manager) GetConfig() (*Config, error) {
 	config.DatabaseName = ""
 	config.Minimal = false
 
-	// Step 2: Read ENV VARS
+	// Step 2: Read ENV VARS - Override defaults with environment variables if present
+	// Environment variables provide system-wide configuration without modifying files
 	if envPassword := os.Getenv("SECRETS_YOHNAH_PASSWORD"); envPassword != "" {
 		config.Password = envPassword
 	}
-	if envDatabase := os.Getenv("SECRETS_YOHNAH_DATABASE"); envDatabase != "" {
-		config.DatabasePath = envDatabase
+	if envDatabasePath := os.Getenv("SECRETS_YOHNAH_DATABASE"); envDatabasePath != "" {
+		config.DatabasePath = envDatabasePath
 	}
-	if envKeyfile := os.Getenv("SECRETS_YOHNAH_KEYFILE"); envKeyfile != "" {
-		config.KeyfilePath = envKeyfile
+	if envKeyfilePath := os.Getenv("SECRETS_YOHNAH_KEYFILE"); envKeyfilePath != "" {
+		config.KeyfilePath = envKeyfilePath
 	}
 	if envConfig := os.Getenv("SECRETS_YOHNAH_CONFIG"); envConfig != "" {
 		config.ConfigPath = envConfig
@@ -126,36 +129,41 @@ func (m *manager) GetConfig() (*Config, error) {
 		config.Verbose = true
 	}
 
-	// Step 3: Read CONFIG.YML (if not ignored)
+	// Step 3: Read CONFIG.YML (if not ignored) - Override with user configuration file
+	// Config files allow persistent, per-project configuration that can be versioned in Git
 	if !m.globalFlags.IgnoreConfigFile {
-		configPath := config.ConfigPath
+		configFilePath := config.ConfigPath
 		if m.globalFlags.Config != "" {
-			configPath = m.globalFlags.Config
+			configFilePath = m.globalFlags.Config
 		}
 
-		fileConfig, err := m.readConfigFile(configPath)
-		if err != nil {
-			// Only ignore "file not found" errors
-			// Any other error (validation, parsing, etc.) is critical
-			if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("failed to read config file: %w", err)
+		// Attempt to read and parse the config file
+		// We only ignore "file not found" errors - other errors (parsing, validation) are critical
+		configFileData, configReadErr := m.readConfigFile(configFilePath)
+		if configReadErr != nil {
+			// Only ignore "file not found" errors - config files are optional
+			// Any other error (malformed YAML, validation failures) should stop execution
+			if !os.IsNotExist(configReadErr) {
+				return nil, fmt.Errorf("failed to read config file: %w", configReadErr)
 			}
-			// File doesn't exist - continue with defaults
+			// File doesn't exist - continue with current config (defaults + env vars)
 		} else {
-			// File exists and is valid - apply config
-			if fileConfig.Database != "" {
-				config.DatabasePath = fileConfig.Database
+			// File exists and is valid - apply config file settings
+			// Config file values override defaults and env vars
+			if configFileData.Database != "" {
+				config.DatabasePath = configFileData.Database
 			}
-			if fileConfig.Keyfile != "" {
-				config.KeyfilePath = fileConfig.Keyfile
+			if configFileData.Keyfile != "" {
+				config.KeyfilePath = configFileData.Keyfile
 			}
-			if fileConfig.NoCreateDatabase != nil {
-				config.NoCreateDatabase = *fileConfig.NoCreateDatabase
+			if configFileData.NoCreateDatabase != nil {
+				config.NoCreateDatabase = *configFileData.NoCreateDatabase
 			}
 		}
 	}
 
-	// Step 4: Apply FLAGS (highest priority)
+	// Step 4: Apply FLAGS (highest priority) - Command-line flags override all other sources
+	// Flags provide immediate, per-command configuration for flexibility and scripting
 	if m.globalFlags.Database != "" {
 		config.DatabasePath = m.globalFlags.Database
 	}
@@ -170,9 +178,10 @@ func (m *manager) GetConfig() (*Config, error) {
 	config.IgnoreConfig = m.globalFlags.IgnoreConfigFile
 
 	// Step 5: Apply COMMAND-SPECIFIC FLAGS (translated from raw flags to semantic config)
-	// ConfigMgr translates flags to configuration semantics here
+	// ConfigMgr acts as a translator: converts CLI flag semantics to internal configuration semantics
+	// This separation allows CLI flags to be user-friendly while internal config is machine-friendly
 	if m.commandFlags != nil {
-		// Init command flags
+		// Init command flags - Control database creation behavior
 		config.ForceRecreate = m.commandFlags.ForceRecreate
 		if m.commandFlags.NoCreateDatabase {
 			config.NoCreateDatabase = m.commandFlags.NoCreateDatabase
@@ -181,19 +190,20 @@ func (m *manager) GetConfig() (*Config, error) {
 			config.DatabaseName = m.commandFlags.DatabaseName
 		}
 
-		// Show template flags
+		// Show template flags - Control template output format and content
 		config.Minimal = m.commandFlags.Minimal
 		if m.commandFlags.TemplateName != "" {
 			config.TemplateName = m.commandFlags.TemplateName
 		}
 
-		// Show status flags
+		// Show status flags - Control output formatting for status display
 		if m.commandFlags.OutputFormat != "" {
 			config.OutputFormat = m.commandFlags.OutputFormat
 		}
 	}
 
-	// Cache the config
+	// Cache the computed config for future calls (performance optimization)
+	// Configuration is computed once and reused since it doesn't change during execution
 	m.config = config
 
 	return config, nil
