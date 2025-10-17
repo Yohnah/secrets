@@ -25,6 +25,6 @@ Template logic:
 ============================================================================
 */ -}}
 
-{{range $key, $value := .}}
+{{- range $key, $value := .Items}}
 set -x {{$key}} "{{$value}}"
-{{end}}
+{{- end}}

@@ -26,6 +26,6 @@ Template logic:
 ============================================================================
 */ -}}
 
-{{range $key, $value := .Items}}
+{{range $key, $value := .Items -}}
 {{$key}} = "{{$value}}"
-{{end}}
+{{end -}}

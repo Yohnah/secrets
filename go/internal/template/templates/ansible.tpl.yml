@@ -8,8 +8,8 @@ that can be referenced in Ansible tasks and templates.
 
 Usage:
   - Include this file in your Ansible roles or playbooks using vars_files
-  - Reference variables in tasks: `{{ db_password }}`
-  - Use in templates with Jinja2: `{{ db_password }}`
+  - Reference variables in tasks: db_password
+  - Use in templates with Jinja2: db_password
   - The template expects data with: { Items: map[string]string }
   - Example output creates Ansible variables for database and API access
 
@@ -24,6 +24,6 @@ Template logic:
   - Uses YAML syntax compatible with Ansible variable files
 ============================================================================
 */ -}}
-{{range $key, $value := .Items}}
+{{range $key, $value := .Items -}}
 {{$key}}: "{{$value}}"
-{{end}}
+{{end -}}

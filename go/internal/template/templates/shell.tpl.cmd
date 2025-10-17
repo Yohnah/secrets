@@ -24,6 +24,6 @@ Template logic:
 */ -}}
 
 @echo off
-{{range $key, $value := .}}
+{{- range $key, $value := .Items}}
 SET {{$key}}={{$value}}
-{{end}}
+{{- end}}

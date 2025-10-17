@@ -24,7 +24,6 @@ Template logic:
   - Outputs a PowerShell environment variable assignment for each
 ============================================================================
 */ -}}
-
-{{range $key, $value := .}}
+{{range $key, $value := .Items -}}
 $env:{{$key}} = "{{$value}}"
-{{end}}
+{{end -}}

@@ -25,6 +25,6 @@ Template logic:
 ============================================================================
 */ -}}
 
-{{range $key, $value := .}}
+{{- range $key, $value := .Items}}
 setenv {{$key}} {{$value}}
-{{end}}
+{{- end}}
