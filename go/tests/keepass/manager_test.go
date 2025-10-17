@@ -417,12 +417,6 @@ func TestGetAttachmentContent(t *testing.T) {
 	}
 
 	// Create attachments with different content
-	defaultContent := []byte("Attachment pending to be filled by the developer")
-	err = testDB.Manager.CreateAttachment(profileName, envName, entryPath, "default.txt", defaultContent)
-	if err != nil {
-		t.Fatalf("Failed to create default attachment: %v", err)
-	}
-
 	realContent := []byte("This is real attachment content")
 	err = testDB.Manager.CreateAttachment(profileName, envName, entryPath, "data.txt", realContent)
 	if err != nil {
@@ -442,13 +436,6 @@ func TestGetAttachmentContent(t *testing.T) {
 		expectedString string
 		expectError    bool
 	}{
-		{
-			name:           "get default placeholder attachment",
-			attachmentName: "default.txt",
-			expectedLength: len(defaultContent),
-			expectedString: "Attachment pending to be filled by the developer",
-			expectError:    false,
-		},
 		{
 			name:           "get attachment with data",
 			attachmentName: "data.txt",

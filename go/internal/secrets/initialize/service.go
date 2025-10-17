@@ -797,9 +797,6 @@ func (s *service) createKeys(profileName string, profile validator.Profile) (int
 
 	s.logger.Debug(fmt.Sprintf("Creating keys for profile '%s'...", profileName))
 
-	// Default value for all keys
-	const defaultValue = "Field pending to be filled by the developer"
-
 	// Process each environment
 	totalKeysCreated := 0
 	totalKeysExisted := 0
@@ -862,9 +859,8 @@ func (s *service) createKeys(profileName string, profile validator.Profile) (int
 
 					s.logger.Debug(fmt.Sprintf("        - Creating attachment '%s'...", attachmentName))
 
-					// Create empty attachment with default content
-					defaultAttachmentContent := []byte("Attachment pending to be filled by the developer")
-					if err := s.keepass.CreateAttachment(profileName, envName, entryPath, attachmentName, defaultAttachmentContent); err != nil {
+					// Create empty attachment
+					if err := s.keepass.CreateAttachment(profileName, envName, entryPath, attachmentName, []byte{}); err != nil {
 						return 0, fmt.Errorf("failed to create attachment '%s' in entry '%s': %w", attachmentName, entryPath, err)
 					}
 
@@ -900,7 +896,7 @@ func (s *service) createKeys(profileName string, profile validator.Profile) (int
 						return 0, err
 					}
 
-					if err := s.keepass.SetStandardField(profileName, envName, entryPath, keyName, defaultValue); err != nil {
+					if err := s.keepass.SetStandardField(profileName, envName, entryPath, keyName, ""); err != nil {
 						return 0, fmt.Errorf("failed to create standard field '%s' in entry '%s': %w", keyName, entryPath, err)
 					}
 				} else {
@@ -917,7 +913,7 @@ func (s *service) createKeys(profileName string, profile validator.Profile) (int
 						return 0, err
 					}
 
-					if err := s.keepass.SetCustomField(profileName, envName, entryPath, keyName, defaultValue); err != nil {
+					if err := s.keepass.SetCustomField(profileName, envName, entryPath, keyName, ""); err != nil {
 						return 0, fmt.Errorf("failed to create custom field '%s' in entry '%s': %w", keyName, entryPath, err)
 					}
 				}

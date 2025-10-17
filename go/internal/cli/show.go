@@ -123,7 +123,6 @@ Displays for each item:
   - FIELD VALUE STATUS: Status of the field value in KeePass
     - "empty": Field exists but has no value
     - "has_data": Field has a value set
-    - "default": Field has the default placeholder value
     - "N/A": Field does not exist or cannot be checked
 
 Examples:

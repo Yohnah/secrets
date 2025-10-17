@@ -208,8 +208,7 @@ func (m *manager) GetTemplate(data interface{}, name string) (string, error) {
 		return "", fmt.Errorf("template %q not found", name)
 	}
 
-	// The current implementation returns raw template content when data is nil,
-	// keeping a placeholder for future processing logic.
+	// The current implementation returns raw template content when data is nil
 	_ = data
 
 	return templateContent, nil

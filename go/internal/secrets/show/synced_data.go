@@ -150,11 +150,8 @@ func (s *service) SyncedData(profileFilter string) error {
 						syncItem.FieldValueStatus = "N/A"
 					} else {
 						// Determine attachment value status
-						contentStr := string(content)
 						if len(content) == 0 {
 							syncItem.FieldValueStatus = "empty"
-						} else if contentStr == "Attachment pending to be filled by the developer" {
-							syncItem.FieldValueStatus = "default"
 						} else {
 							syncItem.FieldValueStatus = "has_data"
 						}
@@ -169,8 +166,6 @@ func (s *service) SyncedData(profileFilter string) error {
 						// Determine field value status
 						if value == "" {
 							syncItem.FieldValueStatus = "empty"
-						} else if value == "Field pending to be filled by the developer" {
-							syncItem.FieldValueStatus = "default"
 						} else {
 							syncItem.FieldValueStatus = "has_data"
 						}
