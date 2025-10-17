@@ -37,6 +37,33 @@ const (
 	SecretsTemplateName = "secrets.yml"
 )
 
+// NormalizeTemplateName converts short template names to full names with extensions
+// Examples: "json" -> "json.json", "k8s" -> "k8s.yml", "shell.sh" -> "shell.sh"
+func NormalizeTemplateName(name string) string {
+	// Map of short names to full template names
+	nameMap := map[string]string{
+		"secrets":     "secrets.yml",
+		"json":        "json.json",
+		"yaml":        "yaml.yml",
+		"dotenv":      "dotenv.env",
+		"k8s":         "k8s.yml",
+		"ansible":     "ansible.yml",
+		"docker":      "docker-compose.yml",
+		"terraform":   "terraform.tfvars",
+		"toml":        "toml.toml",
+		"spring_boot": "spring_boot.properties",
+		"dotnet":      "dotnet.json",
+	}
+
+	// Check if it's a short name
+	if fullName, exists := nameMap[name]; exists {
+		return fullName
+	}
+
+	// If it already has an extension or is a full name, return as-is
+	return name
+}
+
 // Manager exposes template processing capabilities for the application.
 type Manager interface {
 	// GetTemplate returns the raw template content for the requested template name.
@@ -141,19 +168,27 @@ func GetAvailableTemplatesWithDescriptions() (map[string]string, error) {
 			}
 
 			description := "Template file"
-			lines := strings.Split(string(content), "\n")
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if strings.HasPrefix(line, "#") && len(strings.TrimSpace(strings.TrimPrefix(line, "#"))) > 0 {
-					// Skip the header separator line
-					if strings.Contains(line, "=====") {
-						continue
+			contentStr := string(content)
+
+			// Look for Go template comment block and extract the title
+			if strings.HasPrefix(contentStr, "{{- /* ") || strings.HasPrefix(contentStr, "{{- /*\n") {
+				lines := strings.Split(contentStr, "\n")
+				for i, line := range lines {
+					if i == 0 {
+						continue // Skip the opening {{- /*
 					}
-					// Found a comment line with content (should be the title)
-					description = strings.TrimSpace(strings.TrimPrefix(line, "#"))
-					// Convert from CAPITALIZED_SNAKE_CASE to normal case if needed
-					description = normalizeDescription(description)
-					break
+					line = strings.TrimSpace(line)
+					if strings.Contains(line, "====") || strings.Contains(line, "----") {
+						continue // Skip separator lines
+					}
+					if strings.Contains(line, "*/ -}}") {
+						break // End of comment block
+					}
+					if len(line) > 0 && !strings.HasPrefix(line, "This template") && !strings.HasPrefix(line, "Usage:") {
+						// Found the title line
+						description = line
+						break
+					}
 				}
 			}
 

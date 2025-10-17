@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Yohnah/secrets/internal/template"
@@ -19,7 +20,9 @@ var (
 	syncedDataFlagOutput  string
 	variablesFlagOutput   string
 	variablesFlagTemplate string
-) // showCmd represents the show command
+)
+
+// showCmd represents the show command
 var showCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Show various information",
@@ -213,11 +216,14 @@ func init() {
 	showSyncedDataCmd.Flags().StringVarP(&syncedDataFlagOutput, "output", "o", "table", "Output format: table, json, yaml (default: table)")
 
 	// Flags for variables subcommand only
-	showVariablesCmd.Flags().StringVarP(&variablesFlagOutput, "output", "o", "json", "Output format: json, yaml, dotenv, k8s, shell.sh, etc. (default: json)")
+	showVariablesCmd.Flags().StringVarP(&variablesFlagOutput, "output", "o", "yaml", "Output format: json, yaml, dotenv, k8s, shell.sh, etc. (default: yaml)")
 	showVariablesCmd.Flags().StringVarP(&variablesFlagTemplate, "template", "t", "", "Path to custom template file (overrides --output)")
 
 	// Update show template help with available templates
 	updateShowTemplateHelp()
+
+	// Update show variables help with available output formats
+	updateShowVariablesHelp()
 }
 
 func updateShowTemplateHelp() {
@@ -236,9 +242,10 @@ func updateShowTemplateHelp() {
 	showTemplateCmd.Long = fmt.Sprintf(`Displays the specified template file with examples and documentation.
 
 %s
-You can redirect the output to create your own file:
-  secrets show template secrets.yml > secrets.yml
-  secrets show template k8s.yml > k8s.yml
+You can use short names or full names for templates:
+  secrets show template secrets > secrets.yml
+  secrets show template json > config.json
+  secrets show template k8s > kubernetes-secret.yml
 
 The template includes:
   - Complete structure with examples
@@ -248,9 +255,68 @@ The template includes:
 Use --minimal flag to get a simplified version without examples.`, templateList.String())
 }
 
+func updateShowVariablesHelp() {
+	templates, err := template.GetAvailableTemplatesWithDescriptions()
+	if err != nil {
+		// Fallback to static help if we can't get templates
+		return
+	}
+
+	// Build list of output formats excluding secrets.yml (not applicable for variables)
+	var formatList strings.Builder
+	formatList.WriteString("Available output formats:\n")
+	for name, description := range templates {
+		// Skip secrets.yml as it's not an output format for variables
+		if name == "secrets.yml" {
+			continue
+		}
+
+		// For shell templates, show the full name (shell.sh, shell.cmd, etc.)
+		// For others, show the short name without extension
+		displayName := name
+		if !strings.HasPrefix(name, "shell.") {
+			// Remove extension for cleaner display
+			displayName = strings.TrimSuffix(name, filepath.Ext(name))
+		}
+
+		formatList.WriteString(fmt.Sprintf("  - %s: %s\n", displayName, description))
+	}
+
+	showVariablesCmd.Long = fmt.Sprintf(`Display environment variables (items with type: envvar) from the specified environment in various formats.
+
+The command filters items of type "envvar" from the environment, retrieves their values from KeePass,
+and renders them using the specified output format or custom template.
+
+%s
+You can use short names (recommended) or full names with extensions.
+
+Profile name can be specified via:
+  1. Flag: --profile-name (recommended)
+  2. Auto-detection: if secrets.yml defines a single profile, it's selected automatically
+
+Examples:
+  # Show variables in JSON format (default)
+  secrets show variables production
+
+  # Show variables in YAML format
+  secrets show variables production --output yaml
+
+  # Show variables as Kubernetes Secret
+  secrets show variables production --output k8s
+
+  # Show variables as shell exports
+  secrets show variables production --output sh
+
+  # Show variables using custom template
+  secrets show variables production --template ./my-custom.tpl
+
+  # Show variables for specific profile
+  secrets show variables production --profile-name webapp-prod --output dotenv`, formatList.String())
+}
+
 func runShowTemplate(cmd *cobra.Command, args []string) error {
-	// Extract template name from arguments
-	templateName := args[0]
+	// Extract template name from arguments and normalize it
+	templateName := template.NormalizeTemplateName(args[0])
 
 	// CliMgr captures ALL command-specific flags and feeds them to ConfigMgr
 	commandFlags := &types.CommandFlags{
