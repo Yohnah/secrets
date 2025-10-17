@@ -117,6 +117,78 @@ Examples:
 	},
 }
 
+// importContentsCmd represents the import contents command
+var importContentsCmd = &cobra.Command{
+	Use:   "contents <environment-name> <file-path-or-pattern>...",
+	Short: "Import file contents into KeePass database by filename matching",
+	Long: `Import complete file contents into the KeePass database by matching filenames with item names.
+
+Unlike 'import variables' which parses file contents to extract variables, 
+'import contents' takes the entire file content and stores it directly in the 
+corresponding item found in secrets.yml by matching the filename with the item name.
+
+Matching logic:
+  - The base filename (without path) is matched against item names in secrets.yml
+  - If item's key is "attachments/filename.ext", content is stored as attachment
+  - Otherwise, content is stored as a field value in the entry
+
+Behavior:
+  - Multiple files can be specified as separate arguments
+  - Glob patterns are supported (e.g., *.txt) - expanded by shell or internally
+  - If multiple files match, all are processed independently
+  - Existing values in the database are replaced
+  - Files not matching any item in secrets.yml are ignored with a warning
+
+Examples:
+  # Import a single file
+  secrets import contents production /path/to/DB_HOST
+
+  # Import multiple files (shell expansion)
+  secrets import contents production ./.trash/*
+
+  # Import with base64 decoding (if file content is base64-encoded)
+  secrets import contents production ./secrets/* --decode-base64
+
+  # Import to specific profile
+  secrets import contents staging ./configs/* --profile-name myapp-staging`,
+	Args: cobra.MinimumNArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		environmentName := args[0]
+		filePatterns := args[1:]
+
+		// Expand glob patterns and collect all files
+		var allFiles []string
+		for _, pattern := range filePatterns {
+			// Try glob expansion
+			files, err := filepath.Glob(pattern)
+			if err != nil {
+				return fmt.Errorf("invalid file pattern '%s': %w", pattern, err)
+			}
+
+			// If glob found files, use them; otherwise use pattern as-is (direct file path)
+			if len(files) > 0 {
+				allFiles = append(allFiles, files...)
+			} else {
+				allFiles = append(allFiles, pattern)
+			}
+		}
+
+		if len(allFiles) == 0 {
+			return fmt.Errorf("no files found")
+		}
+
+		// Get managers
+		managers := NewManagerContext(nil)
+
+		// Execute import
+		if err := managers.Secrets.ImportContents(environmentName, allFiles, flagDecodeBase64); err != nil {
+			return err
+		}
+
+		return nil
+	},
+}
+
 func init() {
 	// Add import command to root
 	rootCmd.AddCommand(importCmd)
@@ -124,6 +196,12 @@ func init() {
 	// Add variables subcommand to import
 	importCmd.AddCommand(importVariablesCmd)
 
+	// Add contents subcommand to import
+	importCmd.AddCommand(importContentsCmd)
+
 	// Add flags to import variables command
 	importVariablesCmd.Flags().BoolVar(&flagDecodeBase64, "decode-base64", false, "Decode base64-encoded values before storing (useful for Kubernetes secrets)")
+
+	// Add flags to import contents command
+	importContentsCmd.Flags().BoolVar(&flagDecodeBase64, "decode-base64", false, "Decode base64-encoded file contents before storing")
 }

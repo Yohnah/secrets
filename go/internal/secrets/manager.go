@@ -33,6 +33,7 @@ type Manager interface {
 	SnapshotsRestore(profileName, version string) error
 	SnapshotsDelete(profileName, version string) error
 	ImportVariables(environmentName string, filePaths []string, decodeBase64 bool) error
+	ImportContents(environmentName string, filePaths []string, decodeBase64 bool) error
 }
 
 type manager struct {
@@ -117,4 +118,9 @@ func (m *manager) SnapshotsDelete(profileName, version string) error {
 // ImportVariables delegates to the import service
 func (m *manager) ImportVariables(environmentName string, filePaths []string, decodeBase64 bool) error {
 	return m.importService.ImportVariables(environmentName, filePaths, decodeBase64)
+}
+
+// ImportContents delegates to the import service
+func (m *manager) ImportContents(environmentName string, filePaths []string, decodeBase64 bool) error {
+	return m.importService.ImportContents(environmentName, filePaths, decodeBase64)
 }

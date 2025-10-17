@@ -15,9 +15,10 @@ import (
 	"github.com/tobischo/gokeepasslib/v3"
 )
 
-// Service handles the import of variables into KeePass database
+// Service handles the import of variables and contents into KeePass database
 type Service interface {
 	ImportVariables(environmentName string, filePaths []string, decodeBase64 bool) error
+	ImportContents(environmentName string, filePaths []string, decodeBase64 bool) error
 }
 
 type service struct {
@@ -193,7 +194,7 @@ func (s *service) importVariablesFromMap(
 		if strings.HasPrefix(item.Key, "attachments/") {
 			// Extract filename from key
 			filename := strings.TrimPrefix(item.Key, "attachments/")
-			
+
 			// Check if attachment already exists and delete it to force replacement
 			existingContent, err := s.keepassManager.GetAttachmentContent(
 				resolvedProfile.Name,
@@ -210,7 +211,7 @@ func (s *service) importVariablesFromMap(
 					continue
 				}
 			}
-			
+
 			// Store as attachment (now it will be created fresh)
 			if err := s.keepassManager.CreateAttachment(
 				resolvedProfile.Name,
@@ -270,7 +271,7 @@ func (s *service) deleteAttachment(profileName, envName, entryPath, attachmentNa
 	// We need to access the database directly to remove the attachment
 	// Since we can't delete through the interface, we'll use GetDatabase() if available
 	// For now, we'll work around this by getting the entry and removing the binary reference
-	
+
 	// Get the database
 	db := s.keepassManager.GetDatabase()
 	if db == nil {
@@ -328,4 +329,20 @@ func findEntryByPath(db *gokeepasslib.Database, path string) *gokeepasslib.Entry
 	}
 
 	return nil
+}
+
+// ImportContents imports file contents into KeePass database by matching filenames
+func (s *service) ImportContents(environmentName string, filePaths []string, decodeBase64 bool) error {
+	// Create a contents service and delegate
+	contentsService := NewContentsService(
+		s.configManager,
+		s.loggerManager,
+		s.keepassManager,
+		s.outputManager,
+		s.promptManager,
+		s.validatorManager,
+		s.profileResolver,
+	)
+	
+	return contentsService.ImportContents(environmentName, filePaths, decodeBase64)
 }

@@ -23,9 +23,9 @@ func ParseFile(filePath string, decodeBase64 bool) (map[string]string, error) {
 
 	// Detect format by extension
 	ext := strings.ToLower(filepath.Ext(filePath))
-	
+
 	var variables map[string]string
-	
+
 	switch ext {
 	case ".json":
 		variables, err = parseJSON(content)
@@ -44,7 +44,7 @@ func ParseFile(filePath string, decodeBase64 bool) (map[string]string, error) {
 	default:
 		return nil, fmt.Errorf("unsupported file format: %s (file: %s)", ext, filePath)
 	}
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse file %s: %w", filePath, err)
 	}
@@ -177,7 +177,7 @@ func parseDotenv(content []byte) (map[string]string, error) {
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -209,7 +209,7 @@ func parseProperties(content []byte) (map[string]string, error) {
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Skip empty lines and comments (# or !)
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "!") {
 			continue
@@ -251,7 +251,7 @@ func parseTerraform(content []byte) (map[string]string, error) {
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
 			continue
@@ -284,7 +284,7 @@ func parseINI(content []byte) (map[string]string, error) {
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "#") {
 			continue
@@ -322,7 +322,7 @@ func parseINI(content []byte) (map[string]string, error) {
 // decodeBase64Values attempts to decode base64 values in the map
 func decodeBase64Values(variables map[string]string) map[string]string {
 	decoded := make(map[string]string)
-	
+
 	for key, value := range variables {
 		// Try to decode base64
 		decodedBytes, err := base64.StdEncoding.DecodeString(value)
@@ -334,6 +334,6 @@ func decodeBase64Values(variables map[string]string) map[string]string {
 			decoded[key] = value
 		}
 	}
-	
+
 	return decoded
 }
