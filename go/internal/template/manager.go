@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"math/big"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -45,6 +46,10 @@ type Manager interface {
 	// RenderTemplate renders a template with the provided data.
 	// Returns the rendered output or an error if rendering fails.
 	RenderTemplate(name string, data TemplateData) (string, error)
+
+	// RenderCustomTemplate renders a custom template content with the provided data.
+	// Returns the rendered output or an error if rendering fails.
+	RenderCustomTemplate(content string, data TemplateData) (string, error)
 }
 
 // GetAvailableTemplates returns a list of available template names
@@ -260,6 +265,23 @@ func (m *manager) RenderTemplate(name string, data TemplateData) (string, error)
 	return buf.String(), nil
 }
 
+// RenderCustomTemplate renders a custom template content with the provided data.
+func (m *manager) RenderCustomTemplate(content string, data TemplateData) (string, error) {
+	// Create a new template with custom functions
+	tmpl, err := template.New("custom").Funcs(getFuncMap()).Parse(content)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse custom template: %w", err)
+	}
+
+	// Execute the template with the provided data
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("failed to execute custom template: %w", err)
+	}
+
+	return buf.String(), nil
+}
+
 // getFuncMap returns a template.FuncMap with custom functions for templates
 func getFuncMap() template.FuncMap {
 	return template.FuncMap{
@@ -344,6 +366,23 @@ func getFuncMap() template.FuncMap {
 			}
 			return items[len(items)-1]
 		},
+		"isLast": func(key string, items map[string]string) bool {
+			if len(items) == 0 {
+				return true
+			}
+			// Get all keys
+			keys := make([]string, 0, len(items))
+			for k := range items {
+				keys = append(keys, k)
+			}
+			// Check if current key is the last one
+			if len(keys) == 0 {
+				return true
+			}
+			// Find the key and check if it's the last
+			lastKey := keys[len(keys)-1]
+			return key == lastKey
+		},
 		"len": func(v interface{}) int {
 			switch val := v.(type) {
 			case string:
@@ -352,9 +391,23 @@ func getFuncMap() template.FuncMap {
 				return len(val)
 			case map[string]interface{}:
 				return len(val)
+			case map[string]string:
+				return len(val)
 			default:
 				return 0
 			}
+		},
+		"keys": func(m map[string]string) []string {
+			keys := make([]string, 0, len(m))
+			for k := range m {
+				keys = append(keys, k)
+			}
+			// Sort keys for deterministic output
+			sort.Strings(keys)
+			return keys
+		},
+		"index": func(m map[string]string, key string) string {
+			return m[key]
 		},
 
 		// Control functions
@@ -369,6 +422,15 @@ func getFuncMap() template.FuncMap {
 		},
 		"not": func(val bool) bool {
 			return !val
+		},
+		"lt": func(a, b int) bool {
+			return a < b
+		},
+		"gt": func(a, b int) bool {
+			return a > b
+		},
+		"eq": func(a, b int) bool {
+			return a == b
 		},
 
 		// Math functions

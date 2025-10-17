@@ -45,6 +45,18 @@ func ParseFile(filePath string, decodeBase64 bool) (map[string]string, error) {
 		parsedVariables, err = parseTerraform(fileContent)
 	case ".ini":
 		parsedVariables, err = parseINI(fileContent)
+	case ".sh", ".bash", ".zsh":
+		parsedVariables, err = parseShellScript(fileContent)
+	case ".cmd", ".bat":
+		parsedVariables, err = parseWindowsCmd(fileContent)
+	case ".ps1":
+		parsedVariables, err = parsePowerShell(fileContent)
+	case ".csh":
+		parsedVariables, err = parseCShell(fileContent)
+	case ".fish":
+		parsedVariables, err = parseFishShell(fileContent)
+	case ".nu":
+		parsedVariables, err = parseNushell(fileContent)
 	default:
 		return nil, fmt.Errorf("unsupported file format: %s (file: %s)", fileExtension, filePath)
 	}
@@ -347,4 +359,259 @@ func decodeBase64Values(variables map[string]string) map[string]string {
 	}
 
 	return decoded
+}
+
+// parseShellScript parses POSIX shell scripts (.sh, .bash, .zsh)
+// Supports: export KEY="value" or export KEY=value
+func parseShellScript(content []byte) (map[string]string, error) {
+	variables := make(map[string]string)
+	lines := strings.Split(string(content), "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Skip shebang
+		if strings.HasPrefix(line, "#!") {
+			continue
+		}
+
+		// Look for export statements
+		if !strings.HasPrefix(line, "export ") {
+			continue
+		}
+
+		// Remove 'export ' prefix
+		line = strings.TrimPrefix(line, "export ")
+
+		// Split by first = sign
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		// Remove quotes if present
+		value = strings.Trim(value, `"'`)
+
+		variables[key] = value
+	}
+
+	return variables, nil
+}
+
+// parseWindowsCmd parses Windows CMD/BAT scripts (.cmd, .bat)
+// Supports: SET KEY=value or SET KEY="value"
+func parseWindowsCmd(content []byte) (map[string]string, error) {
+	variables := make(map[string]string)
+	lines := strings.Split(string(content), "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "REM ") || strings.HasPrefix(line, "rem ") {
+			continue
+		}
+
+		// Skip @echo off and similar commands
+		if strings.HasPrefix(strings.ToLower(line), "@echo") {
+			continue
+		}
+
+		// Look for SET statements (case-insensitive)
+		upperLine := strings.ToUpper(line)
+		if !strings.HasPrefix(upperLine, "SET ") {
+			continue
+		}
+
+		// Remove 'SET ' prefix (case-insensitive)
+		line = line[4:] // Skip "SET "
+
+		// Split by first = sign
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		// Remove quotes if present
+		value = strings.Trim(value, `"'`)
+
+		variables[key] = value
+	}
+
+	return variables, nil
+}
+
+// parsePowerShell parses PowerShell scripts (.ps1)
+// Supports: $env:KEY = "value" or $env:KEY = 'value'
+func parsePowerShell(content []byte) (map[string]string, error) {
+	variables := make(map[string]string)
+	lines := strings.Split(string(content), "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Look for $env: statements
+		if !strings.HasPrefix(line, "$env:") {
+			continue
+		}
+
+		// Remove '$env:' prefix
+		line = strings.TrimPrefix(line, "$env:")
+
+		// Split by = sign
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		// Remove quotes if present
+		value = strings.Trim(value, `"'`)
+
+		variables[key] = value
+	}
+
+	return variables, nil
+}
+
+// parseCShell parses C Shell scripts (.csh)
+// Supports: setenv KEY "value" or setenv KEY value
+func parseCShell(content []byte) (map[string]string, error) {
+	variables := make(map[string]string)
+	lines := strings.Split(string(content), "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Look for setenv statements
+		if !strings.HasPrefix(line, "setenv ") {
+			continue
+		}
+
+		// Remove 'setenv ' prefix
+		line = strings.TrimPrefix(line, "setenv ")
+
+		// Split by first space
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+
+		key := parts[0]
+		value := strings.Join(parts[1:], " ")
+
+		// Remove quotes if present
+		value = strings.Trim(value, `"'`)
+
+		variables[key] = value
+	}
+
+	return variables, nil
+}
+
+// parseFishShell parses Fish Shell scripts (.fish)
+// Supports: set -x KEY "value" or set -gx KEY value
+func parseFishShell(content []byte) (map[string]string, error) {
+	variables := make(map[string]string)
+	lines := strings.Split(string(content), "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Look for set -x or set -gx statements
+		if !strings.HasPrefix(line, "set -") {
+			continue
+		}
+
+		// Remove 'set -x ' or 'set -gx ' prefix
+		line = strings.TrimPrefix(line, "set ")
+		parts := strings.Fields(line)
+
+		if len(parts) < 3 {
+			continue
+		}
+
+		// Skip the flags (-x, -gx, etc.)
+		if !strings.HasPrefix(parts[0], "-") {
+			continue
+		}
+
+		key := parts[1]
+		value := strings.Join(parts[2:], " ")
+
+		// Remove quotes if present
+		value = strings.Trim(value, `"'`)
+
+		variables[key] = value
+	}
+
+	return variables, nil
+}
+
+// parseNushell parses Nushell scripts (.nu)
+// Supports: $env.KEY = "value" or $env.KEY = 'value'
+func parseNushell(content []byte) (map[string]string, error) {
+	variables := make(map[string]string)
+	lines := strings.Split(string(content), "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Look for $env. statements
+		if !strings.HasPrefix(line, "$env.") {
+			continue
+		}
+
+		// Remove '$env.' prefix
+		line = strings.TrimPrefix(line, "$env.")
+
+		// Split by = sign
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		// Remove quotes if present
+		value = strings.Trim(value, `"'`)
+
+		variables[key] = value
+	}
+
+	return variables, nil
 }

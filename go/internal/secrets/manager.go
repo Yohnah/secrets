@@ -28,6 +28,7 @@ type Manager interface {
 	ShowTree(profileName, environmentName, outputFormat string) error
 	ShowProfiles(profileFilter string) error
 	ShowSyncedData(profileFilter string) error
+	ShowVariables(environmentName, outputFormat, customTemplatePath string) error
 	SnapshotsList(profileName string) error
 	SnapshotsNew(profileName string) error
 	SnapshotsRestore(profileName, version string) error
@@ -93,6 +94,11 @@ func (m *manager) ShowProfiles(profileFilter string) error {
 // ShowSyncedData delegates to the show service
 func (m *manager) ShowSyncedData(profileFilter string) error {
 	return m.showService.SyncedData(profileFilter)
+}
+
+// ShowVariables delegates to the show service
+func (m *manager) ShowVariables(environmentName, outputFormat, customTemplateContent string) error {
+	return m.showService.Variables(environmentName, outputFormat, customTemplateContent)
 }
 
 // SnapshotsList delegates to the snapshots service

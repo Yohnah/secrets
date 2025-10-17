@@ -17,6 +17,8 @@ var (
 	flagProfilesOutput    string
 	syncedDataFlagProfile string
 	syncedDataFlagOutput  string
+	variablesFlagOutput   string
+	variablesFlagTemplate string
 ) // showCmd represents the show command
 var showCmd = &cobra.Command{
 	Use:   "show",
@@ -140,6 +142,48 @@ Examples:
 	RunE: runShowSyncedData,
 }
 
+// showVariablesCmd represents the show variables command
+var showVariablesCmd = &cobra.Command{
+	Use:   "variables <environment-name>",
+	Short: "Show environment variables for a specific environment",
+	Long: `Display environment variables (items with type: envvar) from the specified environment in various formats.
+
+The command filters items of type "envvar" from the environment, retrieves their values from KeePass,
+and renders them using the specified output format or custom template.
+
+Available output formats:
+  - json (default): JSON format
+  - yaml: YAML format
+  - dotenv: .env file format
+  - k8s: Kubernetes Secret YAML
+  - shell.sh, shell.cmd, shell.ps1, etc.: Shell export scripts
+  - terraform: Terraform tfvars format
+  - spring_boot: Spring Boot properties
+  - And many more...
+
+Profile name can be specified via:
+  1. Flag: --profile-name (recommended)
+  2. Auto-detection: if secrets.yml defines a single profile, it's selected automatically
+
+Examples:
+  # Show variables in JSON format (default)
+  secrets show variables production
+
+  # Show variables in YAML format
+  secrets show variables production --output yaml
+
+  # Show variables as Kubernetes Secret
+  secrets show variables production --output k8s
+
+  # Show variables using custom template
+  secrets show variables production --template ./my-custom.tpl
+
+  # Show variables for specific profile
+  secrets show variables production --profile-name webapp-prod --output dotenv`,
+	Args: cobra.ExactArgs(1),
+	RunE: runShowVariables,
+}
+
 func init() {
 	// Register show command with root
 	rootCmd.AddCommand(showCmd)
@@ -150,6 +194,7 @@ func init() {
 	showCmd.AddCommand(showTreeCmd)
 	showCmd.AddCommand(showProfilesCmd)
 	showCmd.AddCommand(showSyncedDataCmd)
+	showCmd.AddCommand(showVariablesCmd)
 
 	// Flags for template subcommand only
 	showTemplateCmd.Flags().BoolVar(&flagMinimal, "minimal", false, "Show minimal template without examples")
@@ -166,6 +211,10 @@ func init() {
 	// Flags for synced-data subcommand only
 	showSyncedDataCmd.Flags().StringVarP(&syncedDataFlagProfile, "profile-name", "p", "", "Profile name (optional, auto-detect if single profile)")
 	showSyncedDataCmd.Flags().StringVarP(&syncedDataFlagOutput, "output", "o", "table", "Output format: table, json, yaml (default: table)")
+
+	// Flags for variables subcommand only
+	showVariablesCmd.Flags().StringVarP(&variablesFlagOutput, "output", "o", "json", "Output format: json, yaml, dotenv, k8s, shell.sh, etc. (default: json)")
+	showVariablesCmd.Flags().StringVarP(&variablesFlagTemplate, "template", "t", "", "Path to custom template file (overrides --output)")
 
 	// Update show template help with available templates
 	updateShowTemplateHelp()
@@ -328,6 +377,49 @@ func runShowSyncedData(cmd *cobra.Command, args []string) error {
 
 	// Execute business logic (delegate all decisions to CORE)
 	if err := managers.Secrets.ShowSyncedData(syncedDataFlagProfile); err != nil {
+		managers.Logger.Error(err.Error())
+		os.Exit(1)
+	}
+
+	return nil
+}
+
+func runShowVariables(cmd *cobra.Command, args []string) error {
+	// Extract environment name from arguments
+	environmentName := args[0]
+
+	// Validate output format (reject "secrets.yml")
+	if variablesFlagOutput == "secrets.yml" {
+		fmt.Fprintln(os.Stderr, "Error: 'secrets.yml' is not a valid output format for variables")
+		os.Exit(1)
+	}
+
+	// Read custom template content if specified
+	var customTemplateContent string
+	if variablesFlagTemplate != "" {
+		content, err := os.ReadFile(variablesFlagTemplate)
+		if err != nil {
+			if os.IsNotExist(err) {
+				fmt.Fprintf(os.Stderr, "Error: Template file not found: %s\n", variablesFlagTemplate)
+			} else {
+				fmt.Fprintf(os.Stderr, "Error: Failed to read template file '%s': %v\n", variablesFlagTemplate, err)
+			}
+			os.Exit(1)
+		}
+		customTemplateContent = string(content)
+	}
+
+	// CliMgr captures ALL command-specific flags and feeds them to ConfigMgr
+	commandFlags := &types.CommandFlags{
+		OutputFormat: variablesFlagOutput,
+	}
+
+	// Create manager context with captured flags
+	managers := NewManagerContext(commandFlags)
+
+	// Execute business logic (delegate all decisions to CORE)
+	// SecretsManager will pull processed config from ConfigMgr
+	if err := managers.Secrets.ShowVariables(environmentName, variablesFlagOutput, customTemplateContent); err != nil {
 		managers.Logger.Error(err.Error())
 		os.Exit(1)
 	}

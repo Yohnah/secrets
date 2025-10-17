@@ -1,29 +1,28 @@
-# ============================================================================
-# .NET AppSettings JSON Template
-# ----------------------------------------------------------------------------
-# This template generates a .NET appsettings.json file that can be used
-# with ASP.NET Core applications. It creates a JSON structure with configuration
-# values that can be accessed via IConfiguration.
-#
-# Usage:
-#   - Use as appsettings.json or appsettings.Environment.json
-#   - Access values in code: Configuration["AppSettings:ApiToken"]
-#   - The template expects data with: { Items: map[string]string }
-#   - Example output creates JSON configuration for .NET applications
-#
-# Security:
-#   - JSON files may contain sensitive configuration data
-#   - Use User Secrets or Azure Key Vault for sensitive data in production
-#   - Do NOT commit generated files with real secrets to version control
-#
-# ----------------------------------------------------------------------------
-# Template logic:
-#   - Creates a JSON object with AppSettings section
-#   - Iterates over .Items map, creating key-value pairs
-# ============================================================================
+{{- /* 
+============================================================================
+JSON Configuration Template
+----------------------------------------------------------------------------
+This template generates a JSON configuration file with secrets organized
+under a section. It creates a structured JSON object that can be used by
+applications that read JSON configuration files.
 
+Usage:
+  - Include this file in your application configuration
+  - Access values using JSON parsing libraries
+  - The template expects data with: { Section: string, Items: map[string]string }
+  - Example output creates JSON config with sectioned secrets
+
+Security:
+  - JSON files may contain sensitive configuration data
+  - Use appropriate access controls for configuration files
+  - Do NOT commit generated files with real secrets to version control
+
+----------------------------------------------------------------------------
+Template logic:
+  - Creates a JSON object with a section key
+  - Places all secrets under the section as key-value pairs
+============================================================================
+*/ -}}
 {
-  "AppSettings": {
-{{range $key, $value := .Items}}    "{{$key}}": "{{$value}}"{{if not (isLast $key $.Items)}},{{end}}
-{{end}}  }
+  "{{.Section}}": {{.Items | toJSON}}
 }
