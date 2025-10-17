@@ -1,38 +1,40 @@
-# ============================================================================
-# Kubernetes Secret Template
-# ----------------------------------------------------------------------------
-# This template generates a Kubernetes Secret resource in YAML format that can
-# be applied directly to a Kubernetes cluster. It creates Opaque secrets with
-# base64-encoded data for secure storage of sensitive information.
-#
-# Usage:
-#   - Apply the generated YAML to your Kubernetes cluster using kubectl
-#   - Reference the secret in your pods/deployments using secretKeyRef
-#   - The template expects data with: { Section: string, Items: map[string]string }
-#   - Example output creates a secret named "production-myapp" with encoded data
-#
-# Example output with sample data:
-#   apiVersion: v1
-#   kind: Secret
-#   metadata:
-#     name: production-myapp
-#   type: Opaque
-#   data:
-#     database_url: cG9zdGdyZXNxbDovL3VzZXI6cGFzc0Bob3N0OjU0MzIvZGI=  # "postgresql://user:pass@host:5432/db"
-#     api_key: c2stMTIzNDU2Nzg5MGFiY2RlZg==                        # "sk-1234567890abcdef"
-#
-# Security:
-#   - Secrets are base64 encoded but NOT encrypted at rest in etcd
-#   - Use RBAC to restrict access to secrets
-#   - Consider using external secret management for production workloads
-#   - Do NOT commit generated YAML with real secrets to version control
-#
-# ----------------------------------------------------------------------------
-# Template logic:
-#   - Creates a Kubernetes v1/Secret resource
-#   - Uses .Section as metadata.name (typically profile-environment)
-#   - Iterates over .Items map, base64 encodes each value
-# ============================================================================
+{{- /* 
+============================================================================
+Kubernetes Secret Template
+----------------------------------------------------------------------------
+This template generates a Kubernetes Secret resource in YAML format that can
+be applied directly to a Kubernetes cluster. It creates Opaque secrets with
+base64-encoded data for secure storage of sensitive information.
+
+Usage:
+  - Apply the generated YAML to your Kubernetes cluster using kubectl
+  - Reference the secret in your pods/deployments using secretKeyRef
+  - The template expects data with: { Section: string, Items: map[string]string }
+  - Example output creates a secret named "production-myapp" with encoded data
+
+Example output with sample data:
+  apiVersion: v1
+  kind: Secret
+  metadata:
+    name: production-myapp
+  type: Opaque
+  data:
+    database_url: cG9zdGdyZXNxbDovL3VzZXI6cGFzc0Bob3N0OjU0MzIvZGI=  # "postgresql://user:pass@host:5432/db"
+    api_key: c2stMTIzNDU2Nzg5MGFiY2RlZg==                        # "sk-1234567890abcdef"
+
+Security:
+  - Secrets are base64 encoded but NOT encrypted at rest in etcd
+  - Use RBAC to restrict access to secrets
+  - Consider using external secret management for production workloads
+  - Do NOT commit generated YAML with real secrets to version control
+
+----------------------------------------------------------------------------
+Template logic:
+  - Creates a Kubernetes v1/Secret resource
+  - Uses .Section as metadata.name (typically profile-environment)
+  - Iterates over .Items map, base64 encodes each value
+============================================================================
+*/ -}}
 
 apiVersion: v1
 kind: Secret

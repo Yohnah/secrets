@@ -40,16 +40,38 @@ func (s *service) Template() error {
 func (s *service) processMinimalTemplate(templateContent string) string {
 	lines := strings.Split(templateContent, "\n")
 	var result strings.Builder
+	inComment := false
 
 	for _, line := range lines {
-		// Skip comment lines (starting with #)
-		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+		trimmed := strings.TrimSpace(line)
+
+		// Check for start of Go template comment
+		if strings.HasPrefix(trimmed, "{{- /*") {
+			inComment = true
 			continue
 		}
+
+		// Check for end of Go template comment
+		if strings.HasPrefix(trimmed, "*/ -}}") {
+			inComment = false
+			continue
+		}
+
+		// Skip lines inside comments
+		if inComment {
+			continue
+		}
+
+		// Skip traditional comment lines (starting with #)
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
 		// Skip empty lines
-		if strings.TrimSpace(line) == "" {
+		if trimmed == "" {
 			continue
 		}
+
 		// Include the line
 		result.WriteString(line)
 		result.WriteString("\n")
