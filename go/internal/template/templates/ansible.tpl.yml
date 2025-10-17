@@ -24,7 +24,6 @@ Template logic:
   - Uses YAML syntax compatible with Ansible variable files
 ============================================================================
 */ -}}
-
 {{range $key, $value := .Items}}
 {{$key}}: "{{$value}}"
 {{end}}
