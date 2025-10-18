@@ -11,6 +11,11 @@ import (
 
 // Variables retrieves and displays environment variables (type=envvar) from a profile environment
 func (s *service) Variables(environmentName, outputFormat, customTemplateContent string, withNoValues bool) error {
+	// Short-circuit for --with-no-values: render template only, no KeePass access needed
+	if withNoValues {
+		return s.renderVariablesTemplateOnly(environmentName, outputFormat, customTemplateContent)
+	}
+
 	// Resolve profile (auto-detect when no profile specified)
 	resolvedProfile, err := s.profileResolver.Resolve("")
 	if err != nil {
@@ -149,6 +154,74 @@ func (s *service) Variables(environmentName, outputFormat, customTemplateContent
 	}
 
 	// Print the rendered output using OutputManager
+	if err := s.output.OutputRaw(rendered); err != nil {
+		return fmt.Errorf("failed to print output: %w", err)
+	}
+
+	return nil
+}
+
+// renderVariablesTemplateOnly renders variables template with empty values, bypassing KeePass entirely
+func (s *service) renderVariablesTemplateOnly(environmentName, outputFormat, customTemplateContent string) error {
+	// 1. Validate secrets.yml exists and is valid (but don't store config, we use profileResolver)
+	_, errs := s.validator.ReadAndValidateSecretsYML("secrets.yml")
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to read secrets.yml: %v", errs[0])
+	}
+
+	// 2. Resolve profile (auto-detect)
+	resolvedProfile, err := s.profileResolver.Resolve("")
+	if err != nil {
+		return err
+	}
+
+	// 3. Extract variables from the environment
+	environmentItems, exists := resolvedProfile.Profile.Environments[environmentName]
+	if !exists {
+		return fmt.Errorf("environment '%s' does not exist in profile '%s'", environmentName, resolvedProfile.Name)
+	}
+
+	// 4. Filter only envvar items and build empty map
+	itemsMap := make(map[string]string)
+	for _, item := range environmentItems {
+		if strings.ToLower(item.Type) == "envvar" {
+			itemsMap[item.Name] = "" // Empty value
+		}
+	}
+
+	if len(itemsMap) == 0 {
+		return fmt.Errorf("no environment variables (type=envvar) found in environment '%s'", environmentName)
+	}
+
+	// 5. Prepare template data
+	templateData := template.TemplateData{
+		Section:     "variables",
+		Environment: environmentName,
+		Profile:     resolvedProfile.Name,
+		Items:       itemsMap,
+	}
+
+	// 6. Render the output
+	var rendered string
+
+	if customTemplateContent != "" {
+		// Render using custom template content
+		rendered, err = s.template.RenderCustomTemplate(customTemplateContent, templateData)
+		if err != nil {
+			return fmt.Errorf("failed to render custom template: %w", err)
+		}
+	} else {
+		// Normalize output format to template name with extension
+		templateName := normalizeOutputFormat(outputFormat)
+
+		// Render using built-in template for the specified format
+		rendered, err = s.template.RenderTemplate(templateName, templateData)
+		if err != nil {
+			return fmt.Errorf("failed to render template: %w", err)
+		}
+	}
+
+	// 7. Print the rendered output using OutputManager
 	if err := s.output.OutputRaw(rendered); err != nil {
 		return fmt.Errorf("failed to print output: %w", err)
 	}
