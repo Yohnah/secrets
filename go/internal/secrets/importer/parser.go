@@ -195,6 +195,8 @@ func parseKubernetesSecret(data interface{}) (map[string]string, error) {
 
 	variables := make(map[string]string)
 	for key, value := range dataMap {
+		// Just extract the value as-is, no automatic decoding
+		// User will use --decode-base64 flag if they want to decode
 		variables[key] = fmt.Sprint(value)
 	}
 
@@ -378,18 +380,77 @@ func decodeBase64Values(variables map[string]string) map[string]string {
 	decoded := make(map[string]string)
 
 	for key, value := range variables {
+		// Skip empty values
+		if value == "" {
+			decoded[key] = value
+			continue
+		}
+
+		// Validate if value looks like base64:
+		// 1. Must only contain base64 characters [A-Za-z0-9+/=]
+		// 2. Length must be multiple of 4 (base64 padding requirement)
+		// 3. Padding '=' can only appear at the end
+		isBase64 := isLikelyBase64(value)
+		
+		if !isBase64 {
+			// Doesn't look like base64, keep original
+			decoded[key] = value
+			continue
+		}
+
 		// Try to decode base64
 		decodedBytes, err := base64.StdEncoding.DecodeString(value)
 		if err == nil {
 			// Successfully decoded
 			decoded[key] = string(decodedBytes)
 		} else {
-			// Not base64 or decode failed, keep original
+			// Decode failed, keep original
 			decoded[key] = value
 		}
 	}
 
 	return decoded
+}
+
+// isLikelyBase64 checks if a string looks like valid base64
+func isLikelyBase64(s string) bool {
+	// Base64 length must be multiple of 4
+	if len(s)%4 != 0 {
+		return false
+	}
+
+	// Check for valid base64 characters
+	validChars := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
+	for _, char := range s {
+		found := false
+		for _, valid := range validChars {
+			if char == valid {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+
+	// Check padding is only at the end
+	// Count '=' characters and ensure they're only at the end
+	paddingStart := -1
+	for i, char := range s {
+		if char == '=' {
+			if paddingStart == -1 {
+				paddingStart = i
+			}
+		} else {
+			// If we found a non-padding char after padding started, invalid
+			if paddingStart != -1 {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 // parseShellScript parses POSIX shell scripts (.sh, .bash, .zsh)

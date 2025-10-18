@@ -182,12 +182,12 @@ key3=value3`
 	}
 }
 
-// TestParseFile_KubernetesSecretDetection tests that Kubernetes Secrets are detected
+// TestParseFile_KubernetesSecretDetection tests that Kubernetes Secrets values are stored as-is
 func TestParseFile_KubernetesSecretDetection(t *testing.T) {
 	tempDir := t.TempDir()
 	k8sFilePath := filepath.Join(tempDir, "k8s-secret.yml")
 
-	// Kubernetes Secret without base64 decoding
+	// Kubernetes Secret without automatic decoding
 	content := `apiVersion: v1
 kind: Secret
 metadata:
@@ -200,18 +200,18 @@ data:
 		t.Fatal(err)
 	}
 
-	// Without decoding
+	// Without --decode-base64 flag, values should be stored as-is
 	vars, err := importer.ParseFile(k8sFilePath, false)
 	if err != nil {
 		t.Fatalf("ParseFile failed: %v", err)
 	}
 
-	// Should still have base64 encoded values
+	// Should have base64 encoded values (as-is from file)
 	if vars["username"] != "YWRtaW4=" {
-		t.Errorf("Expected username='YWRtaW4=' (encoded), got '%s'", vars["username"])
+		t.Errorf("Expected username='YWRtaW4=' (as-is), got '%s'", vars["username"])
 	}
 	if vars["password"] != "MWYyZDFlMmU2N2Rm" {
-		t.Errorf("Expected password='MWYyZDFlMmU2N2Rm' (encoded), got '%s'", vars["password"])
+		t.Errorf("Expected password='MWYyZDFlMmU2N2Rm' (as-is), got '%s'", vars["password"])
 	}
 }
 
@@ -240,7 +240,7 @@ func TestParseFile_Base64Decoding(t *testing.T) {
 	}
 }
 
-// TestParseFile_KubernetesSecretWithBase64Decoding tests K8s secret with decoding
+// TestParseFile_KubernetesSecretWithBase64Decoding tests K8s secret with explicit decoding flag
 func TestParseFile_KubernetesSecretWithBase64Decoding(t *testing.T) {
 	tempDir := t.TempDir()
 	k8sFilePath := filepath.Join(tempDir, "k8s-secret.yml")
@@ -257,18 +257,72 @@ data:
 		t.Fatal(err)
 	}
 
-	// With decoding
+	// With --decode-base64 flag, values should be decoded
 	vars, err := importer.ParseFile(k8sFilePath, true)
 	if err != nil {
 		t.Fatalf("ParseFile failed: %v", err)
 	}
 
-	// Should be decoded
+	// Should be decoded when using --decode-base64 flag
 	if vars["username"] != "admin" {
 		t.Errorf("Expected username='admin' (decoded), got '%s'", vars["username"])
 	}
 	if vars["password"] != "1f2d1e2e67df" {
 		t.Errorf("Expected password='1f2d1e2e67df' (decoded), got '%s'", vars["password"])
+	}
+}
+
+// TestParseFile_KubernetesSecretWithPlainText tests K8s secret with plain text values (not base64)
+func TestParseFile_KubernetesSecretWithPlainText(t *testing.T) {
+	tempDir := t.TempDir()
+	k8sFilePath := filepath.Join(tempDir, "k8s-secret.yml")
+
+	content := `apiVersion: v1
+kind: Secret
+metadata:
+  name: mysecret
+type: Opaque
+data:
+  plain1: jajajaja
+  plain2: jejejeje
+  encoded1: YWRtaW4=
+  encoded2: cGFzc3dvcmQxMjM=`
+	if err := os.WriteFile(k8sFilePath, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Without --decode-base64 flag, all values stored as-is
+	vars, err := importer.ParseFile(k8sFilePath, false)
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+
+	// All values should remain as-is
+	if vars["plain1"] != "jajajaja" {
+		t.Errorf("Expected plain1='jajajaja', got '%s'", vars["plain1"])
+	}
+	if vars["plain2"] != "jejejeje" {
+		t.Errorf("Expected plain2='jejejeje', got '%s'", vars["plain2"])
+	}
+	if vars["encoded1"] != "YWRtaW4=" {
+		t.Errorf("Expected encoded1='YWRtaW4=' (as-is), got '%s'", vars["encoded1"])
+	}
+	if vars["encoded2"] != "cGFzc3dvcmQxMjM=" {
+		t.Errorf("Expected encoded2='cGFzc3dvcmQxMjM=' (as-is), got '%s'", vars["encoded2"])
+	}
+
+	// With --decode-base64 flag, all values are decoded
+	varsDecoded, err := importer.ParseFile(k8sFilePath, true)
+	if err != nil {
+		t.Fatalf("ParseFile with decode failed: %v", err)
+	}
+
+	// All values should be decoded (even if result is garbage for non-base64)
+	if varsDecoded["encoded1"] != "admin" {
+		t.Errorf("Expected encoded1='admin' (decoded), got '%s'", varsDecoded["encoded1"])
+	}
+	if varsDecoded["encoded2"] != "password123" {
+		t.Errorf("Expected encoded2='password123' (decoded), got '%s'", varsDecoded["encoded2"])
 	}
 }
 

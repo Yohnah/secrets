@@ -1,8 +1,12 @@
 package keepass
 
 import (
+	"bytes"
+	"compress/gzip"
 	"crypto/rand"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,6 +57,7 @@ type ProfileManager interface {
 	SetStandardField(profileName, envName, entryPath, fieldName, value string) error
 	SetCustomField(profileName, envName, entryPath, fieldName, value string) error
 	CreateAttachment(profileName, envName, entryPath, attachmentName string, data []byte) error
+	DeleteAttachment(profileName, envName, entryPath, attachmentName string) error
 	FieldExists(profileName, envName, entryPath, fieldName string) (bool, error)
 	GetFieldValue(profileName, envName, entryPath, fieldName string) (string, error)
 	GetAttachmentContent(profileName, envName, entryPath, attachmentName string) ([]byte, error)
@@ -961,6 +966,7 @@ func (p *profileManager) CreateAttachment(profileName, envName, entryPath, attac
 		return err
 	}
 
+	// Check if attachment already exists - if so, do nothing (don't replace)
 	for _, binary := range entry.Binaries {
 		if binary.Name == attachmentName {
 			return nil
@@ -978,6 +984,49 @@ func (p *profileManager) CreateAttachment(profileName, envName, entryPath, attac
 	// Create a reference to the binary in the entry
 	entry.Binaries = append(entry.Binaries, gokeepasslib.NewBinaryReference(attachmentName, addedBinary.ID))
 
+	// Clear path cache after modification
+	m.clearPathCache()
+
+	return nil
+}
+
+// DeleteAttachment removes an attachment from an entry
+func (p *profileManager) DeleteAttachment(profileName, envName, entryPath, attachmentName string) error {
+	if attachmentName == "" {
+		return fmt.Errorf("attachment name cannot be empty")
+	}
+
+	entry, err := p.findEnvironmentEntry(profileName, envName, entryPath)
+	if err != nil {
+		return err
+	}
+
+	// Check if attachment exists
+	found := false
+	for _, binary := range entry.Binaries {
+		if binary.Name == attachmentName {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("attachment '%s' not found in entry '%s'", attachmentName, entryPath)
+	}
+
+	// Remove the attachment from the entry by filtering in-place
+	// We must modify the slice in-place, not reassign it, because entry is a pointer
+	// and reassigning entry.Binaries would only change the local reference
+	n := 0
+	for _, binary := range entry.Binaries {
+		if binary.Name != attachmentName {
+			entry.Binaries[n] = binary
+			n++
+		}
+	}
+	entry.Binaries = entry.Binaries[:n]
+
+	m := p.parent
 	// Clear path cache after modification
 	m.clearPathCache()
 
@@ -1069,17 +1118,31 @@ func (p *profileManager) GetAttachmentContent(profileName, envName, entryPath, a
 		if binary.Name == attachmentName {
 			// Get the binary ID from the reference
 			binaryID := binary.Value.ID
+			
 			// Use FindBinary which handles format version differences
 			dbBinary := p.parent.db.FindBinary(binaryID)
 			if dbBinary == nil {
 				return nil, fmt.Errorf("attachment '%s' content not found in database (ID: %d)", attachmentName, binaryID)
 			}
 
-			// Get content bytes from the binary
-			content, err := dbBinary.GetContentBytes()
-			if err != nil {
-				return nil, fmt.Errorf("failed to get attachment '%s' content: %w", attachmentName, err)
+			// For KDBX v4, content is stored RAW (not base64 encoded)
+			// For KDBX v3, content is base64 encoded
+			// Read directly from Content field to avoid GetContentBytes() base64 decode bug
+			content := dbBinary.Content
+			
+			// Handle compression if enabled (both KDBX 3 and 4 support this)
+			if dbBinary.Compressed.Bool {
+				reader, err := gzip.NewReader(bytes.NewReader(content))
+				if err != nil {
+					return nil, fmt.Errorf("failed to decompress attachment '%s': %w", attachmentName, err)
+				}
+				defer reader.Close()
+				content, err = io.ReadAll(reader)
+				if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
+					return nil, fmt.Errorf("failed to read compressed attachment '%s': %w", attachmentName, err)
+				}
 			}
+			
 			return content, nil
 		}
 	}
@@ -2112,12 +2175,18 @@ func (m *manager) SetCustomField(profileName, envName, entryPath, fieldName, val
 	return m.profileOps.SetCustomField(profileName, envName, entryPath, fieldName, value)
 }
 
-// CreateAttachment creates or updates an attachment in an entry
+// CreateAttachment creates an attachment in an entry
+// If the attachment already exists, it does nothing (does not replace)
 // Attachments in gokeepasslib use a BinaryReference system where:
 // 1. Binary data is stored in db.Content.Meta.Binaries
 // 2. Entry references binary by ID via entry.Binaries (BinaryReference)
 func (m *manager) CreateAttachment(profileName, envName, entryPath, attachmentName string, data []byte) error {
 	return m.profileOps.CreateAttachment(profileName, envName, entryPath, attachmentName, data)
+}
+
+// DeleteAttachment removes an attachment from an entry
+func (m *manager) DeleteAttachment(profileName, envName, entryPath, attachmentName string) error {
+	return m.profileOps.DeleteAttachment(profileName, envName, entryPath, attachmentName)
 }
 
 // FieldExists checks if a field exists in an entry (standard or custom field)

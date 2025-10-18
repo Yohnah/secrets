@@ -12,7 +12,6 @@ import (
 	"github.com/Yohnah/secrets/internal/secrets/common"
 	"github.com/Yohnah/secrets/internal/secrets/profile"
 	"github.com/Yohnah/secrets/internal/validator"
-	"github.com/tobischo/gokeepasslib/v3"
 )
 
 // Service handles the import of variables and contents into KeePass database
@@ -195,7 +194,7 @@ func (s *service) importVariablesFromMap(
 			// Extract filename from key
 			filename := strings.TrimPrefix(item.Key, "attachments/")
 
-			// Check if attachment already exists and delete it to force replacement
+			// Check if attachment exists, if so delete it first
 			existingContent, err := s.keepassManager.GetAttachmentContent(
 				resolvedProfile.Name,
 				environmentName,
@@ -203,9 +202,14 @@ func (s *service) importVariablesFromMap(
 				filename,
 			)
 			if err == nil && existingContent != nil {
-				// Attachment exists, need to delete it first by removing it from entry binaries
-				s.loggerManager.Debug(fmt.Sprintf("Attachment '%s' already exists, replacing...", filename))
-				if err := s.deleteAttachment(resolvedProfile.Name, environmentName, item.Entry, filename); err != nil {
+				// Attachment exists, delete it first to force replacement
+				s.loggerManager.Debug(fmt.Sprintf("Attachment '%s' already exists, deleting before import...", filename))
+				if err := s.keepassManager.DeleteAttachment(
+					resolvedProfile.Name,
+					environmentName,
+					item.Entry,
+					filename,
+				); err != nil {
 					s.loggerManager.Error(fmt.Sprintf("Failed to delete existing attachment for '%s': %v", varName, err))
 					ignored++
 					continue
@@ -213,12 +217,14 @@ func (s *service) importVariablesFromMap(
 			}
 
 			// Store as attachment (now it will be created fresh)
+			dataBytes := []byte(varValue)
+			
 			if err := s.keepassManager.CreateAttachment(
 				resolvedProfile.Name,
 				environmentName,
 				item.Entry,
 				filename,
-				[]byte(varValue),
+				dataBytes,
 			); err != nil {
 				s.loggerManager.Error(fmt.Sprintf("Failed to set attachment for '%s': %v", varName, err))
 				ignored++
@@ -263,72 +269,6 @@ func (s *service) importVariablesFromMap(
 	}
 
 	return imported, ignored
-}
-
-// deleteAttachment removes an attachment from an entry
-// This is a helper method since KeePassManager doesn't provide a delete method
-func (s *service) deleteAttachment(profileName, envName, entryPath, attachmentName string) error {
-	// We need to access the database directly to remove the attachment
-	// Since we can't delete through the interface, we'll use GetDatabase() if available
-	// For now, we'll work around this by getting the entry and removing the binary reference
-
-	// Get the database
-	db := s.keepassManager.GetDatabase()
-	if db == nil {
-		return fmt.Errorf("database not open")
-	}
-
-	// Find the entry
-	fullPath := fmt.Sprintf("/%s/HEAD/%s%s", profileName, envName, entryPath)
-	entry := findEntryByPath(db, fullPath)
-	if entry == nil {
-		return fmt.Errorf("entry not found: %s", fullPath)
-	}
-
-	// Remove the attachment from the entry
-	newBinaries := make([]gokeepasslib.BinaryReference, 0)
-	for _, binary := range entry.Binaries {
-		if binary.Name != attachmentName {
-			newBinaries = append(newBinaries, binary)
-		}
-	}
-	entry.Binaries = newBinaries
-
-	return nil
-}
-
-// findEntryByPath finds an entry in the database by its full path
-func findEntryByPath(db *gokeepasslib.Database, path string) *gokeepasslib.Entry {
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	if len(parts) == 0 {
-		return nil
-	}
-
-	// Navigate through groups
-	currentGroup := &db.Content.Root.Groups[0]
-	for i := 0; i < len(parts)-1; i++ {
-		found := false
-		for j := range currentGroup.Groups {
-			if currentGroup.Groups[j].Name == parts[i] {
-				currentGroup = &currentGroup.Groups[j]
-				found = true
-				break
-			}
-		}
-		if !found {
-			return nil
-		}
-	}
-
-	// Find the entry in the last group
-	entryName := parts[len(parts)-1]
-	for i := range currentGroup.Entries {
-		if currentGroup.Entries[i].GetTitle() == entryName {
-			return &currentGroup.Entries[i]
-		}
-	}
-
-	return nil
 }
 
 // ImportContents imports file contents into KeePass database by matching filenames

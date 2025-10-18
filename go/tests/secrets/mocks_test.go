@@ -286,6 +286,10 @@ func (m *mockKeePassManager) CreateAttachment(profileName, envName, entryPath, a
 	return nil
 }
 
+func (m *mockKeePassManager) DeleteAttachment(profileName, envName, entryPath, attachmentName string) error {
+	return nil
+}
+
 func (m *mockKeePassManager) FieldExists(profileName, envName, entryPath, fieldName string) (bool, error) {
 	return false, nil
 }
