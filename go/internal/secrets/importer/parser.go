@@ -391,7 +391,7 @@ func decodeBase64Values(variables map[string]string) map[string]string {
 		// 2. Length must be multiple of 4 (base64 padding requirement)
 		// 3. Padding '=' can only appear at the end
 		isBase64 := isLikelyBase64(value)
-		
+
 		if !isBase64 {
 			// Doesn't look like base64, keep original
 			decoded[key] = value

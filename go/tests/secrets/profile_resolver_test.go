@@ -96,7 +96,7 @@ environments:
 outputs: []`
 
 	validatorMgr := newMockValidatorManager(secretsContent)
-	configMgr := newMockConfigManager("/tmp/test-secrets.yml")
+	configMgr := newMockConfigManagerWithProfile("/tmp/test-secrets.yml", "unknown-profile")
 	loggerMgr := logger.NewManager(false)
 	resolver := profile.NewResolver(configMgr, loggerMgr, validatorMgr)
 

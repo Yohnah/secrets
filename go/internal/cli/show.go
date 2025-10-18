@@ -368,32 +368,23 @@ func runShowTree(cmd *cobra.Command, args []string) error {
 	managers := NewManagerContext(commandFlags)
 
 	// Determine profile name from flag or positional argument
-	var profileName, environmentName string
+	var environmentName string
 
 	switch {
-	case flagProfileName != "":
-		// Priority 1: Use flag if provided
-		profileName = flagProfileName
-		if len(args) < 1 {
-			managers.Logger.Error("environment name is required")
-			os.Exit(1)
-		}
-		environmentName = args[0]
 	case len(args) == 2:
-		// Priority 2: Legacy positional arguments (backward compatibility)
-		profileName = args[0]
+		// Legacy positional arguments (backward compatibility)
 		environmentName = args[1]
 	case len(args) == 1:
 		// Auto-detection path: only environment provided
 		environmentName = args[0]
 	default:
-		managers.Logger.Error("environment name is required")
+		fmt.Fprintln(os.Stderr, "Error: environment name is required")
 		os.Exit(1)
 	}
 
 	// Execute business logic (delegate all decisions to CORE)
 	// SecretsManager will pull processed config from ConfigMgr
-	if err := managers.Secrets.ShowTree(profileName, environmentName, flagTreeOutput); err != nil {
+	if err := managers.Secrets.ShowTree(environmentName, flagTreeOutput); err != nil {
 		managers.Logger.Error(err.Error())
 		os.Exit(1)
 	}

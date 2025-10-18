@@ -12,7 +12,8 @@ import (
 // Resolver defines the contract for resolving profiles from secrets.yml
 type Resolver interface {
 	// Resolve returns the resolved profile information. If profileName is empty,
-	// the resolver will attempt to auto-detect a single profile from secrets.yml.
+	// uses the global --profile-name flag from ConfigManager. If profileName is provided,
+	// resolves that specific profile.
 	Resolve(profileName string) (*ResolvedProfile, error)
 
 	// LoadConfig reads secrets.yml and returns the parsed configuration.
@@ -41,11 +42,17 @@ func NewResolver(cfg config.Manager, log logger.Manager, val validator.Validator
 	}
 }
 
-// Resolve resolves the profile using the provided name or auto-detects it from secrets.yml.
+// Resolve resolves the profile using the profile name from ConfigManager (--profile-name flag).
+// If no profile name is specified, the resolver will attempt to auto-detect a single profile from secrets.yml.
 func (r *resolver) Resolve(profileName string) (*ResolvedProfile, error) {
 	config, err := r.loadConfig()
 	if err != nil {
 		return nil, err
+	}
+
+	// If no profile name provided, get from ConfigManager (global --profile-name flag)
+	if profileName == "" {
+		profileName = r.configManager.GetProfileName()
 	}
 
 	// If a profile name is provided, validate it exists and return it.

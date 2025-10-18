@@ -18,18 +18,18 @@ type TreeNode struct {
 }
 
 // Tree displays a tree representation of the specified profile and environment
-func (s *service) Tree(profileName, environmentName, outputFormat string) error {
+func (s *service) Tree(environmentName, outputFormat string) error {
 	// Validate output format
 	if outputFormat != "ansi" && outputFormat != "ascii" {
 		return fmt.Errorf("invalid output format '%s': must be 'ansi' or 'ascii'", outputFormat)
 	}
 
 	// Resolve profile (auto-detect when possible)
-	resolvedProfile, err := s.profileResolver.Resolve(profileName)
+	resolvedProfile, err := s.profileResolver.Resolve("")
 	if err != nil {
 		return err
 	}
-	profileName = resolvedProfile.Name
+	profileName := resolvedProfile.Name
 
 	if resolvedProfile.Profile == nil {
 		return fmt.Errorf("profile '%s' is invalid in secrets.yml", profileName)

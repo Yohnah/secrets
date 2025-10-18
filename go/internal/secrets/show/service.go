@@ -15,7 +15,7 @@ import (
 type Service interface {
 	Status() error
 	Template() error
-	Tree(profileName, environmentName, outputFormat string) error
+	Tree(environmentName, outputFormat string) error
 	Profiles(profileFilter string) error
 	SyncedData(profileFilter string) error
 	Variables(environmentName, outputFormat, customTemplatePath string, withNoValues bool) error

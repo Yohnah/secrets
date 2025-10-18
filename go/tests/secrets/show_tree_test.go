@@ -74,7 +74,7 @@ outputs: []`
 	}
 
 	// Test show tree command
-	err = secretsMgr.ShowTree("test-tree-profile", "development", "ansi")
+	err = secretsMgr.ShowTree("development", "ansi")
 	if err != nil {
 		t.Fatalf("ShowTree failed: %v", err)
 	}
@@ -132,7 +132,7 @@ outputs: []`
 	}
 
 	// Test show tree command with ASCII format
-	err = secretsMgr.ShowTree("ascii-test", "production", "ascii")
+	err = secretsMgr.ShowTree("production", "ascii")
 	if err != nil {
 		t.Fatalf("ShowTree with ASCII format failed: %v", err)
 	}
@@ -140,69 +140,6 @@ outputs: []`
 	t.Logf("✓ Show tree command executed successfully with ASCII format")
 }
 
-// TestShowTreeInvalidProfile tests showing tree for non-existent profile
-func TestShowTreeInvalidProfile(t *testing.T) {
-	tmpDir := setupTestDir(t)
-	setupTestPassword(t)
-	initGitRepo(t, tmpDir)
-
-	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
-	os.Chdir(tmpDir)
-
-	// Create secrets.yml with test profile
-	secretsYML := `---
-metadata:
-  profile: "valid-profile"
-environments:
-  development:
-    - name: "TEST_VAR"
-      type: "envvar"
-      entry: "/Test"
-      key: "key"
-outputs: []`
-
-	secretsPath := filepath.Join(tmpDir, "secrets.yml")
-	if err := os.WriteFile(secretsPath, []byte(secretsYML), 0644); err != nil {
-		t.Fatalf("Failed to create secrets.yml: %v", err)
-	}
-
-	flags := &types.GlobalFlags{
-		Force: true,
-	}
-
-	validatorMgr := validator.NewManager()
-	configMgr := config.NewManager(flags, &types.CommandFlags{}, validatorMgr)
-	loggerMgr := logger.NewManager(false)
-	promptMgr := prompt.NewManager()
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, newMockKeePassManager(), output.NewManager(), newMockTemplateManager(), validator.NewManager())
-
-	// Setup infrastructure first
-	err := secretsMgr.Setup()
-	if err != nil {
-		t.Fatalf("Setup failed: %v", err)
-	}
-
-	// Initialize database
-	err = secretsMgr.Init()
-	if err != nil {
-		t.Fatalf("Init failed: %v", err)
-	}
-
-	// Test show tree command with non-existent profile (should fail)
-	err = secretsMgr.ShowTree("nonexistent-profile", "development", "ansi")
-	if err == nil {
-		t.Fatalf("Expected error for non-existent profile, but got nil")
-	}
-
-	if !contains(err.Error(), "nonexistent-profile") && !contains(err.Error(), "profile") && !contains(err.Error(), "not found") {
-		t.Logf("Warning: Error message doesn't mention profile issue: %v", err)
-	}
-
-	t.Logf("✓ Show tree correctly failed for non-existent profile: %v", err)
-}
-
-// TestShowTreeInvalidEnvironment tests showing tree for non-existent environment
 func TestShowTreeInvalidEnvironment(t *testing.T) {
 	tmpDir := setupTestDir(t)
 	setupTestPassword(t)
@@ -252,7 +189,7 @@ outputs: []`
 	}
 
 	// Test show tree command with non-existent environment (should fail)
-	err = secretsMgr.ShowTree("env-test", "nonexistent-env", "ansi")
+	err = secretsMgr.ShowTree("nonexistent-env", "ansi")
 	if err == nil {
 		t.Fatalf("Expected error for non-existent environment, but got nil")
 	}
@@ -314,7 +251,7 @@ outputs: []`
 	}
 
 	// Test show tree command with invalid format (should fail)
-	err = secretsMgr.ShowTree("format-test", "development", "invalid-format")
+	err = secretsMgr.ShowTree("development", "invalid-format")
 	if err == nil {
 		t.Fatalf("Expected error for invalid format, but got nil")
 	}

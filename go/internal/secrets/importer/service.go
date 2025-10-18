@@ -218,7 +218,7 @@ func (s *service) importVariablesFromMap(
 
 			// Store as attachment (now it will be created fresh)
 			dataBytes := []byte(varValue)
-			
+
 			if err := s.keepassManager.CreateAttachment(
 				resolvedProfile.Name,
 				environmentName,

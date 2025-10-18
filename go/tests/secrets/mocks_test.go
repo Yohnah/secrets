@@ -500,11 +500,20 @@ func (m *mockKeePassManager) GetAllFieldsByEnvironmentEntry(profileName, envName
 // mockConfigManager is a mock implementation of config.Manager for testing
 type mockConfigManager struct {
 	secretsFilePath string
+	profileName     string
 }
 
 func newMockConfigManager(secretsFilePath string) *mockConfigManager {
 	return &mockConfigManager{
 		secretsFilePath: secretsFilePath,
+		profileName:     "",
+	}
+}
+
+func newMockConfigManagerWithProfile(secretsFilePath, profileName string) *mockConfigManager {
+	return &mockConfigManager{
+		secretsFilePath: secretsFilePath,
+		profileName:     profileName,
 	}
 }
 
@@ -546,6 +555,10 @@ func (m *mockConfigManager) ShouldUseHomeDirectory() bool {
 
 func (m *mockConfigManager) GetPassword() (string, error) {
 	return "TestPassword123!", nil
+}
+
+func (m *mockConfigManager) GetProfileName() string {
+	return m.profileName
 }
 
 func (m *mockConfigManager) IsNoInteractive() bool {

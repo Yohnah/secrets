@@ -25,7 +25,7 @@ type Manager interface {
 	Setup() error
 	Status() error
 	ShowTemplate() error
-	ShowTree(profileName, environmentName, outputFormat string) error
+	ShowTree(environmentName, outputFormat string) error
 	ShowProfiles(profileFilter string) error
 	ShowSyncedData(profileFilter string) error
 	ShowVariables(environmentName, outputFormat, customTemplatePath string, withNoValues bool) error
@@ -82,8 +82,8 @@ func (m *manager) ShowTemplate() error {
 }
 
 // ShowTree delegates to the show service
-func (m *manager) ShowTree(profileName, environmentName, outputFormat string) error {
-	return m.showService.Tree(profileName, environmentName, outputFormat)
+func (m *manager) ShowTree(environmentName, outputFormat string) error {
+	return m.showService.Tree(environmentName, outputFormat)
 }
 
 // ShowProfiles delegates to the show service

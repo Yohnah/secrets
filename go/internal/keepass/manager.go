@@ -1118,7 +1118,7 @@ func (p *profileManager) GetAttachmentContent(profileName, envName, entryPath, a
 		if binary.Name == attachmentName {
 			// Get the binary ID from the reference
 			binaryID := binary.Value.ID
-			
+
 			// Use FindBinary which handles format version differences
 			dbBinary := p.parent.db.FindBinary(binaryID)
 			if dbBinary == nil {
@@ -1129,7 +1129,7 @@ func (p *profileManager) GetAttachmentContent(profileName, envName, entryPath, a
 			// For KDBX v3, content is base64 encoded
 			// Read directly from Content field to avoid GetContentBytes() base64 decode bug
 			content := dbBinary.Content
-			
+
 			// Handle compression if enabled (both KDBX 3 and 4 support this)
 			if dbBinary.Compressed.Bool {
 				reader, err := gzip.NewReader(bytes.NewReader(content))
@@ -1142,7 +1142,7 @@ func (p *profileManager) GetAttachmentContent(profileName, envName, entryPath, a
 					return nil, fmt.Errorf("failed to read compressed attachment '%s': %w", attachmentName, err)
 				}
 			}
-			
+
 			return content, nil
 		}
 	}

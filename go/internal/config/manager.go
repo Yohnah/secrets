@@ -35,6 +35,7 @@ type Manager interface {
 	GetPassword() (string, error)
 	IsNoInteractive() bool
 	GenerateSecurePassword() string
+	GetProfileName() string
 }
 
 // Config holds the complete application configuration
@@ -352,7 +353,12 @@ func (m *manager) ShouldUseHomeDirectory() bool {
 	return m.commandFlags.SetupDirInHome
 }
 
-// GetPassword returns the password from environment variable if available
+// GetProfileName returns the profile name specified via --profile-name flag
+func (m *manager) GetProfileName() string {
+	return m.globalFlags.ProfileName
+}
+
+// GetPassword returns the password from configuration or environment
 func (m *manager) GetPassword() (string, error) {
 	password := os.Getenv("SECRETS_YOHNAH_PASSWORD")
 	if password == "" {
