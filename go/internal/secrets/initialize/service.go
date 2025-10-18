@@ -121,7 +121,20 @@ func (s *service) Init() error {
 
 	s.logger.Success("✓ Database opened successfully!")
 
-	// Step 5: Load profiles from secrets.yml
+	// Step 5: Confirm action if --profile-name is specified (safety check)
+	profileName := s.config.GetProfileName()
+	if profileName != "" {
+		confirmed, err := s.prompt.Confirm(fmt.Sprintf("Are you sure you want to load ONLY the profile '%s' from secrets.yml?", profileName))
+		if err != nil {
+			return fmt.Errorf("confirmation prompt failed: %w", err)
+		}
+		if !confirmed {
+			s.logger.Info("Operation cancelled by user")
+			return nil
+		}
+	}
+
+	// Step 6: Load profiles from secrets.yml
 	if err := s.loadProfilesFromSecretsYML(dbPath, keyfilePath, securePassword.String(), targetDir); err != nil {
 		return fmt.Errorf("failed to load profiles from secrets.yml: %w", err)
 	}
@@ -629,7 +642,30 @@ func (s *service) validateAndReadSecretsYML() (*validator.SecretsConfig, error) 
 // applySecretsConfig applies a validated secrets configuration to the KeePass database
 // Assumes the configuration has already been validated
 func (s *service) applySecretsConfig(secretsConfig *validator.SecretsConfig, dbPath, keyfilePath, password string) error {
-	s.logger.Info(fmt.Sprintf("Loading %d profile(s) from secrets.yml...", len(secretsConfig.Profiles)))
+	// Get profile name from config (respects --profile-name flag)
+	specifiedProfileName := s.config.GetProfileName()
+
+	// Filter profiles if --profile-name is specified
+	var profilesToProcess []validator.Profile
+	if specifiedProfileName != "" {
+		// Find the specific profile
+		for _, profile := range secretsConfig.Profiles {
+			if profile.Metadata.Profile == specifiedProfileName {
+				profilesToProcess = append(profilesToProcess, profile)
+				break
+			}
+		}
+
+		// If profile not found, return error
+		if len(profilesToProcess) == 0 {
+			return fmt.Errorf("profile '%s' not found in secrets.yml", specifiedProfileName)
+		}
+	} else {
+		// No profile specified, process all profiles
+		profilesToProcess = secretsConfig.Profiles
+	}
+
+	s.logger.Info(fmt.Sprintf("Loading %d profile(s) from secrets.yml...", len(profilesToProcess)))
 
 	// Open database session ONCE for all operations
 	if s.keepass.IsOpen() {
@@ -650,7 +686,7 @@ func (s *service) applySecretsConfig(secretsConfig *validator.SecretsConfig, dbP
 	profilesUpdated := 0
 	profilesUnchanged := 0
 
-	for _, profile := range secretsConfig.Profiles {
+	for _, profile := range profilesToProcess {
 		profileName := profile.Metadata.Profile
 
 		// Check if profile already exists
