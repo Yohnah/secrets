@@ -75,7 +75,7 @@ func (s *service) ImportVariables(environmentName string, filePaths []string, de
 	}
 
 	// Step 3: Get password
-	securePassword, err := common.GetPassword(s.configManager, nil, s.loggerManager, false)
+	securePassword, err := common.GetPassword(s.configManager, s.promptManager, s.loggerManager, false)
 	if err != nil {
 		return err
 	}
