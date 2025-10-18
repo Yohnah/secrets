@@ -2,12 +2,10 @@ package cli
 
 import (
 	"github.com/Yohnah/secrets/internal/config"
-	"github.com/Yohnah/secrets/internal/keepass"
 	"github.com/Yohnah/secrets/internal/logger"
 	"github.com/Yohnah/secrets/internal/output"
 	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/secrets"
-	"github.com/Yohnah/secrets/internal/template"
 	"github.com/Yohnah/secrets/internal/types"
 	"github.com/Yohnah/secrets/internal/validator"
 )
@@ -54,43 +52,9 @@ type ManagerContext struct {
 //	   os.Exit(1)
 //	}
 func NewManagerContext(commandFlags *types.CommandFlags) *ManagerContext {
-	// Step 1: Get global flags (captured by Cobra)
-	globalFlags := GetGlobalFlags()
-
-	// Step 2: Instantiate ValidatorManager
-	validatorMgr := validator.NewManager()
-
-	// Step 3: Instantiate ConfigManager (with ValidatorManager injected)
-	// CliMgr feeds ALL raw data (global + command flags) to ConfigMgr
-	configMgr := config.NewManager(globalFlags, commandFlags, validatorMgr)
-
-	// Step 4: Instantiate LoggerManager
-	loggerMgr := logger.NewManager(globalFlags.Verbose)
-
-	// Step 5: Instantiate PromptManager
-	promptMgr := prompt.NewManager()
-
-	// Step 6: Instantiate OutputManager
-	outputMgr := output.NewManager()
-
-	// Step 7: Instantiate KeePassManager
-	keepassMgr := keepass.NewManager()
-
-	// Step 8: Instantiate TemplateManager
-	templateMgr := template.NewManager()
-
-	// Step 9: Instantiate SecretsManager (CORE - business logic)
-	// SecretsManager receives all dependencies via constructor injection
-	secretsMgr := secrets.NewManager(configMgr, loggerMgr, promptMgr, keepassMgr, outputMgr, templateMgr, validatorMgr)
-
-	return &ManagerContext{
-		Config:    configMgr,
-		Logger:    loggerMgr,
-		Prompt:    promptMgr,
-		Output:    outputMgr,
-		Secrets:   secretsMgr,
-		Validator: validatorMgr,
-	}
+	// Use the new container for dependency injection
+	container := NewContainer(commandFlags)
+	return container.GetManagerContext()
 }
 
 // NewManagerContextForTest is an exported version of NewManagerContext for testing purposes.

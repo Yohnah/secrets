@@ -96,6 +96,18 @@ security-check: install-deps ## Run security checks (vulnerability scanning)
 		exit 1; \
 	fi
 
+.PHONY: architecture-check
+architecture-check: install-deps ## Run architecture compliance checks
+	@echo "Running architecture compliance checks..."
+	@cd $(GO_DIR) && go test -run TestManagersUseInterfaces ./tests/architecture/
+	@cd $(GO_DIR) && go test -run TestNoCircularDependencies ./tests/architecture/
+	@cd $(GO_DIR) && go test -run TestAllTestsUseMocks ./tests/architecture/
+	@cd $(GO_DIR) && go test -run TestOutputManagerIsUsedForAllOutput ./tests/architecture/
+	@cd $(GO_DIR) && go test -run TestSecretsMgrIsCore ./tests/architecture/
+	@cd $(GO_DIR) && go test -run TestCLICommandsUseFactory ./tests/architecture/
+	@echo ""
+	@printf "\033[32;1m✓ All architecture checks completed successfully\033[0m\n"
+
 .PHONY: clean
 clean: ## Clean test artifacts, temporary files and binaries
 	@echo "Cleaning test artifacts and binaries..."

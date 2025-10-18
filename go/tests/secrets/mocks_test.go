@@ -664,3 +664,91 @@ func (m *mockValidatorManager) ValidateUniqueFieldsInEntry(fields []string, entr
 func newMockTemplateManager() template.Manager {
 	return template.NewManager()
 }
+
+// mockImporterService is a mock implementation of importer.Service for testing
+type mockImporterService struct {
+	importVariablesCalled bool
+	importContentsCalled  bool
+	lastEnvironmentName   string
+	lastFilePaths         []string
+	lastDecodeBase64      bool
+	returnError           error
+}
+
+func newMockImporterService() *mockImporterService {
+	return &mockImporterService{}
+}
+
+func (m *mockImporterService) ImportVariables(environmentName string, filePaths []string, decodeBase64 bool) error {
+	m.importVariablesCalled = true
+	m.lastEnvironmentName = environmentName
+	m.lastFilePaths = filePaths
+	m.lastDecodeBase64 = decodeBase64
+	return m.returnError
+}
+
+func (m *mockImporterService) ImportContents(environmentName string, filePaths []string, decodeBase64 bool) error {
+	m.importContentsCalled = true
+	m.lastEnvironmentName = environmentName
+	m.lastFilePaths = filePaths
+	m.lastDecodeBase64 = decodeBase64
+	return m.returnError
+}
+
+// mockShowService is a mock implementation of show.Service for testing
+type mockShowService struct {
+	statusCalled           bool
+	templateCalled         bool
+	treeCalled             bool
+	profilesCalled         bool
+	syncedDataCalled       bool
+	variablesCalled        bool
+	lastEnvironmentName    string
+	lastOutputFormat       string
+	lastProfileFilter      string
+	lastCustomTemplatePath string
+	lastWithNoValues       bool
+	returnError            error
+}
+
+func newMockShowService() *mockShowService {
+	return &mockShowService{}
+}
+
+func (m *mockShowService) Status() error {
+	m.statusCalled = true
+	return m.returnError
+}
+
+func (m *mockShowService) Template() error {
+	m.templateCalled = true
+	return m.returnError
+}
+
+func (m *mockShowService) Tree(environmentName, outputFormat string) error {
+	m.treeCalled = true
+	m.lastEnvironmentName = environmentName
+	m.lastOutputFormat = outputFormat
+	return m.returnError
+}
+
+func (m *mockShowService) Profiles(profileFilter string) error {
+	m.profilesCalled = true
+	m.lastProfileFilter = profileFilter
+	return m.returnError
+}
+
+func (m *mockShowService) SyncedData(profileFilter string) error {
+	m.syncedDataCalled = true
+	m.lastProfileFilter = profileFilter
+	return m.returnError
+}
+
+func (m *mockShowService) Variables(environmentName, outputFormat, customTemplatePath string, withNoValues bool) error {
+	m.variablesCalled = true
+	m.lastEnvironmentName = environmentName
+	m.lastOutputFormat = outputFormat
+	m.lastCustomTemplatePath = customTemplatePath
+	m.lastWithNoValues = withNoValues
+	return m.returnError
+}

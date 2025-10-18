@@ -121,7 +121,19 @@ func (s *service) Init() error {
 
 	s.logger.Success("✓ Database opened successfully!")
 
-	// Step 5: Confirm action if --profile-name is specified (safety check)
+	// Step 5: Ask for confirmation if not in force mode (safety check)
+	if !s.config.IsNoInteractive() {
+		confirmed, err := s.prompt.Confirm("Are you sure you want to load profiles from secrets.yml into the database? This may modify your existing database structure.")
+		if err != nil {
+			return fmt.Errorf("confirmation prompt failed: %w", err)
+		}
+		if !confirmed {
+			s.logger.Info("Operation cancelled by user")
+			return nil
+		}
+	}
+
+	// Step 6: Confirm action if --profile-name is specified (safety check)
 	profileName := s.config.GetProfileName()
 	if profileName != "" {
 		confirmed, err := s.prompt.Confirm(fmt.Sprintf("Are you sure you want to load ONLY the profile '%s' from secrets.yml?", profileName))
@@ -134,7 +146,7 @@ func (s *service) Init() error {
 		}
 	}
 
-	// Step 6: Load profiles from secrets.yml
+	// Step 7: Load profiles from secrets.yml
 	if err := s.loadProfilesFromSecretsYML(dbPath, keyfilePath, securePassword.String(), targetDir); err != nil {
 		return fmt.Errorf("failed to load profiles from secrets.yml: %w", err)
 	}

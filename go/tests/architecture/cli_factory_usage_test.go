@@ -40,6 +40,7 @@ func TestCLICommandsUseFactory(t *testing.T) {
 	excludedFiles := map[string]bool{
 		"root.go":         true, // Defines rootCmd and global flags
 		"factory.go":      true, // Is the factory itself
+		"container.go":    true, // Is part of the factory pattern
 		"factory_test.go": true, // Tests for the factory
 	}
 
@@ -164,6 +165,7 @@ func TestCLICommandsNoDuplicatedInitialization(t *testing.T) {
 	// Files that CAN contain these patterns (not violations)
 	allowedFiles := map[string]bool{
 		"factory.go":      true, // Legitimate factory implementation
+		"container.go":    true, // Legitimate container implementation
 		"factory_test.go": true, // Tests can instantiate managers
 	}
 

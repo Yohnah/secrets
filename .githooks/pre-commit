@@ -10,6 +10,9 @@ echo "Running pre-commit checks..."
 echo "Running tests..."
 make tests
 
+echo "Running architecture checks..."
+make architecture-check
+
 echo "Running govulncheck..."
 if command -v govulncheck &> /dev/null; then
     make security-check
