@@ -1,8 +1,7 @@
 #!/bin/bash
 
 # Pre-push hook for secrets project
-# TEMPORARILY BLOCKS ALL PUSHES
-# Remove or modify this hook when ready to allow pushes
+# Temporarily blocks all pushes during development to prevent accidental pushes
 
 set -e
 
@@ -16,7 +15,7 @@ echo "1. Remove this hook: rm .githooks/pre-push"
 echo "2. Bypass temporarily: git push --no-verify"
 echo ""
 echo "Current branch: $(git branch --show-current)"
-echo "Remote: $(git remote get-url origin 2>/dev/null || echo 'none')"
+echo "Remote: $(git remote get-url origin)"
 echo ""
 
 exit 1
