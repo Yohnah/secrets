@@ -21,6 +21,7 @@ var (
 	variablesFlagOutput       string
 	variablesFlagTemplate     string
 	variablesFlagWithNoValues bool
+	sshkeysFlagOutput         string
 )
 
 // showCmd represents the show command
@@ -188,6 +189,48 @@ Examples:
 	RunE: runShowVariables,
 }
 
+// showSSHKeysCmd represents the show sshkeys command
+var showSSHKeysCmd = &cobra.Command{
+	Use:   "sshkeys <environment-name> [item-name]",
+	Short: "Show SSH keys for a specific environment",
+	Long: `Display SSH keys (items with type: sshkey) from the specified environment.
+
+Two modes of operation:
+
+1. List Mode (no item-name provided):
+   Lists all SSH key items in the environment with their entry paths.
+   Does NOT require KeePass password (reads only from secrets.yml).
+   
+   Available output formats:
+     - table (default): Table format
+     - json: JSON format
+     - yaml: YAML format
+
+2. Content Mode (item-name provided):
+   Displays the actual SSH private key content from KeePass attachment.
+   REQUIRES KeePass password to access the database.
+   Outputs the raw private key content.
+
+Profile name can be specified via:
+  1. Flag: --profile-name (recommended)
+  2. Auto-detection: if secrets.yml defines a single profile, it's selected automatically
+
+Examples:
+  # List all SSH keys in production (table format)
+  secrets show sshkeys production
+
+  # List all SSH keys in JSON format
+  secrets show sshkeys production --output json
+
+  # Show specific SSH key content
+  secrets show sshkeys production DB_HOST
+
+  # Show SSH key for specific profile
+  secrets show sshkeys production DB_HOST --profile-name webapp-prod`,
+	Args: cobra.RangeArgs(1, 2),
+	RunE: runShowSSHKeys,
+}
+
 func init() {
 	// Register show command with root
 	rootCmd.AddCommand(showCmd)
@@ -199,6 +242,7 @@ func init() {
 	showCmd.AddCommand(showProfilesCmd)
 	showCmd.AddCommand(showSyncedDataCmd)
 	showCmd.AddCommand(showVariablesCmd)
+	showCmd.AddCommand(showSSHKeysCmd)
 
 	// Flags for template subcommand only
 	showTemplateCmd.Flags().BoolVar(&flagMinimal, "minimal", false, "Show minimal template without examples")
@@ -220,6 +264,9 @@ func init() {
 	showVariablesCmd.Flags().StringVarP(&variablesFlagOutput, "output", "o", "yaml", "Output format: json, yaml, dotenv, k8s, shell.sh, etc. (default: yaml)")
 	showVariablesCmd.Flags().StringVarP(&variablesFlagTemplate, "template", "t", "", "Path to custom template file (overrides --output)")
 	showVariablesCmd.Flags().BoolVar(&variablesFlagWithNoValues, "with-no-values", false, "Show variables without their values (empty values)")
+
+	// Flags for sshkeys subcommand only
+	showSSHKeysCmd.Flags().StringVarP(&sshkeysFlagOutput, "output", "o", "table", "Output format: table, json, yaml (default: table)")
 
 	// Update show template help with available templates
 	updateShowTemplateHelp()
@@ -481,6 +528,43 @@ func runShowVariables(cmd *cobra.Command, args []string) error {
 	if err := managers.Secrets.ShowVariables(environmentName, variablesFlagOutput, customTemplateContent, variablesFlagWithNoValues); err != nil {
 		managers.Logger.Error(err.Error())
 		os.Exit(1)
+	}
+
+	return nil
+}
+
+func runShowSSHKeys(cmd *cobra.Command, args []string) error {
+	// Extract environment name from arguments
+	environmentName := args[0]
+
+	// Check if item name is provided (content mode) or not (list mode)
+	var itemName string
+	if len(args) > 1 {
+		itemName = args[1]
+	}
+
+	// CliMgr captures ALL command-specific flags and feeds them to ConfigMgr
+	commandFlags := &types.CommandFlags{
+		OutputFormat: sshkeysFlagOutput,
+	}
+
+	// Create manager context with captured flags
+	managers := NewManagerContext(commandFlags)
+
+	// Execute business logic (delegate all decisions to CORE)
+	// SecretsManager will pull processed config from ConfigMgr
+	if itemName != "" {
+		// Content mode: show specific SSH key content
+		if err := managers.Secrets.ShowSSHKeyContent(environmentName, itemName); err != nil {
+			managers.Logger.Error(err.Error())
+			os.Exit(1)
+		}
+	} else {
+		// List mode: show all SSH keys
+		if err := managers.Secrets.ShowSSHKeys(environmentName, sshkeysFlagOutput); err != nil {
+			managers.Logger.Error(err.Error())
+			os.Exit(1)
+		}
 	}
 
 	return nil

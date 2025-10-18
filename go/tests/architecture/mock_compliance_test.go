@@ -87,6 +87,7 @@ func TestAllTestsUseMocks(t *testing.T) {
 			"setup_test.go",                         // Tests complete setup process
 			"status_test.go",                        // Tests status reporting functionality
 			"show_profiles_test.go",                 // Tests profile display operations
+			"show_sshkeys_test.go",                  // Tests SSH keys display operations
 			"show_tree_test.go",                     // Tests tree structure display
 			"show_template_test.go",                 // Tests template rendering
 			"show_variables_with_no_values_test.go", // Tests --with-no-values flag (bypasses KeePass)

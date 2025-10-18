@@ -29,6 +29,8 @@ type Manager interface {
 	ShowProfiles(profileFilter string) error
 	ShowSyncedData(profileFilter string) error
 	ShowVariables(environmentName, outputFormat, customTemplatePath string, withNoValues bool) error
+	ShowSSHKeys(environmentName, outputFormat string) error
+	ShowSSHKeyContent(environmentName, itemName string) error
 	SnapshotsList(profileName string) error
 	SnapshotsNew(profileName string) error
 	SnapshotsRestore(profileName, version string) error
@@ -99,6 +101,16 @@ func (m *manager) ShowSyncedData(profileFilter string) error {
 // ShowVariables delegates to the show service
 func (m *manager) ShowVariables(environmentName, outputFormat, customTemplateContent string, withNoValues bool) error {
 	return m.showService.Variables(environmentName, outputFormat, customTemplateContent, withNoValues)
+}
+
+// ShowSSHKeys delegates to the show service
+func (m *manager) ShowSSHKeys(environmentName, outputFormat string) error {
+	return m.showService.SSHKeys(environmentName, outputFormat)
+}
+
+// ShowSSHKeyContent delegates to the show service
+func (m *manager) ShowSSHKeyContent(environmentName, itemName string) error {
+	return m.showService.SSHKeyContent(environmentName, itemName)
 }
 
 // SnapshotsList delegates to the snapshots service
