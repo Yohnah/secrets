@@ -3,6 +3,7 @@ package secrets_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -238,6 +239,10 @@ func TestImportContents_FileNotFound(t *testing.T) {
 
 // TestImportContents_PermissionDenied tests error handling for permission denied
 func TestImportContents_PermissionDenied(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("File permissions test not applicable on Windows (chmod 0000 doesn't work)")
+	}
+
 	if os.Getuid() == 0 {
 		t.Skip("Skipping permission test when running as root")
 	}

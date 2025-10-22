@@ -10,6 +10,25 @@ import (
 	"testing"
 )
 
+// findModuleRoot finds the root directory of the Go module
+func findModuleRoot() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", os.ErrNotExist
+		}
+		dir = parent
+	}
+}
+
 // TestCLICommandsUseFactory verifies that all CLI commands use the factory
 // NewManagerContext() instead of duplicating manager initialization code.
 //
@@ -27,8 +46,12 @@ import (
 // ALL CLI commands MUST use NewManagerContext() to obtain their managers.
 // This eliminates duplication and centralizes the 7-step initialization pattern.
 func TestCLICommandsUseFactory(t *testing.T) {
-	// Arrange: CLI commands directory
-	cliDir := "/workspaces/secrets/go/internal/cli"
+	// Arrange: Find module root and construct CLI directory path
+	root, err := findModuleRoot()
+	if err != nil {
+		t.Fatalf("Failed to find module root: %v", err)
+	}
+	cliDir := filepath.Join(root, "internal", "cli")
 
 	// Act: Read all .go files in the CLI directory
 	files, err := os.ReadDir(cliDir)
@@ -149,8 +172,12 @@ func fileUsesFactory(filePath string) (bool, error) {
 // - factory.go: Contains the legitimate implementation
 // - Tests: Can instantiate managers for unit tests
 func TestCLICommandsNoDuplicatedInitialization(t *testing.T) {
-	// Arrange: CLI commands directory
-	cliDir := "/workspaces/secrets/go/internal/cli"
+	// Arrange: Find module root and construct CLI directory path
+	root, err := findModuleRoot()
+	if err != nil {
+		t.Fatalf("Failed to find module root: %v", err)
+	}
+	cliDir := filepath.Join(root, "internal", "cli")
 
 	// Patterns that indicate manual initialization (duplication)
 	duplicationPatterns := []string{
@@ -217,8 +244,12 @@ func TestCLICommandsNoDuplicatedInitialization(t *testing.T) {
 // TestFactoryFileExists verifies that the factory.go file exists and is accessible.
 // This test ensures that the factory is available for all commands.
 func TestFactoryFileExists(t *testing.T) {
-	// Arrange
-	factoryPath := "/workspaces/secrets/go/internal/cli/factory.go"
+	// Arrange: Find module root and construct factory path
+	root, err := findModuleRoot()
+	if err != nil {
+		t.Fatalf("Failed to find module root: %v", err)
+	}
+	factoryPath := filepath.Join(root, "internal", "cli", "factory.go")
 
 	// Act
 	info, err := os.Stat(factoryPath)

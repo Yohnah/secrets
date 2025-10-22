@@ -3,6 +3,7 @@ package secrets_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/Yohnah/secrets/internal/config"
@@ -65,12 +66,16 @@ func TestSetupCreatesAllFiles(t *testing.T) {
 	}
 
 	// Verify keyfile has secure permissions (0600)
-	keyfileInfo, err := os.Stat(keyfilePath)
-	if err != nil {
-		t.Fatalf("Failed to stat keyfile: %v", err)
-	}
-	if keyfileInfo.Mode().Perm() != 0600 {
-		t.Errorf("Keyfile permissions: got %o, want 0600", keyfileInfo.Mode().Perm())
+	// Note: On Windows, file permissions work differently (ACLs instead of Unix permissions)
+	// Skip this validation on Windows as chmod 0600 doesn't work the same way
+	if runtime.GOOS != "windows" {
+		keyfileInfo, err := os.Stat(keyfilePath)
+		if err != nil {
+			t.Fatalf("Failed to stat keyfile: %v", err)
+		}
+		if keyfileInfo.Mode().Perm() != 0600 {
+			t.Errorf("Keyfile permissions: got %o, want 0600", keyfileInfo.Mode().Perm())
+		}
 	}
 }
 

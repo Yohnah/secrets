@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Yohnah/secrets/tests/testutils"
 )
 
 // TestNoHardcodedPasswords ensures no hardcoded passwords in source code
@@ -58,7 +60,8 @@ func TestNoHardcodedPasswords(t *testing.T) {
 				!strings.Contains(line, "SECRETS_YOHNAH_PASSWORD") &&
 				!strings.Contains(line, "TestPassword") && // Allow test passwords
 				!strings.Contains(line, "testpassword") { // Allow test passwords
-				violations = append(violations, filepath.Base(path)+":"+string(rune(i+1))+": "+strings.TrimSpace(line))
+				relPath, _ := filepath.Rel(root, path)
+				violations = append(violations, testutils.NormalizePath(relPath)+":"+string(rune(i+1))+": "+strings.TrimSpace(line))
 			}
 		}
 
@@ -116,7 +119,8 @@ func TestFilePermissionsSecurity(t *testing.T) {
 					strings.Contains(line, "keyData") {
 					// Must use 0600
 					if !strings.Contains(line, "0600") {
-						violations = append(violations, filepath.Base(path)+":"+string(rune(i+1)))
+						relPath, _ := filepath.Rel(root, path)
+						violations = append(violations, testutils.NormalizePath(relPath)+":"+string(rune(i+1)))
 					}
 				}
 			}
@@ -125,7 +129,8 @@ func TestFilePermissionsSecurity(t *testing.T) {
 			if strings.Contains(line, "os.OpenFile") {
 				if strings.Contains(line, ".kdbx") || strings.Contains(line, "dbPath") {
 					if !strings.Contains(line, "0600") {
-						violations = append(violations, filepath.Base(path)+":"+string(rune(i+1)))
+						relPath, _ := filepath.Rel(root, path)
+						violations = append(violations, testutils.NormalizePath(relPath)+":"+string(rune(i+1)))
 					}
 				}
 			}
@@ -190,12 +195,13 @@ func TestNoSensitiveDataInLogs(t *testing.T) {
 					!strings.Contains(line, "GetPassword") &&
 					!strings.Contains(line, "//") {
 
-					// Check if value is printed
-					if strings.Contains(line, `"%s"`) ||
-						strings.Contains(line, `"%v"`) ||
-						strings.Contains(line, "String()") {
-						violations = append(violations, filepath.Base(path)+":"+string(rune(i+1)))
-					}
+				// Check if value is printed
+				if strings.Contains(line, `"%s"`) ||
+					strings.Contains(line, `"%v"`) ||
+					strings.Contains(line, "String()") {
+					relPath, _ := filepath.Rel(root, path)
+					violations = append(violations, testutils.NormalizePath(relPath)+":"+string(rune(i+1)))
+				}
 				}
 			}
 		}
@@ -249,7 +255,8 @@ func TestCryptoRandUsage(t *testing.T) {
 			// Check for math/rand import
 			if strings.Contains(line, `"math/rand"`) && !strings.HasPrefix(strings.TrimSpace(line), "//") {
 				mathRandUsed = true
-				violations = append(violations, filepath.Base(path)+":"+string(rune(i+1))+": uses math/rand instead of crypto/rand")
+				relPath, _ := filepath.Rel(root, path)
+				violations = append(violations, testutils.NormalizePath(relPath)+":"+string(rune(i+1))+": uses math/rand instead of crypto/rand")
 			}
 
 			// Check for crypto/rand usage
@@ -323,7 +330,8 @@ func TestPasswordMemoryCleanup(t *testing.T) {
 					}
 				}
 				if !foundDefer && !strings.Contains(path, "types") {
-					violations = append(violations, filepath.Base(path)+":"+string(rune(i+1))+": securePassword without defer Clear()")
+					relPath, _ := filepath.Rel(root, path)
+					violations = append(violations, testutils.NormalizePath(relPath)+":"+string(rune(i+1))+": securePassword without defer Clear()")
 				}
 			}
 		}
@@ -437,12 +445,13 @@ func TestErrorMessageSanitization(t *testing.T) {
 			if strings.Contains(line, "fmt.Errorf") || strings.Contains(line, "errors.New") {
 				// Look for SecureValue.String() or SecurePassword.String() in error messages
 				if strings.Contains(line, ".String()") {
-					// Check if it's a secure type
-					if strings.Contains(line, "securePassword") ||
-						strings.Contains(line, "secureValue") ||
-						strings.Contains(line, "password.String()") {
-						violations = append(violations, filepath.Base(path)+":"+string(rune(i+1))+": Sensitive data in error message")
-					}
+				// Check if it's a secure type
+				if strings.Contains(line, "securePassword") ||
+					strings.Contains(line, "secureValue") ||
+					strings.Contains(line, "password.String()") {
+					relPath, _ := filepath.Rel(root, path)
+					violations = append(violations, testutils.NormalizePath(relPath)+":"+string(rune(i+1))+": Sensitive data in error message")
+				}
 				}
 			}
 		}
@@ -502,8 +511,9 @@ func TestCentralizedPasswordAccess(t *testing.T) {
 			// Check for direct os.Getenv("SECRETS_YOHNAH_PASSWORD") usage
 			if strings.Contains(line, `os.Getenv("SECRETS_YOHNAH_PASSWORD")`) {
 				// Make sure it's not in config manager or helpers
-				if !strings.Contains(path, "/config/") && !strings.Contains(path, "/common/helpers.go") {
-					violations = append(violations, filepath.Base(path)+":"+string(rune(i+1))+": Direct password env access")
+				if !testutils.ContainsPath(path, "/config/") && !testutils.ContainsPath(path, "/common/helpers.go") {
+					relPath, _ := filepath.Rel(root, path)
+					violations = append(violations, testutils.NormalizePath(relPath)+":"+string(rune(i+1))+": Direct password env access")
 				}
 			}
 		}

@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/Yohnah/secrets/tests/testutils"
 )
 
 // TestAllTestsUseMocks validates that all unit tests use mocks instead of real artifacts
@@ -69,12 +71,12 @@ func TestAllTestsUseMocks(t *testing.T) {
 		}
 
 		// Skip mock files - these files define mocks and may legitimately use real operations
-		if strings.Contains(currentFilePath, "mocks_test.go") {
+		if testutils.ContainsPath(currentFilePath, "mocks_test.go") {
 			return nil
 		}
 
 		// Skip architecture tests - these tests validate the architecture itself and may need real operations
-		if strings.Contains(currentFilePath, "architecture/") {
+		if testutils.ContainsPath(currentFilePath, "architecture/") {
 			return nil
 		}
 
