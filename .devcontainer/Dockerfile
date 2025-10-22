@@ -71,21 +71,21 @@ RUN echo "Setting up Go environment directories..." && \
     mkdir -p /go/bin && \
     echo "Go environment directories created with proper permissions"
 
-# Install additional tools for Go development
-RUN echo "Installing Go development tools..." && \
-    export GOPATH=/go && \
-    CGO_ENABLED=1 go install golang.org/x/tools/gopls@latest && \
-    CGO_ENABLED=1 go install github.com/go-delve/delve/cmd/dlv@latest && \
-    CGO_ENABLED=0 go install honnef.co/go/tools/cmd/staticcheck@latest && \
-    CGO_ENABLED=0 go install golang.org/x/tools/cmd/goimports@latest && \
-    echo "Installing golangci-lint (may take longer)..." && \
-    (CGO_ENABLED=0 go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest || \
-     echo "Warning: golangci-lint installation failed, will be available for manual install") && \
-    echo "Go tools installation completed"
-
 # Configure Go environment variables for all users
 ENV GOPATH="/go"
 ENV PATH="/usr/local/go/bin:/go/bin:${PATH}"
+
+# Install Task (Taskfile) before using it
+RUN sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+
+# Copy Taskfile and tools for development environment setup
+COPY Taskfile.yml /tmp/Taskfile.yml
+COPY tools /tmp/tools
+
+# Install Go development tools using Taskfile
+RUN cd /tmp && \
+    task prepare-development-environment && \
+    rm -rf /tmp/Taskfile.yml /tmp/tools
 
 # Create symbolic links for VS Code compatibility (fallback for user installations)
 RUN echo "Setting up VS Code Go tools compatibility..." && \
@@ -112,9 +112,6 @@ RUN echo "Creating permission fix script..." && \
     echo "fi" >> /usr/local/bin/fix-go-permissions && \
     chmod +x /usr/local/bin/fix-go-permissions && \
     echo "Permission fix script created"
-
-# Install Task (Taskfile)
-RUN sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
 
 # Set working directory
 WORKDIR /workspaces/secrets

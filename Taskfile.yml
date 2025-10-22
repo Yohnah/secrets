@@ -140,6 +140,21 @@ tasks:
           GOARCH: arm64
       - cmd: 'echo "All binaries built successfully in {{.DIST_DIR}}/"'
 
+  prepare-development-environment:
+    desc: Install all Go development tools (LSP, debugger, linters, formatters)
+    cmds:
+      - echo "Installing Go development tools..."
+      - task: install-go-gopls
+      - echo "Installing delve debugger..."
+      - task: install-go-delve
+      - echo "Installing staticcheck..."
+      - task: install-go-staticcheck
+      - echo "Installing goimports..."
+      - task: install-go-goimports
+      - echo "Installing golangci-lint..."
+      - task: install-go-golangci-lint
+      - echo "Development environment prepared successfully"
+
   install-go-dependencies:
     internal: true
     dir: "{{.GO_DIR}}"
@@ -156,6 +171,36 @@ tasks:
     internal: true
     cmds:
       - cmd: '{{.GOCMD}} install github.com/mfridman/tparse@latest'
+
+  install-go-gopls:
+    internal: true
+    cmds:
+      - cmd: 'CGO_ENABLED=1 {{.GOCMD}} install golang.org/x/tools/gopls@latest'
+
+  install-go-delve:
+    internal: true
+    cmds:
+      - cmd: 'CGO_ENABLED=1 {{.GOCMD}} install github.com/go-delve/delve/cmd/dlv@latest'
+        platforms: [linux, darwin]
+      - cmd: 'CGO_ENABLED=1 {{.GOCMD}} install github.com/go-delve/delve/cmd/dlv@latest'
+        platforms: [windows/amd64]
+      - cmd: 'echo "Warning: Delve debugger is not supported on Windows ARM64, skipping installation"'
+        platforms: [windows/arm64]
+
+  install-go-staticcheck:
+    internal: true
+    cmds:
+      - cmd: 'CGO_ENABLED=0 {{.GOCMD}} install honnef.co/go/tools/cmd/staticcheck@latest'
+
+  install-go-goimports:
+    internal: true
+    cmds:
+      - cmd: 'CGO_ENABLED=0 {{.GOCMD}} install golang.org/x/tools/cmd/goimports@latest'
+
+  install-go-golangci-lint:
+    internal: true
+    cmds:
+      - cmd: 'CGO_ENABLED=0 {{.GOCMD}} install github.com/golangci/golangci-lint/cmd/golangci-lint@latest'
 
   configure-git-hooks:
     internal: true
