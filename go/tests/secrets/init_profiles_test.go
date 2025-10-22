@@ -264,7 +264,7 @@ environments:
 
 outputs: []`
 
-	secretsYMLPath := filepath.Join(tempDir, "secrets.yml")
+	secretsYMLPath := filepath.Join(tempDir, config.SecretsYMLFilename)
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {
 		t.Fatalf("Failed to create secrets.yml: %v", err)
 	}
@@ -459,7 +459,7 @@ environments:
 
 outputs: []`
 
-	secretsYMLPath := filepath.Join(tempDir, "secrets.yml")
+	secretsYMLPath := filepath.Join(tempDir, config.SecretsYMLFilename)
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYMLContent), 0644); err != nil {
 		t.Fatalf("Failed to create secrets.yml: %v", err)
 	}
@@ -596,7 +596,7 @@ environments:
       key: "Password"
 outputs: []
 `
-	secretsYMLPath := filepath.Join(testDir, "secrets.yml")
+	secretsYMLPath := filepath.Join(testDir, config.SecretsYMLFilename)
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYML), 0644); err != nil {
 		t.Fatalf("Failed to write secrets.yml: %v", err)
 	}
@@ -753,7 +753,7 @@ environments:
       key: "token"
 outputs: []
 `
-	secretsYMLPath := filepath.Join(testDir, "secrets.yml")
+	secretsYMLPath := filepath.Join(testDir, config.SecretsYMLFilename)
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYML), 0644); err != nil {
 		t.Fatalf("Failed to write secrets.yml: %v", err)
 	}
@@ -862,7 +862,7 @@ environments:
       key: "Password"
 outputs: []
 `
-	secretsYMLPath := filepath.Join(testDir, "secrets.yml")
+	secretsYMLPath := filepath.Join(testDir, config.SecretsYMLFilename)
 	if err := os.WriteFile(secretsYMLPath, []byte(secretsYML), 0644); err != nil {
 		t.Fatalf("Failed to write secrets.yml: %v", err)
 	}

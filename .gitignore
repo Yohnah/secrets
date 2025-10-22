@@ -119,6 +119,15 @@ secrets.yml
 *.secrets.yaml
 *.secrets.yml
 
+# Secrets configuration files (new naming - capitalized)
+Secrets.yaml
+Secrets.yml
+*.Secrets.yaml
+*.Secrets.yml
+
+# Exception: Allow template files (part of source code)
+!**/templates/*.tpl.yml
+
 # Test output
 junit.xml
 test-results/

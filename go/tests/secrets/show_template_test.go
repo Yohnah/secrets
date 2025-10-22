@@ -38,7 +38,7 @@ func TestShowTemplate_FullTemplate(t *testing.T) {
 		Verbose:          false,
 	}
 	commandFlags := &types.CommandFlags{
-		TemplateName: "secrets.yml",
+		TemplateName: config.SecretsYMLFilename,
 	}
 	validatorMgr := validator.NewManager()
 	configMgr := config.NewManager(globalFlags, commandFlags, validatorMgr)
@@ -90,7 +90,7 @@ func TestShowTemplate_MinimalTemplate(t *testing.T) {
 
 	commandFlags := &types.CommandFlags{
 		Minimal:      true,
-		TemplateName: "secrets.yml",
+		TemplateName: config.SecretsYMLFilename,
 	}
 
 	validatorMgr := validator.NewManager()
@@ -141,7 +141,7 @@ func TestShowTemplate_MinimalTemplate(t *testing.T) {
 	outputMock2 := &mockOutputManager{}
 	commandFlags2 := &types.CommandFlags{
 		Minimal:      false,
-		TemplateName: "secrets.yml",
+		TemplateName: config.SecretsYMLFilename,
 	}
 	configMgr2 := config.NewManager(globalFlags, commandFlags2, validatorMgr)
 	secretsMgr2 := secrets.NewManager(configMgr2, loggerMgr, promptMgr, newMockKeePassManager(), outputMock2, newMockTemplateManager(), validator.NewManager())
@@ -163,7 +163,7 @@ func TestShowTemplate_UsesOutputManager(t *testing.T) {
 		Verbose:          false,
 	}
 	commandFlags := &types.CommandFlags{
-		TemplateName: "secrets.yml",
+		TemplateName: config.SecretsYMLFilename,
 	}
 	validatorMgr := validator.NewManager()
 	configMgr := config.NewManager(globalFlags, commandFlags, validatorMgr)

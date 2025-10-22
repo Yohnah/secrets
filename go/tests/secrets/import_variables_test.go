@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Yohnah/secrets/internal/config"
 	"github.com/Yohnah/secrets/internal/secrets/importer"
 	"github.com/Yohnah/secrets/internal/validator"
 )
@@ -369,7 +370,7 @@ func TestParseFile_UnsupportedFormat(t *testing.T) {
 // TestReadAndValidateSecretsYML_ValidSecretsFile tests validator integration
 func TestReadAndValidateSecretsYML_ValidSecretsFile(t *testing.T) {
 	tempDir := t.TempDir()
-	secretsFilePath := filepath.Join(tempDir, "secrets.yml")
+	secretsFilePath := filepath.Join(tempDir, config.SecretsYMLFilename)
 
 	content := `metadata:
   profile: testprofile
@@ -422,7 +423,7 @@ environments:
 // TestReadAndValidateSecretsYML_InvalidFile tests error handling for invalid secrets.yml
 func TestReadAndValidateSecretsYML_InvalidFile(t *testing.T) {
 	tempDir := t.TempDir()
-	secretsFilePath := filepath.Join(tempDir, "secrets.yml")
+	secretsFilePath := filepath.Join(tempDir, config.SecretsYMLFilename)
 
 	// Missing required field 'profile' in metadata
 	content := `metadata:

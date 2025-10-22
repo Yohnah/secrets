@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Yohnah/secrets/internal/config"
 	"github.com/Yohnah/secrets/internal/template"
 )
 
@@ -19,7 +20,7 @@ func TestGetTemplate_SecretsYml_Success(t *testing.T) {
 	t.Parallel()
 	mgr := template.NewManager()
 
-	content, err := mgr.GetTemplate(nil, "secrets.yml")
+	content, err := mgr.GetTemplate(nil, config.SecretsYMLFilename)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -63,7 +64,7 @@ func TestGetTemplate_WithData_ReturnsRaw(t *testing.T) {
 
 	// For now, data parameter is ignored and raw template is returned
 	data := map[string]string{"key": "value"}
-	content, err := mgr.GetTemplate(data, "secrets.yml")
+	content, err := mgr.GetTemplate(data, config.SecretsYMLFilename)
 
 	// Data processing not yet implemented, but should not error
 	// Just ignore data and return raw template
@@ -90,7 +91,7 @@ func TestGetTemplate_SecretsYml_ContainsDocumentation(t *testing.T) {
 	t.Parallel()
 	mgr := template.NewManager()
 
-	content, err := mgr.GetTemplate(nil, "secrets.yml")
+	content, err := mgr.GetTemplate(nil, config.SecretsYMLFilename)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}

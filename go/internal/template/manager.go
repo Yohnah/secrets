@@ -17,6 +17,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/Yohnah/secrets/internal/config"
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 )
@@ -34,7 +35,7 @@ type TemplateData struct {
 
 // Template names handled by the manager.
 const (
-	SecretsTemplateName = "secrets.yml"
+	SecretsTemplateName = config.SecretsYMLFilename
 )
 
 // NormalizeTemplateName converts short template names to full names with extensions
@@ -42,7 +43,7 @@ const (
 func NormalizeTemplateName(name string) string {
 	// Map of short names to full template names
 	nameMap := map[string]string{
-		"secrets":     "secrets.yml",
+		"secrets":     config.SecretsYMLFilename,
 		"json":        "json.json",
 		"yaml":        "yaml.yml",
 		"dotenv":      "dotenv.env",

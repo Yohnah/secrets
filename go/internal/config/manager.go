@@ -14,6 +14,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	// SecretsYMLFilename is the default filename for secrets configuration
+	SecretsYMLFilename = "Secrets.yml"
+
+	// ConfigYMLFilename is the default filename for application configuration
+	ConfigYMLFilename = "config.yml"
+)
+
 //go:embed templates/config.tpl.yml
 var configTemplate string
 
@@ -327,8 +335,8 @@ func (m *manager) GetSecretsFilePath() string {
 	}
 
 	// Priority 2: Check if secrets.yml exists in current directory
-	if _, err := os.Stat("secrets.yml"); err == nil {
-		return "secrets.yml"
+	if _, err := os.Stat(SecretsYMLFilename); err == nil {
+		return SecretsYMLFilename
 	}
 
 	// No secrets.yml available

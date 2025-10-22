@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Yohnah/secrets/internal/config"
 	"github.com/Yohnah/secrets/internal/secrets/common"
 	"github.com/Yohnah/secrets/internal/template"
 	"github.com/Yohnah/secrets/internal/validator"
@@ -164,7 +165,7 @@ func (s *service) Variables(environmentName, outputFormat, customTemplateContent
 // renderVariablesTemplateOnly renders variables template with empty values, bypassing KeePass entirely
 func (s *service) renderVariablesTemplateOnly(environmentName, outputFormat, customTemplateContent string) error {
 	// 1. Validate secrets.yml exists and is valid (but don't store config, we use profileResolver)
-	_, errs := s.validator.ReadAndValidateSecretsYML("secrets.yml")
+	_, errs := s.validator.ReadAndValidateSecretsYML(config.SecretsYMLFilename)
 	if len(errs) > 0 {
 		return fmt.Errorf("failed to read secrets.yml: %v", errs[0])
 	}
