@@ -127,8 +127,6 @@ func (m *manager) outputTable(data interface{}) error {
 			return m.renderProfilesList(statusData, displayMeta)
 		case "synced_data_list":
 			return m.renderSyncedDataList(statusData, displayMeta)
-		case "sshkeys_list":
-			return m.renderSSHKeysList(statusData, displayMeta)
 		}
 	}
 
@@ -894,96 +892,5 @@ func (m *manager) renderSyncedDataList(data map[string]interface{}, displayMeta 
 		fmt.Printf("%-*s  %-*s  %-*s  %-*s\n", maxName, name, maxStatus, status, maxIssue, issue, maxFieldValue, fieldValueStatus)
 	}
 
-	return nil
-}
-
-// renderSSHKeysList renders SSH keys in a table format
-// Format:
-//
-// SSH Keys in profile/environment
-// ================================
-//
-// NAME         ENTRY PATH
-// ----------   ----------------------------------
-// DB_HOST      webapp-production/production/...
-// DB_HOST10    webapp-production/production/...
-func (m *manager) renderSSHKeysList(data map[string]interface{}, displayMeta map[string]interface{}) error {
-	// Print title if present
-	if title, ok := displayMeta["title"].(string); ok {
-		fmt.Println()
-		fmt.Println(title)
-		fmt.Println(m.repeatString("=", len(title)))
-		fmt.Println()
-	}
-
-	// Get SSH keys data
-	sshkeysRaw := data["sshkeys"]
-	if sshkeysRaw == nil {
-		fmt.Println("No SSH keys found")
-		return nil
-	}
-
-	// Try to convert to []interface{}
-	sshkeysData, ok := sshkeysRaw.([]interface{})
-	if !ok {
-		// Try to convert to []map[string]interface{}
-		if sshkeysSlice, ok2 := sshkeysRaw.([]map[string]interface{}); ok2 {
-			// Convert to []interface{}
-			sshkeysData = make([]interface{}, len(sshkeysSlice))
-			for i, s := range sshkeysSlice {
-				sshkeysData[i] = s
-			}
-		} else {
-			// Unknown type, fallback to JSON
-			return m.outputJSON(data)
-		}
-	}
-
-	if len(sshkeysData) == 0 {
-		fmt.Println("No SSH keys found")
-		return nil
-	}
-
-	// Calculate max widths for alignment
-	maxName := len("NAME")
-	maxPath := len("ENTRY PATH")
-
-	for _, sshkeyRaw := range sshkeysData {
-		sshkeyMap, ok := sshkeyRaw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		name, _ := sshkeyMap["name"].(string)
-		entryPath, _ := sshkeyMap["entry_path"].(string)
-
-		if len(name) > maxName {
-			maxName = len(name)
-		}
-		if len(entryPath) > maxPath {
-			maxPath = len(entryPath)
-		}
-	}
-
-	// Print header
-	fmt.Printf("%-*s  %-*s\n", maxName, "NAME", maxPath, "ENTRY PATH")
-	fmt.Printf("%s  %s\n",
-		m.repeatString("-", maxName),
-		m.repeatString("-", maxPath))
-
-	// Print SSH keys
-	for _, sshkeyRaw := range sshkeysData {
-		sshkeyMap, ok := sshkeyRaw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		name, _ := sshkeyMap["name"].(string)
-		entryPath, _ := sshkeyMap["entry_path"].(string)
-
-		fmt.Printf("%-*s  %-*s\n", maxName, name, maxPath, entryPath)
-	}
-
-	fmt.Println()
 	return nil
 }

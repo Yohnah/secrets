@@ -113,5 +113,8 @@ RUN echo "Creating permission fix script..." && \
     chmod +x /usr/local/bin/fix-go-permissions && \
     echo "Permission fix script created"
 
+# Install Task (Taskfile)
+RUN sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+
 # Set working directory
 WORKDIR /workspaces/secrets

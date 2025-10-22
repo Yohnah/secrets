@@ -697,18 +697,15 @@ func (m *mockImporterService) ImportContents(environmentName string, filePaths [
 
 // mockShowService is a mock implementation of show.Service for testing
 type mockShowService struct {
-	statusCalled           bool
-	templateCalled         bool
-	treeCalled             bool
-	profilesCalled         bool
-	syncedDataCalled       bool
-	variablesCalled        bool
-	lastEnvironmentName    string
-	lastOutputFormat       string
-	lastProfileFilter      string
-	lastCustomTemplatePath string
-	lastWithNoValues       bool
-	returnError            error
+	statusCalled        bool
+	templateCalled      bool
+	treeCalled          bool
+	profilesCalled      bool
+	syncedDataCalled    bool
+	lastEnvironmentName string
+	lastOutputFormat    string
+	lastProfileFilter   string
+	returnError         error
 }
 
 func newMockShowService() *mockShowService {
@@ -741,14 +738,5 @@ func (m *mockShowService) Profiles(profileFilter string) error {
 func (m *mockShowService) SyncedData(profileFilter string) error {
 	m.syncedDataCalled = true
 	m.lastProfileFilter = profileFilter
-	return m.returnError
-}
-
-func (m *mockShowService) Variables(environmentName, outputFormat, customTemplatePath string, withNoValues bool) error {
-	m.variablesCalled = true
-	m.lastEnvironmentName = environmentName
-	m.lastOutputFormat = outputFormat
-	m.lastCustomTemplatePath = customTemplatePath
-	m.lastWithNoValues = withNoValues
 	return m.returnError
 }

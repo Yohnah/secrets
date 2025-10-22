@@ -18,9 +18,6 @@ type Service interface {
 	Tree(environmentName, outputFormat string) error
 	Profiles(profileFilter string) error
 	SyncedData(profileFilter string) error
-	Variables(environmentName, outputFormat, customTemplatePath string, withNoValues bool) error
-	SSHKeys(environmentName, outputFormat string) error
-	SSHKeyContent(environmentName, itemName string) error
 }
 
 type service struct {

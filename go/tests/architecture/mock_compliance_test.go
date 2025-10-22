@@ -81,24 +81,22 @@ func TestAllTestsUseMocks(t *testing.T) {
 		// Skip integration tests that require real file system operations for end-to-end testing
 		// These tests verify complete workflows and are exempt from mock requirements
 		exemptedIntegrationTests := []string{
-			"init_test.go",                          // Tests database initialization workflow
-			"init_database_test.go",                 // Tests database creation and setup
-			"init_profiles_test.go",                 // Tests profile creation logic
-			"setup_test.go",                         // Tests complete setup process
-			"status_test.go",                        // Tests status reporting functionality
-			"show_profiles_test.go",                 // Tests profile display operations
-			"show_sshkeys_test.go",                  // Tests SSH keys display operations
-			"show_tree_test.go",                     // Tests tree structure display
-			"show_template_test.go",                 // Tests template rendering
-			"show_variables_with_no_values_test.go", // Tests --with-no-values flag (bypasses KeePass)
-			"snapshots_new_test.go",                 // Tests snapshot creation
-			"snapshots_list_test.go",                // Tests snapshot listing
-			"snapshots_delete_test.go",              // Tests snapshot deletion
-			"snapshots_restore_test.go",             // Tests snapshot restoration
-			"secrets_validator_test.go",             // Tests validation logic
-			"validator_test.go",                     // Tests validator functionality
-			"import_variables_test.go",              // Tests parser functionality (needs real file I/O)
-			"import_contents_test.go",               // Tests file content operations (needs real file I/O)
+			"init_test.go",              // Tests database initialization workflow
+			"init_database_test.go",     // Tests database creation and setup
+			"init_profiles_test.go",     // Tests profile creation logic
+			"setup_test.go",             // Tests complete setup process
+			"status_test.go",            // Tests status reporting functionality
+			"show_profiles_test.go",     // Tests profile display operations
+			"show_tree_test.go",         // Tests tree structure display
+			"show_template_test.go",     // Tests template rendering
+			"snapshots_new_test.go",     // Tests snapshot creation
+			"snapshots_list_test.go",    // Tests snapshot listing
+			"snapshots_delete_test.go",  // Tests snapshot deletion
+			"snapshots_restore_test.go", // Tests snapshot restoration
+			"secrets_validator_test.go", // Tests validation logic
+			"validator_test.go",         // Tests validator functionality
+			"import_variables_test.go",  // Tests parser functionality (needs real file I/O)
+			"import_contents_test.go",   // Tests file content operations (needs real file I/O)
 		}
 		for _, exemptedTestFile := range exemptedIntegrationTests {
 			if strings.Contains(currentFilePath, exemptedTestFile) {

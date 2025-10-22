@@ -50,7 +50,25 @@ Examples:
 
 // Execute runs the root command
 func Execute() error {
-	return rootCmd.Execute()
+	// Configure global error handling after all commands are registered
+	configureGlobalErrorHandling(rootCmd)
+
+	// Execute and customize unknown command error
+	err := rootCmd.Execute()
+	if err != nil && isUnknownCommandError(err) {
+		// Add help suggestion for unknown commands at root level
+		return fmt.Errorf("%s\nRun 'secrets --help' for a list of available commands", err.Error())
+	}
+	return err
+}
+
+// isUnknownCommandError checks if the error is an unknown command error
+func isUnknownCommandError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	return len(errMsg) > 15 && errMsg[:15] == "unknown command"
 }
 
 func init() {
@@ -128,6 +146,50 @@ Configuration Precedence:
 			os.Exit(0)
 		}
 	}
+}
+
+// configureGlobalErrorHandling sets up consistent error handling for all commands
+func configureGlobalErrorHandling(cmd *cobra.Command) {
+	// Disable default help and usage behavior when command not found
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+
+	// Set custom error handler for flag parsing errors
+	cmd.SetFlagErrorFunc(handleFlagError)
+
+	// Add RunE to handle subcommand validation for commands that have subcommands
+	if cmd.HasSubCommands() && cmd.RunE == nil && cmd.Run == nil {
+		cmd.RunE = func(c *cobra.Command, args []string) error {
+			// If no subcommand is provided
+			if len(args) == 0 {
+				return fmt.Errorf("missing subcommand for '%s'\nRun '%s --help' for a list of available subcommands", c.Name(), c.CommandPath())
+			}
+			// If an unknown subcommand is provided
+			return fmt.Errorf("unknown subcommand '%s' for '%s'\nRun '%s --help' for a list of available subcommands", args[0], c.CommandPath(), c.CommandPath())
+		}
+	}
+
+	// For the root command, wrap Execute to provide better error messages
+	if cmd == rootCmd {
+		cmd.FParseErrWhitelist = cobra.FParseErrWhitelist{
+			UnknownFlags: true,
+		}
+	}
+
+	// Recursively apply to all subcommands
+	for _, subCmd := range cmd.Commands() {
+		configureGlobalErrorHandling(subCmd)
+	}
+}
+
+// handleFlagError handles flag parsing errors with descriptive messages
+func handleFlagError(cmd *cobra.Command, err error) error {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Run '%s --help' for usage.\n", cmd.CommandPath())
+		return err
+	}
+	return nil
 }
 
 // GetGlobalFlags returns all global flag values as a struct
