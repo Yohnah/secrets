@@ -22,6 +22,17 @@ vars:
   GOTEST: go test
   GOVET: go vet
   GOMOD: go mod
+  # Auto-detect current OS and architecture
+  GOOS:
+    sh: go env GOOS
+  GOARCH:
+    sh: go env GOARCH
+  # Binary naming for current platform
+  BINARY_NAME: '{{.APP_NAME}}-{{.GOOS}}-{{.GOARCH}}{{if eq .GOOS "windows"}}.exe{{end}}'
+  BINARY_PATH: '{{.BIN_DIR}}/{{.BINARY_NAME}}'
+  # Symlink naming (Unix-like only)
+  SYMLINK_NAME: '{{.APP_NAME}}{{if eq .GOOS "windows"}}.exe{{end}}'
+  SYMLINK_PATH: '{{.BIN_DIR}}/{{.SYMLINK_NAME}}'
 
 tasks:
   default:
@@ -45,17 +56,44 @@ tasks:
 
   build:
     desc: Build the secrets binary for current platform
-    deps: [install-deps]
-    vars:
-      BIN_EXT: '{{if eq .OS "windows"}}.exe{{end}}'
-    cmds:
-      - cmd: 'echo "Building {{.APP_NAME}} for current platform..."'
+    deps:
       - task: create-dir
         vars:
           PATH: "{{.BIN_DIR}}"
-      - cmd: '{{.GOCMD}} build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}{{.BIN_EXT}} {{.CMD_DIR}}'
-        dir: "{{.GO_DIR}}"
-      - cmd: 'echo "Binary built successfully: {{.BIN_DIR}}/{{.APP_NAME}}{{.BIN_EXT}}"'
+    cmds:
+      - task: build-binary
+      - task: create-symlink-unix
+      - task: create-symlink-windows
+    sources:
+      - '{{.GO_DIR}}/**/*.go'
+    generates:
+      - '{{.BINARY_PATH}}'
+
+  build-binary:
+    internal: true
+    desc: Compile binary for current OS and architecture
+    dir: "{{.GO_DIR}}"
+    cmds:
+      - cmd: 'echo "Building {{.BINARY_NAME}}..."'
+      - cmd: '{{.GOCMD}} build {{.BUILD_FLAGS}} -o ../{{.BINARY_PATH}} ./cmd/{{.APP_NAME}}'
+      - cmd: 'echo "✓ Binary built: {{.BINARY_PATH}}"'
+
+  create-symlink-unix:
+    internal: true
+    desc: Create symlink for Unix-like systems
+    platforms: [linux, darwin]
+    dir: "{{.BIN_DIR}}"
+    cmds:
+      - cmd: 'ln -sf {{.BINARY_NAME}} {{.SYMLINK_NAME}}'
+      - cmd: 'echo "✓ Symlink created: {{.SYMLINK_NAME}} -> {{.BINARY_NAME}}"'
+
+  create-symlink-windows:
+    internal: true
+    desc: Windows does not create symlink (requires elevated privileges)
+    platforms: [windows]
+    cmds:
+      - cmd: 'echo "ℹ Windows: Use {{.BINARY_PATH}} directly (symlinks require admin privileges)"'
+    silent: true
 
   tests:
     desc: Run all tests with verbose output and colors
