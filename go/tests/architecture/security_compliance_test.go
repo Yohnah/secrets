@@ -195,13 +195,13 @@ func TestNoSensitiveDataInLogs(t *testing.T) {
 					!strings.Contains(line, "GetPassword") &&
 					!strings.Contains(line, "//") {
 
-				// Check if value is printed
-				if strings.Contains(line, `"%s"`) ||
-					strings.Contains(line, `"%v"`) ||
-					strings.Contains(line, "String()") {
-					relPath, _ := filepath.Rel(root, path)
-					violations = append(violations, testutils.NormalizePath(relPath)+":"+string(rune(i+1)))
-				}
+					// Check if value is printed
+					if strings.Contains(line, `"%s"`) ||
+						strings.Contains(line, `"%v"`) ||
+						strings.Contains(line, "String()") {
+						relPath, _ := filepath.Rel(root, path)
+						violations = append(violations, testutils.NormalizePath(relPath)+":"+string(rune(i+1)))
+					}
 				}
 			}
 		}
@@ -445,13 +445,13 @@ func TestErrorMessageSanitization(t *testing.T) {
 			if strings.Contains(line, "fmt.Errorf") || strings.Contains(line, "errors.New") {
 				// Look for SecureValue.String() or SecurePassword.String() in error messages
 				if strings.Contains(line, ".String()") {
-				// Check if it's a secure type
-				if strings.Contains(line, "securePassword") ||
-					strings.Contains(line, "secureValue") ||
-					strings.Contains(line, "password.String()") {
-					relPath, _ := filepath.Rel(root, path)
-					violations = append(violations, testutils.NormalizePath(relPath)+":"+string(rune(i+1))+": Sensitive data in error message")
-				}
+					// Check if it's a secure type
+					if strings.Contains(line, "securePassword") ||
+						strings.Contains(line, "secureValue") ||
+						strings.Contains(line, "password.String()") {
+						relPath, _ := filepath.Rel(root, path)
+						violations = append(violations, testutils.NormalizePath(relPath)+":"+string(rune(i+1))+": Sensitive data in error message")
+					}
 				}
 			}
 		}

@@ -13,6 +13,7 @@ import (
 	"github.com/Yohnah/secrets/internal/secrets"
 	"github.com/Yohnah/secrets/internal/types"
 	"github.com/Yohnah/secrets/internal/validator"
+	"github.com/Yohnah/secrets/tests/testutils"
 )
 
 // TestSetupCreatesAllFiles verifies that setup creates directory + files + database
@@ -377,10 +378,8 @@ func TestSetupWithSetupDirInHome(t *testing.T) {
 	tmpHome := setupTestDir(t)
 	defer os.RemoveAll(tmpHome)
 
-	// Set HOME environment variable to temp directory
-	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpHome)
-	defer os.Setenv("HOME", originalHome)
+	// Set HOME/USERPROFILE environment variable based on OS
+	defer testutils.SetHomeEnv(t, tmpHome)()
 
 	// Create temp project directory
 	tmpProject := setupTestDir(t)
@@ -638,10 +637,8 @@ func TestSetupBothDirectoriesCanCoexist(t *testing.T) {
 	tmpHome := setupTestDir(t)
 	defer os.RemoveAll(tmpHome)
 
-	// Set HOME environment variable
-	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpHome)
-	defer os.Setenv("HOME", originalHome)
+	// Set HOME/USERPROFILE environment variable based on OS
+	defer testutils.SetHomeEnv(t, tmpHome)()
 
 	setupTestPassword(t)
 

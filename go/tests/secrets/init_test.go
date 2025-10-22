@@ -14,6 +14,7 @@ import (
 	"github.com/Yohnah/secrets/internal/prompt"
 	"github.com/Yohnah/secrets/internal/secrets"
 	"github.com/Yohnah/secrets/internal/types"
+	"github.com/Yohnah/secrets/tests/testutils"
 )
 
 // NOTE: After refactoring, 'init' command ONLY loads profiles from secrets.yml
@@ -402,12 +403,14 @@ func TestInitWithCustomPaths(t *testing.T) {
 		t.Fatalf("Failed to read config.yml: %v", err)
 	}
 
+	// Normalize content to Unix-style paths for cross-platform comparison
 	contentStr := string(content)
-	if !contains(contentStr, "/custom/db.kdbx") {
-		t.Errorf("config.yml does not contain custom database path")
+	normalizedContent := testutils.NormalizePath(contentStr)
+	if !strings.Contains(normalizedContent, "custom/db.kdbx") {
+		t.Errorf("config.yml does not contain custom database path. Content:\n%s", contentStr)
 	}
-	if !contains(contentStr, "/custom/key.file") {
-		t.Errorf("config.yml does not contain custom keyfile path")
+	if !strings.Contains(normalizedContent, "custom/key.file") {
+		t.Errorf("config.yml does not contain custom keyfile path. Content:\n%s", contentStr)
 	}
 }
 

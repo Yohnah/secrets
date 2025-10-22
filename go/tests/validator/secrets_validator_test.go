@@ -528,6 +528,7 @@ func TestReadAndValidateSecretsYML_ValidCustomOutputWithTemplate(t *testing.T) {
 	tmpFile.Close()
 
 	// Create test YAML file with reference to temp template
+	// Use filepath.ToSlash to convert Windows paths to Unix-style for YAML compatibility
 	testYAML := fmt.Sprintf(`metadata:
   profile: "test-custom-output-temp"
 
@@ -543,7 +544,7 @@ outputs:
     environment: "production"
     format: "custom"
     template: "%s"
-`, tmpFile.Name())
+`, filepath.ToSlash(tmpFile.Name()))
 
 	// Create temporary YAML file
 	tmpYAML, err := os.CreateTemp("", "test-yaml-*.yml")
