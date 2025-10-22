@@ -1,0 +1,203 @@
+version: '3'
+
+vars:
+  APP_NAME: secrets
+  GO_DIR: ./go
+  CMD_DIR: ./go/cmd/{{.APP_NAME}}
+  BIN_DIR: ./bin
+  DIST_DIR: ./dist
+  TRASH_DIR: ./.trash
+  VERSION:
+    sh: go run ./tools/versioninfo --field version
+  BUILD_TIME:
+    sh: go run ./tools/versioninfo --field build-time
+  GIT_COMMIT:
+    sh: go run ./tools/versioninfo --field commit
+  LDFLAGS: >-
+    -X github.com/Yohnah/secrets/internal/cli.Version={{.VERSION}} -X github.com/Yohnah/secrets/internal/cli.BuildTime={{.BUILD_TIME}} -X github.com/Yohnah/secrets/internal/cli.GitCommit={{.GIT_COMMIT}}
+  BUILD_FLAGS: >-
+    -ldflags "{{.LDFLAGS}}" -trimpath
+  GOCMD: go
+  GOBUILD: go build
+  GOTEST: go test
+  GOVET: go vet
+  GOMOD: go mod
+
+tasks:
+  default:
+    desc: Show available commands with descriptions
+    cmds:
+      - task --list
+    silent: true
+
+  install-deps:
+    desc: Install Go dependencies and configure Git hooks
+    cmds:
+      - echo "Installing Go dependencies..."
+      - task: install-go-dependencies
+      - echo "Installing govulncheck..."
+      - task: install-go-govulncheck
+      - echo "Installing tparse..."
+      - task: install-go-tparse
+      - echo "Configuring Git hooks..."
+      - task: configure-git-hooks
+      - echo "Dependencies installed successfully"
+
+  build:
+    desc: Build the secrets binary for current platform
+    deps: [install-deps]
+    vars:
+      BIN_EXT: '{{if eq .OS "windows"}}.exe{{end}}'
+    cmds:
+      - cmd: 'echo "Building {{.APP_NAME}} for current platform..."'
+      - task: create-dir
+        vars:
+          PATH: "{{.BIN_DIR}}"
+      - cmd: '{{.GOCMD}} build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}{{.BIN_EXT}} {{.CMD_DIR}}'
+        dir: "{{.GO_DIR}}"
+      - cmd: 'echo "Binary built successfully: {{.BIN_DIR}}/{{.APP_NAME}}{{.BIN_EXT}}"'
+
+  tests:
+    desc: Run all tests with verbose output and colors
+    deps: [install-deps]
+    dir: "{{.GO_DIR}}"
+    cmds:
+      - cmd: 'echo "Running all tests..."'
+      - cmd: '{{.GOTEST}} -json ./... | tparse -all'
+      - cmd: 'echo "Running go vet..."'
+      - cmd: '{{.GOVET}} ./...'
+      - cmd: 'echo "✓ All tests and vet checks completed successfully"'
+
+  security-check:
+    desc: Run security checks (vulnerability scanning)
+    deps: [install-deps]
+    dir: "{{.GO_DIR}}"
+    cmds:
+      - cmd: 'echo "Running security checks..."'
+      - cmd: 'govulncheck ./...'
+      - cmd: 'echo "Security checks completed"'
+
+  architecture-check:
+    desc: Run architecture compliance checks
+    deps: [install-deps]
+    dir: "{{.GO_DIR}}"
+    cmds:
+      - cmd: 'echo "Running architecture compliance checks..."'
+      - cmd: '{{.GOTEST}} -run TestManagersUseInterfaces ./tests/architecture/'
+      - cmd: '{{.GOTEST}} -run TestNoCircularDependencies ./tests/architecture/'
+      - cmd: '{{.GOTEST}} -run TestAllTestsUseMocks ./tests/architecture/'
+      - cmd: '{{.GOTEST}} -run TestOutputManagerIsUsedForAllOutput ./tests/architecture/'
+      - cmd: '{{.GOTEST}} -run TestSecretsMgrIsCore ./tests/architecture/'
+      - cmd: '{{.GOTEST}} -run TestCLICommandsUseFactory ./tests/architecture/'
+      - cmd: 'echo "✓ All architecture checks completed successfully"'
+
+  clean:
+    desc: Clean test artifacts, temporary files and binaries
+    cmds:
+      - cmd: 'echo "Cleaning test artifacts and binaries..."'
+      - task: clean-dir
+        vars:
+          PATH: "{{.TRASH_DIR}}"
+      - task: clean-dir
+        vars:
+          PATH: "{{.BIN_DIR}}"
+      - task: clean-dir
+        vars:
+          PATH: "{{.DIST_DIR}}"
+      - cmd: 'echo "Artifacts cleaned"'
+
+  build-all:
+    desc: Build binaries for all supported platforms
+    deps: [install-deps]
+    cmds:
+      - cmd: 'echo "Building {{.APP_NAME}} for all platforms..."'
+      - task: create-dir
+        vars:
+          PATH: "{{.DIST_DIR}}"
+      - task: build-platform
+        vars:
+          GOOS: linux
+          GOARCH: amd64
+      - task: build-platform
+        vars:
+          GOOS: linux
+          GOARCH: arm64
+      - task: build-platform
+        vars:
+          GOOS: darwin
+          GOARCH: amd64
+      - task: build-platform
+        vars:
+          GOOS: darwin
+          GOARCH: arm64
+      - task: build-platform
+        vars:
+          GOOS: windows
+          GOARCH: amd64
+      - task: build-platform
+        vars:
+          GOOS: windows
+          GOARCH: arm64
+      - cmd: 'echo "All binaries built successfully in {{.DIST_DIR}}/"'
+
+  install-go-dependencies:
+    internal: true
+    dir: "{{.GO_DIR}}"
+    cmds:
+      - cmd: '{{.GOMOD}} download'
+      - cmd: '{{.GOMOD}} tidy'
+
+  install-go-govulncheck:
+    internal: true
+    cmds:
+      - cmd: '{{.GOCMD}} install golang.org/x/vuln/cmd/govulncheck@latest'
+
+  install-go-tparse:
+    internal: true
+    cmds:
+      - cmd: '{{.GOCMD}} install github.com/mfridman/tparse@latest'
+
+  configure-git-hooks:
+    internal: true
+    cmds:
+      - cmd: git config core.hooksPath .githooks
+      - task: ensure-git-hooks-executable
+
+  ensure-git-hooks-executable:
+    internal: true
+    cmds:
+      - cmd: powershell -Command "if (Test-Path '.githooks') { Get-ChildItem '.githooks' -File | ForEach-Object { icacls $_.FullName /grant *S-1-5-32-545:RX | Out-Null } }"
+        platforms: [windows]
+      - cmd: '[ -d .githooks ] && chmod +x .githooks/* || true'
+        platforms: [linux, darwin]
+
+  create-dir:
+    internal: true
+    cmds:
+      - cmd: powershell -Command "New-Item -ItemType Directory -Force -Path '{{.PATH | replace "'" "''"}}' | Out-Null"
+        platforms: [windows]
+      - cmd: mkdir -p {{.PATH}}
+        platforms: [linux, darwin]
+
+  clean-dir:
+    internal: true
+    cmds:
+      - cmd: powershell -Command "if (Test-Path '{{.PATH | replace "'" "''"}}') { Get-ChildItem -LiteralPath '{{.PATH | replace "'" "''"}}' -Force | Remove-Item -Recurse -Force }"
+        platforms: [windows]
+      - cmd: '[ -d {{.PATH}} ] && rm -rf {{.PATH}}/* || true'
+        platforms: [linux, darwin]
+
+  build-platform:
+    internal: true
+    vars:
+      TARGET_EXT: '{{if eq .GOOS "windows"}}.exe{{end}}'
+    cmds:
+      - cmd: 'echo "Building for {{.GOOS}}/{{.GOARCH}}..."'
+      - task: create-dir
+        vars:
+          PATH: "{{.DIST_DIR}}/{{.APP_NAME}}-{{.GOOS}}-{{.GOARCH}}"
+      - cmd: '{{.GOCMD}} build {{.BUILD_FLAGS}} -o ../{{.DIST_DIR}}/{{.APP_NAME}}-{{.GOOS}}-{{.GOARCH}}/{{.APP_NAME}}{{.TARGET_EXT}} {{.CMD_DIR}}'
+        dir: "{{.GO_DIR}}"
+        env:
+          GOOS: "{{.GOOS}}"
+          GOARCH: "{{.GOARCH}}"
