@@ -91,6 +91,9 @@ coverage/
 *.egg-info/
 *.egg
 
+# Task cache
+.task/
+
 # Docker
 *.pid
 docker-compose.override.yml
