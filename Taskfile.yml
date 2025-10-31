@@ -8,11 +8,11 @@ vars:
   DIST_DIR: ./dist
   TRASH_DIR: ./.trash
   VERSION:
-    sh: go run ./tools/versioninfo --field version
+    sh: go run ./tools/versioninfo/main.go --field version
   BUILD_TIME:
-    sh: go run ./tools/versioninfo --field build-time
+    sh: go run ./tools/versioninfo/main.go --field build-time
   GIT_COMMIT:
-    sh: go run ./tools/versioninfo --field commit
+    sh: go run ./tools/versioninfo/main.go --field commit
   LDFLAGS: >-
     -X github.com/Yohnah/secrets/internal/cli.Version={{.VERSION}} -X github.com/Yohnah/secrets/internal/cli.BuildTime={{.BUILD_TIME}} -X github.com/Yohnah/secrets/internal/cli.GitCommit={{.GIT_COMMIT}}
   BUILD_FLAGS: >-
@@ -42,16 +42,10 @@ tasks:
     silent: true
 
   install-deps:
-    desc: Install Go dependencies and configure Git hooks
+    desc: Install Go dependencies (for build/CI/CD)
     cmds:
       - echo "Installing Go dependencies..."
       - task: install-go-dependencies
-      - echo "Installing govulncheck..."
-      - task: install-go-govulncheck
-      - echo "Installing tparse..."
-      - task: install-go-tparse
-      - echo "Configuring Git hooks..."
-      - task: configure-git-hooks
       - echo "Dependencies installed successfully"
 
   build:
@@ -115,19 +109,66 @@ tasks:
       - cmd: 'govulncheck ./...'
       - cmd: 'echo "Security checks completed"'
 
+  show-vars:
+    desc: Show all global variables (useful for debugging)
+    silent: true
+    cmds:
+      - echo "APP_NAME = {{.APP_NAME}}"
+      - echo "GO_DIR = {{.GO_DIR}}"
+      - echo "BIN_DIR = {{.BIN_DIR}}"
+      - echo "DIST_DIR = {{.DIST_DIR}}"
+      - echo "TRASH_DIR = {{.TRASH_DIR}}"
+      - echo "VERSION = {{.VERSION}}"
+      - echo "BUILD_TIME = {{.BUILD_TIME}}"
+      - echo "GIT_COMMIT = {{.GIT_COMMIT}}"
+      - echo "LDFLAGS = {{.LDFLAGS}}"
+      - echo "BUILD_FLAGS = {{.BUILD_FLAGS}}"
+      - echo "GOCMD = {{.GOCMD}}"
+      - echo "GOOS = {{.GOOS}}"
+      - echo "GOARCH = {{.GOARCH}}"
+      - echo "BINARY_NAME = {{.BINARY_NAME}}"
+      - echo "BINARY_PATH = {{.BINARY_PATH}}"
+
   architecture-check:
-    desc: Run architecture compliance checks
+    desc: Run architecture compliance checks (SOLID, DRY, interfaces)
     deps: [install-deps]
     dir: "{{.GO_DIR}}"
     cmds:
       - cmd: 'echo "Running architecture compliance checks..."'
-      - cmd: '{{.GOTEST}} -run TestManagersUseInterfaces ./tests/architecture/'
-      - cmd: '{{.GOTEST}} -run TestNoCircularDependencies ./tests/architecture/'
-      - cmd: '{{.GOTEST}} -run TestAllTestsUseMocks ./tests/architecture/'
-      - cmd: '{{.GOTEST}} -run TestOutputManagerIsUsedForAllOutput ./tests/architecture/'
-      - cmd: '{{.GOTEST}} -run TestSecretsMgrIsCore ./tests/architecture/'
-      - cmd: '{{.GOTEST}} -run TestCLICommandsUseFactory ./tests/architecture/'
+      - cmd: '{{.GOTEST}} -v ./tests/architecture/ -run TestManagersUseOnlyInterfaces'
+      - cmd: '{{.GOTEST}} -v ./tests/architecture/ -run TestManagersCommunicateViaInterfaces'
+      - cmd: '{{.GOTEST}} -v ./tests/architecture/ -run TestFolderStructureCompliance'
+      - cmd: '{{.GOTEST}} -v ./tests/architecture/ -run TestUnitTestsColocated'
+      - cmd: '{{.GOTEST}} -v ./tests/architecture/ -run TestInterfacesInManagerRoot'
+      - cmd: '{{.GOTEST}} -v ./tests/architecture/ -run TestNoCircularDependencies'
       - cmd: 'echo "✓ All architecture checks completed successfully"'
+
+  integration-tests:
+    desc: Run integration tests (real binary, real filesystem)
+    deps: [build]
+    dir: "{{.GO_DIR}}"
+    cmds:
+      - cmd: 'echo "Running integration tests..."'
+      - cmd: '{{.GOTEST}} -v -timeout 30m ./tests/integration/...'
+      - cmd: 'echo "✓ All integration tests completed successfully"'
+
+  integration-tests-init:
+    desc: Run only init integration tests
+    deps: [build]
+    dir: "{{.GO_DIR}}"
+    cmds:
+      - cmd: 'echo "Running init integration tests..."'
+      - cmd: '{{.GOTEST}} -v -timeout 10m ./tests/integration/init/...'
+      - cmd: 'echo "✓ Init integration tests completed successfully"'
+
+  integration-tests-cli:
+    desc: Run only CLI integration tests
+    deps: [build]
+    dir: "{{.GO_DIR}}"
+    cmds:
+      - cmd: 'echo "Running CLI integration tests..."'
+      - cmd: '{{.GOTEST}} -v ./tests/integration/cli/...'
+      - cmd: 'echo "✓ CLI integration tests completed successfully"'
 
   clean:
     desc: Clean test artifacts, temporary files and binaries
@@ -179,8 +220,10 @@ tasks:
       - cmd: 'echo "All binaries built successfully in {{.DIST_DIR}}/"'
 
   prepare-development-environment:
-    desc: Install all Go development tools (LSP, debugger, linters, formatters)
+    desc: Install all Go development tools (LSP, debugger, linters, formatters, testing tools, Git hooks)
     cmds:
+      - echo "Installing Go dependencies..."
+      - task: install-go-dependencies
       - echo "Installing Go development tools..."
       - task: install-go-gopls
       - echo "Installing delve debugger..."
@@ -191,6 +234,12 @@ tasks:
       - task: install-go-goimports
       - echo "Installing golangci-lint..."
       - task: install-go-golangci-lint
+      - echo "Installing govulncheck..."
+      - task: install-go-govulncheck
+      - echo "Installing tparse..."
+      - task: install-go-tparse
+      - echo "Configuring Git hooks..."
+      - task: configure-git-hooks
       - echo "Development environment prepared successfully"
 
   install-go-dependencies:

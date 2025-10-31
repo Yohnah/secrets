@@ -69,6 +69,7 @@ RUN echo "Setting up Go environment directories..." && \
     mkdir -p /go && \
     chmod 777 /go && \
     mkdir -p /go/bin && \
+    chown -R 1000:1000 /go && \
     echo "Go environment directories created with proper permissions"
 
 # Configure Go environment variables for all users
@@ -78,14 +79,18 @@ ENV PATH="/usr/local/go/bin:/go/bin:${PATH}"
 # Install Task (Taskfile) before using it
 RUN sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
 
-# Copy Taskfile and tools for development environment setup
-COPY Taskfile.yml /tmp/Taskfile.yml
-COPY tools /tmp/tools
+RUN mkdir -p /go/tmp_build
 
-# Install Go development tools using Taskfile
-RUN cd /tmp && \
-    task prepare-development-environment && \
-    rm -rf /tmp/Taskfile.yml /tmp/tools
+# Copy Taskfile and tools for development environment setup
+#COPY Taskfile.yml /go/tmp_build/Taskfile.yml
+#COPY tools /go/tmp_build/tools
+#COPY go/go.mod /go/tmp_build/go.mod
+#COPY go/go.sum /go/tmp_build/go.sum
+#
+## Install Go development tools using Taskfile
+#RUN cd /go/tmp_build && \
+#    task prepare-development-environment && \
+#    rm -rf /tmp/Taskfile.yml /tmp/tools /go/tmp_build
 
 # Create symbolic links for VS Code compatibility (fallback for user installations)
 RUN echo "Setting up VS Code Go tools compatibility..." && \

@@ -1,8 +1,0 @@
-environments:
-  production:
-    - name: "DB_PASSWORD"
-      type: "envvar"
-      entry: "/Production/DB"
-      key: "Password"
-
-outputs: []

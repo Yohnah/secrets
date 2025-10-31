@@ -3,6 +3,7 @@
     "name": "Go Development Container",
     "build": {
         "dockerfile": "Dockerfile",
+        // "context": "..",
         "args": {
             // Set to "true" to automatically use latest Go version
             // Set to "false" to use fixed version with update notifications
@@ -17,6 +18,10 @@
             "moby": false
         }
     },
+    // Mount host container_home folder as /home/vscode for local persistence
+    "mounts": [
+        "source=${localWorkspaceFolder}/../container_home/secrets,target=/home/vscode/.secrets,type=bind,consistency=cached"
+    ],
     // Optional: SSH agent forwarding if needed
     "runArgs": [
         "-v", "${env:SSH_AUTH_SOCK}:/ssh-agent",
@@ -33,7 +38,10 @@
                 "go.vetOnSave": "package",
                 "go.formatTool": "goimports",
                 "go.lintTool": "golangci-lint",
-                "go.gomodDirectories": ["./go"]
+                "go.gomodDirectories": ["./go"],
+                "go.toolsManagement.autoSetGopath": false,
+                "go.toolsManagement.autoUpdate": false,
+                "go.toolsManagement.autoInstall": false // <-- Esto es clave
             },
             "extensions": [
                 "golang.go",
@@ -47,6 +55,6 @@
         "workspaceFolder": "/workspaces/secrets"
     },
     "remoteUser": "vscode",
-    "postCreateCommand": "/usr/local/bin/fix-go-permissions && /usr/local/bin/setup-go-tools && go version && echo 'Go DevContainer ready with tools configured.'",
+    "postCreateCommand": "/usr/local/bin/fix-go-permissions && /usr/local/bin/setup-go-tools && task -t /workspaces/secrets/Taskfile.yml prepare-development-environment && go version && echo 'Go DevContainer ready with tools configured.'",
     "postStartCommand": "/usr/local/bin/fix-go-permissions"
 }
