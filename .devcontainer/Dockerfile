@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Go with version control and update notifications
-ARG GO_VERSION=1.25.2
+ARG GO_VERSION=1.25.3
 ARG AUTO_UPDATE_GO=false
 
 RUN echo "Checking Go version configuration..." && \

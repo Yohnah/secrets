@@ -98,7 +98,9 @@ tasks:
       - cmd: '{{.GOTEST}} -json ./... | tparse -all'
       - cmd: 'echo "Running go vet..."'
       - cmd: '{{.GOVET}} ./...'
-      - cmd: 'echo "✓ All tests and vet checks completed successfully"'
+      - cmd: 'echo "Running security checks..."'
+      - cmd: 'govulncheck ./...'
+      - cmd: 'echo "✓ All tests, vet checks and security checks completed successfully"'
 
   security-check:
     desc: Run security checks (vulnerability scanning)
@@ -107,7 +109,7 @@ tasks:
     cmds:
       - cmd: 'echo "Running security checks..."'
       - cmd: 'govulncheck ./...'
-      - cmd: 'echo "Security checks completed"'
+      - cmd: 'echo "✓ Security checks completed"'
 
   show-vars:
     desc: Show all global variables (useful for debugging)
