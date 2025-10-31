@@ -23,11 +23,6 @@
 # Go workspace file
 go.work
 
-# Go module proxy cache
-go/go.sum
-
-*.sum
-
 # Binaries and distribution builds
 /bin/
 /dist/
