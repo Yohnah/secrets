@@ -5,7 +5,6 @@ import (
 "fmt"
 "os"
 "strings"
-
 "github.com/Yohnah/secrets/internal/loggermanager"
 "github.com/tobischo/gokeepasslib/v3"
 )
@@ -64,7 +63,7 @@ db.Content.Root.Groups = append(db.Content.Root.Groups, rootGroup)
 if err := db.LockProtectedEntries(); err != nil {
 return fmt.Errorf("failed to lock protected entries: %w", err)
 }
-file, err := os.Create(dbPath)
+file, err := os.OpenFile(dbPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 if err != nil {
 return fmt.Errorf("failed to create database file: %w", err)
 }

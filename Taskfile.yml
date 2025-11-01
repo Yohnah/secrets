@@ -14,7 +14,7 @@ vars:
   GIT_COMMIT:
     sh: go run ./tools/versioninfo/main.go --field commit
   LDFLAGS: >-
-    -X github.com/Yohnah/secrets/internal/cli.Version={{.VERSION}} -X github.com/Yohnah/secrets/internal/cli.BuildTime={{.BUILD_TIME}} -X github.com/Yohnah/secrets/internal/cli.GitCommit={{.GIT_COMMIT}}
+    -X github.com/Yohnah/secrets/cmd/secrets.Version={{.VERSION}} -X github.com/Yohnah/secrets/cmd/secrets.BuildTime={{.BUILD_TIME}} -X github.com/Yohnah/secrets/cmd/secrets.GitCommit={{.GIT_COMMIT}}
   BUILD_FLAGS: >-
     -ldflags "{{.LDFLAGS}}" -trimpath
   GOCMD: go

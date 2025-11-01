@@ -11,7 +11,7 @@ type Logger interface {
 	Info(msg string)
 	Warn(msg string)
 	Error(msg string)
-	Fatal(msg string) // Logs and exits with code 1
+	Fatal(msg string)
 	SetVerbose(verbose bool)
 }
 
@@ -22,9 +22,7 @@ type StderrLogger struct {
 
 // NewStderrLogger creates a new logger that writes to stderr
 func NewStderrLogger() Logger {
-	return &StderrLogger{
-		verbose: false,
-	}
+	return &StderrLogger{verbose: false}
 }
 
 // SetVerbose enables or disables verbose mode

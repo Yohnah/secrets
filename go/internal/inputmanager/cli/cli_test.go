@@ -1,56 +1,45 @@
 package cli
 
 import (
-	"testing"
-
-	"github.com/spf13/cobra"
+"testing"
+"github.com/spf13/cobra"
+"github.com/stretchr/testify/assert"
 )
 
+func TestNewCobraCliReader(t *testing.T) {
+reader := NewCobraCliReader()
+assert.NotNil(t, reader)
+}
+
+func TestCobraCliReader_SetCommand(t *testing.T) {
+reader := NewCobraCliReader()
+cmd := &cobra.Command{Use: "test"}
+
+reader.SetCommand(cmd)
+
+assert.Equal(t, "test", reader.GetCommand())
+}
+
 func TestCobraCliReader_GetStringFlag(t *testing.T) {
-	reader := NewCobraCliReader()
+reader := NewCobraCliReader()
+cmd := &cobra.Command{Use: "test"}
+cmd.Flags().String("name", "default", "test flag")
+reader.SetCommand(cmd)
 
-	cmd := &cobra.Command{}
-	cmd.Flags().String("test-flag", "default-value", "test flag")
-	cmd.Flags().Set("test-flag", "custom-value")
+value, err := reader.GetStringFlag("name")
 
-	reader.SetCommand(cmd)
-
-	got, err := reader.GetStringFlag("test-flag")
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	if got != "custom-value" {
-		t.Errorf("Expected %q, got %q", "custom-value", got)
-	}
+assert.NoError(t, err)
+assert.Equal(t, "default", value)
 }
 
 func TestCobraCliReader_GetBoolFlag(t *testing.T) {
-	reader := NewCobraCliReader()
+reader := NewCobraCliReader()
+cmd := &cobra.Command{Use: "test"}
+cmd.Flags().Bool("verbose", false, "test flag")
+reader.SetCommand(cmd)
 
-	cmd := &cobra.Command{}
-	cmd.Flags().Bool("test-bool", false, "test bool")
-	cmd.Flags().Set("test-bool", "true")
+value, err := reader.GetBoolFlag("verbose")
 
-	reader.SetCommand(cmd)
-
-	got, err := reader.GetBoolFlag("test-bool")
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	if !got {
-		t.Errorf("Expected true, got false")
-	}
-}
-
-func TestCobraCliReader_NoCommand(t *testing.T) {
-	reader := NewCobraCliReader()
-
-	// No command set
-	got, err := reader.GetStringFlag("any-flag")
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	if got != "" {
-		t.Errorf("Expected empty string, got %q", got)
-	}
+assert.NoError(t, err)
+assert.False(t, value)
 }

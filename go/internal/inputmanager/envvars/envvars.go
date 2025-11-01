@@ -1,21 +1,32 @@
 package envvars
 
-import "os"
+import (
+"os"
+"strings"
+)
 
-// EnvVarsReader interface defines the contract for reading environment variables
 type EnvVarsReader interface {
-	Get(key string) (string, bool)
+Get(key string) (string, bool)
+GetAll() map[string]string
 }
 
-// OsEnvVarsReader implements EnvVarsReader using os.LookupEnv
 type OsEnvVarsReader struct{}
 
-// NewOsEnvVarsReader creates a new environment variables reader
 func NewOsEnvVarsReader() EnvVarsReader {
-	return &OsEnvVarsReader{}
+return &OsEnvVarsReader{}
 }
 
-// Get retrieves an environment variable value
 func (r *OsEnvVarsReader) Get(key string) (string, bool) {
-	return os.LookupEnv(key)
+return os.LookupEnv(key)
+}
+
+func (r *OsEnvVarsReader) GetAll() map[string]string {
+result := make(map[string]string)
+for _, env := range os.Environ() {
+parts := strings.SplitN(env, "=", 2)
+if len(parts) == 2 {
+result[parts[0]] = parts[1]
+}
+}
+return result
 }
